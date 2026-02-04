@@ -83,31 +83,31 @@ LightIDEA follows a modern, scalable three-tier architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                    │
-│  Browser (React/Next.js) → Mobile (PWA) → Desktop Client → API Consumer    │
+│                              CLIENT LAYER                                   │
+│  Browser (React/Next.js) → Mobile (PWA) → Desktop Client → API Consumer     │
 └─────────────────────────────────────────────────────────────────────────────┘
                                         │
                                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         FRONTEND (Next.js 16 + TypeScript)                   │
+│                         FRONTEND (Next.js 16 + TypeScript)                  │
 │  ┌────────────────────────────────────────────────────────────────────┐     │
 │  │ App Router (RSC)  │  Services Layer  │  UI Components  │  State    │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
-│                              Port: 3000                                      │
+│                              Port: 3000                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
                                         │
                                         ▼ HTTP/REST (JSON + JWT)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           BACKEND (FastAPI + Python)                         │
+│                           BACKEND (FastAPI + Python)                        │
 │  ┌────────────────────────────────────────────────────────────────────┐     │
-│  │ API Gateway → Routers → Services → Business Logic → ORM           │     │
+│  │ API Gateway → Routers → Services → Business Logic → ORM            │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
-│                              Port: 8000                                      │
+│                              Port: 8000                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
                                         │
                                         ▼ SQLAlchemy ORM
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         DATABASE (SQLite/PostgreSQL)                         │
+│                         DATABASE (SQLite/PostgreSQL)                        │
 │  Users │ Projects │ Tasks │ Timesheets │ Expenses │ Notifications │ ...     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -325,198 +325,11 @@ Once the backend is running, access the interactive API documentation:
 
 ---
 
-## 🎨 Screenshots
-
-> **Note:** The application features a modern **glassmorphism** design with:
-> - 🌙 Dark/Light theme support
-> - ✨ Smooth animations and transitions
-> - 📱 Fully responsive layout
-> - 🎯 Intuitive navigation
-> - 🔔 Real-time notifications
-
----
-
-## 🔒 Security Features
-
-- ✅ **JWT Authentication** with secure token handling
-- ✅ **Multi-Factor Authentication (MFA)** support
-- ✅ **Role-Based Access Control (RBAC)**
-- ✅ **Password Hashing** with bcrypt
-- ✅ **CORS Protection**
-- ✅ **SQL Injection Prevention** via ORM
-- ✅ **XSS Protection**
-- ✅ **GDPR Compliance** tools
-- ✅ **Audit Logging** for sensitive operations
-
----
-
-## 📊 Performance
-
-- ⚡ **Fast Response Times:** Average API response < 100ms
-- 🚀 **Optimized Frontend:** Next.js 16 with React Server Components
-- 📦 **Efficient Database:** Indexed queries, connection pooling
-- 🔄 **Real-time Updates:** WebSocket connections for live data
-- 📈 **Scalable Architecture:** Designed for horizontal scaling
-
----
-
-## 🧪 Testing
-
-```bash
-# Backend tests (if available)
-cd backend
-pytest
-
-# Frontend tests (if available)
-cd frontend
-npm test
-```
-
----
-
-## 📦 Production Deployment
-
-### Backend (FastAPI)
-
-```bash
-# Install production dependencies
-pip install -r requirements.txt
-
-# Set production environment variables
-export DATABASE_URL="postgresql://user:pass@host/db"
-export SECRET_KEY="your-production-secret-key"
-export GEMINI_API_KEY="your-gemini-api-key"
-
-# Run with Gunicorn (production server)
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-```
-
-### Frontend (Next.js)
-
-```bash
-# Build for production
-npm run build
-
-# Start production server
-npm start
-```
-
-### Docker Deployment (Coming Soon)
-
-```bash
-docker-compose up -d
-```
-
----
-
 ## 🤝 Contributing
 
-Contributions are welcome! Here's how to get started:
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-1. **Fork the repository**
-   ```bash
-   git fork https://github.com/agusain2001/timesheet.git
-   ```
-
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-
-3. **Make your changes**
-   - Follow the existing code style
-   - Add tests if applicable
-   - Update documentation
-
-4. **Commit your changes**
-   ```bash
-   git commit -m "Add amazing feature"
-   ```
-
-5. **Push to your fork**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-
-6. **Open a Pull Request**
-   - Provide a clear description of changes
-   - Reference any related issues
-
-### Development Guidelines
-
-- Use **TypeScript** for frontend code
-- Follow **PEP 8** for Python code
-- Write **meaningful commit messages**
-- Add **comments** for complex logic
-- Update **documentation** for new features
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 👨‍💻 Author
-
-**Ashish Gusain**  
-- GitHub: [@agusain2001](https://github.com/agusain2001)
-- Email: agusain2001@gmail.com
-
----
-
-## 🙏 Acknowledgments
-
-- **Next.js Team** for the amazing React framework
-- **FastAPI Team** for the modern Python web framework
-- **Google** for Gemini AI API
-- **Open Source Community** for incredible libraries and tools
-
----
-
-## 📞 Support
-
-Need help? Here are your options:
-
-- 📖 **Documentation:** Check [architecture.md](architecture.md) and [AGENTS.md](AGENTS.md)
-- 🐛 **Bug Reports:** [Open an issue](https://github.com/agusain2001/timesheet/issues)
-- 💡 **Feature Requests:** [Request a feature](https://github.com/agusain2001/timesheet/issues/new)
-- 📧 **Email:** agusain2001@gmail.com
-
----
-
-## 🗺️ Roadmap
-
-### Upcoming Features
-
-- [ ] Mobile app (React Native)
-- [ ] Desktop app (Electron)
-- [ ] Advanced AI features (voice commands, predictive analytics)
-- [ ] Kubernetes deployment configs
-- [ ] Docker containerization
-- [ ] Comprehensive test suite
-- [ ] Performance monitoring dashboard
-- [ ] Multi-language support (i18n)
-- [ ] Advanced reporting with custom templates
-- [ ] Integration marketplace
-
----
-
-## 📈 Project Status
-
-![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-3.0.0-blue?style=for-the-badge)
-![Coverage](https://img.shields.io/badge/Coverage-85%25-yellow?style=for-the-badge)
-
-**Last Updated:** February 4, 2026
-
----
-
-<p align="center">
-  Made with ❤️ by <a href="https://github.com/agusain2001">Ashish Gusain</a>
-</p>
-
-<p align="center">
-  <sub>⭐ Star this repo if you find it helpful!</sub>
-</p>

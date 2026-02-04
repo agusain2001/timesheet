@@ -931,52 +931,11 @@ class Permission:
 
 ## 🚀 Performance Optimization
 
-### Caching Strategy
-
-**Redis Caching (Future Enhancement):**
-
-```python
-# Cache dashboard stats (TTL: 5 minutes)
-@cache(ttl=300)
-def get_dashboard_stats(user_id: int):
-    # Heavy computation
-    pass
-
-# Cache project list (TTL: 1 minute)  
-@cache(ttl=60)
-def get_projects():
-    # Database query
-    pass
-```
-
-### Database Query Optimization
-
-**Techniques:**
-- ✅ **Eager Loading:** Load relationships upfront
-- ✅ **Query Pagination:** Limit result sets
-- ✅ **Indexed Queries:** Use database indexes
-- ✅ **Query Caching:** Cache frequent queries
-- ✅ **Connection Pooling:** Reuse database connections
-
-**Example:**
-
-```python
-# Bad: N+1 query problem
-tasks = db.query(Task).all()
-for task in tasks:
-    print(task.assignee.name)  # Extra query per task
-
-# Good: Eager loading
-tasks = db.query(Task).options(joinedload(Task.assignee)).all()
-for task in tasks:
-    print(task.assignee.name)  # No extra queries
 ```
 
 ---
 
 ## 📊 Monitoring & Logging
-
-### Logging Strategy
 
 ```python
 import logging
@@ -990,83 +949,18 @@ async def log_requests(request: Request, call_next):
     response = await call_next(request)
     logger.info(f"Status: {response.status_code}")
     return response
-
-# Error logging
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(status_code=500, content={"error": "Internal server error"})
 ```
-
-### Metrics (Future Enhancement)
-
-**Key Metrics:**
-- Request rate (requests/second)
-- Response time (p50, p95, p99)
-- Error rate
-- Database query time
-- Active WebSocket connections
-- AI API latency
 
 ---
 
-## 🔄 Deployment Architecture
-
-### Production Deployment
-
-```mermaid
-graph TB
-    subgraph "Load Balancer"
-        LB[Nginx/HAProxy]
-    end
-    
-    subgraph "Application Servers"
-        APP1[FastAPI Instance 1]
-        APP2[FastAPI Instance 2]
-        APP3[FastAPI Instance 3]
-    end
-    
-    subgraph "Database"
-        DB[(PostgreSQL Primary)]
-        DB_REPLICA[(PostgreSQL Replica)]
-    end
-    
-    subgraph "Cache Layer"
-        REDIS[Redis]
-    end
-    
-    subgraph "File Storage"
-        S3[S3/Object Storage]
-    end
-    
-    LB --> APP1
-    LB --> APP2
-    LB --> APP3
-    
-    APP1 --> DB
-    APP2 --> DB
-    APP3 --> DB
-    
-    APP1 --> DB_REPLICA
-    APP2 --> DB_REPLICA
-    APP3 --> DB_REPLICA
-    
-    APP1 --> REDIS
-    APP2 --> REDIS
-    APP3 --> REDIS
-    
-    APP1 --> S3
-    APP2 --> S3
-    APP3 --> S3
-```
-
-### Environment Configuration
+## 🔄 Environment Configuration
 
 **Development:**
 ```bash
 DATABASE_URL=sqlite:///./timesheet.db
 DEBUG=true
 CORS_ORIGINS=http://localhost:3000
+GEMINI_API_KEY=your-api-key
 ```
 
 **Production:**
@@ -1075,85 +969,18 @@ DATABASE_URL=postgresql://user:pass@host:5432/lightidea
 DEBUG=false
 CORS_ORIGINS=https://app.lightidea.com
 SECRET_KEY=<strong-random-key>
+GEMINI_API_KEY=your-production-api-key
 ```
 
 ---
 
-## 🎯 Design Patterns
+## 🎯 Design Patterns Used
 
-### Patterns Used
-
-1. **Dependency Injection:**
-   ```python
-   def get_current_user(token: str = Depends(oauth2_scheme)):
-       # Inject current user
-       pass
-   ```
-
-2. **Repository Pattern:**
-   ```python
-   class UserRepository:
-       def get_by_id(self, user_id: int):
-           return db.query(User).filter(User.id == user_id).first()
-   ```
-
-3. **Factory Pattern:**
-   ```python
-   class NotificationFactory:
-       @staticmethod
-       def create(type: str):
-           if type == "email":
-               return EmailNotification()
-           elif type == "websocket":
-               return WebSocketNotification()
-   ```
-
-4. **Observer Pattern:**
-   - Used for event-driven notifications
-
-5. **Strategy Pattern:**
-   - Used for different approval workflows
-
----
-
-## 🔮 Future Enhancements
-
-### Scalability Roadmap
-
-1. **Microservices Architecture:**
-   - Split into auth, project, time, expense services
-   - Service mesh (Istio)
-   - API gateway (Kong)
-
-2. **Event-Driven Architecture:**
-   - Message queue (RabbitMQ/Kafka)
-   - Event sourcing
-   - CQRS pattern
-
-3. **Advanced Caching:**
-   - Redis for session management
-   - CDN for static assets
-   - Database query result caching
-
-4. **Horizontal Scaling:**
-   - Load balancer (Nginx/HAProxy)
-   - Multiple API instances
-   - Database read replicas
-
-5. **Observability:**
-   - Distributed tracing (Jaeger)
-   - Metrics (Prometheus + Grafana)
-   - Centralized logging (ELK stack)
-
----
-
-## 📚 References
-
-- **FastAPI:** https://fastapi.tiangolo.com/
-- **SQLAlchemy:** https://www.sqlalchemy.org/
-- **Pydantic:** https://pydantic-docs.helpmanual.io/
-- **Google Gemini AI:** https://ai.google.dev/
-- **Next.js:** https://nextjs.org/
+1. **Dependency Injection** - FastAPI dependencies for current user
+2. **Repository Pattern** - Data access abstraction
+3. **Factory Pattern** - Notification creation
+4. **Observer Pattern** - Event-driven notifications
+5. **Strategy Pattern** - Approval workflows
 
 ---
 
