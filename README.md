@@ -84,7 +84,7 @@ LightIDEA follows a modern, scalable three-tier architecture:
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              CLIENT LAYER                                   │
-│  Browser (React/Next.js) → Mobile (PWA) → Desktop Client → API Consumer     │
+│                          Browser (React/Next.js)                            |
 └─────────────────────────────────────────────────────────────────────────────┘
                                         │
                                         ▼
