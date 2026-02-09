@@ -49,7 +49,7 @@ graph TB
     end
     
     A1 --> B1
-    A2 --> B1
+    
     
     B1 --> B2
     B2 --> B3
