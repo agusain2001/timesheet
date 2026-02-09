@@ -14,7 +14,6 @@ LightIDEA uses a **hybrid backend architecture** combining Django REST Framework
 graph TB
     subgraph "Client Layer"
         A1[Web Browser]
-        A2[Mobile PWA]
     end
     
     subgraph "Frontend - Next.js 16"
