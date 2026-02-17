@@ -99,6 +99,7 @@ def get_all_tasks(
 def get_my_tasks(
     task_type: str = None,
     status_filter: str = None,
+    active_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -109,6 +110,14 @@ def get_my_tasks(
         query = query.filter(Task.task_type == task_type)
     if status_filter:
         query = query.filter(Task.status == status_filter)
+    if active_only:
+        query = query.filter(
+            Task.status.notin_([
+                TaskStatus.COMPLETED.value,
+                TaskStatus.OVERDUE.value,
+                TaskStatus.CANCELLED.value
+            ])
+        )
     
     tasks = query.all()
     return [build_task_response(t, db) for t in tasks]
@@ -121,7 +130,8 @@ def create_task(
     current_user: User = Depends(get_current_active_user)
 ):
     """Create a new task."""
-    db_task = Task(**task_data.model_dump())
+    task_dict = task_data.model_dump(exclude_unset=True)
+    db_task = Task(**task_dict)
     
     # If no assignee, assign to current user for personal tasks
     if not db_task.assignee_id and task_data.task_type == "personal":

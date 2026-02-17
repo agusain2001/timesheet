@@ -38,7 +38,7 @@ from app.models.expense_audit_log import ExpenseAuditLog
 from app.models.approval_rule import ApprovalRule
 
 # Support
-from app.models.support import SupportRequest, SupportStatus
+from app.models.support import SupportRequest, SupportStatus, SupportPriority
 
 # Notification models
 from app.models.notification import Notification, NotificationPreference, NotificationRule
@@ -98,7 +98,7 @@ __all__ = [
     "ApprovalRule",
     
     # Support
-    "SupportRequest", "SupportStatus",
+    "SupportRequest", "SupportStatus", "SupportPriority",
     
     # Notifications
     "Notification", "NotificationPreference", "NotificationRule",

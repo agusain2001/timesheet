@@ -5,11 +5,5 @@ export default function ProtectedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <html suppressHydrationWarning>
-      <body>
-        <ContentShell>{children}</ContentShell>
-      </body>
-    </html>
-  );
+  return <ContentShell>{children}</ContentShell>;
 }

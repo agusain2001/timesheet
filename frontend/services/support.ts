@@ -7,36 +7,54 @@ import { apiGet, apiPost, apiPut, apiDelete } from "./api";
 
 // =============== Types ===============
 
+export interface SupportUser {
+    id: string;
+    full_name: string;
+    email: string;
+    avatar_url?: string;
+}
+
 export interface SupportRequest {
     id: string;
     user_id: string;
+    subject?: string;
     message: string;
+    priority: "urgent" | "high" | "normal" | "low";
+    related_module?: string;
+    image_url?: string;
+    is_draft: boolean;
+    recipient_ids?: string[];
     status: "open" | "in_progress" | "resolved" | "closed";
     created_at: string;
     updated_at?: string;
     resolved_at?: string;
-    image_url?: string;
-    user?: {
-        id: string;
-        full_name: string;
-        email: string;
-        avatar_url?: string;
-    };
+    user?: SupportUser;
 }
 
 export interface SupportRequestCreate {
     message: string;
+    subject?: string;
+    priority?: string;
+    related_module?: string;
     image_url?: string;
+    is_draft?: boolean;
+    recipient_ids?: string[];
 }
 
 export interface SupportRequestUpdate {
     message?: string;
+    subject?: string;
+    priority?: string;
+    related_module?: string;
+    image_url?: string;
     status?: "open" | "in_progress" | "resolved" | "closed";
+    is_draft?: boolean;
+    recipient_ids?: string[];
 }
 
 // =============== API Functions ===============
 
-const BASE_URL = "/support";
+const BASE_URL = "/api/support";
 
 /**
  * Get all support requests (admin/manager) or own requests (employee)
@@ -44,10 +62,12 @@ const BASE_URL = "/support";
 export async function getSupportRequests(params?: {
     user_id?: string;
     status_filter?: string;
+    priority?: string;
+    is_draft?: boolean;
     skip?: number;
     limit?: number;
 }): Promise<SupportRequest[]> {
-    return apiGet<SupportRequest[]>(BASE_URL, params);
+    return apiGet<SupportRequest[]>(BASE_URL, params as Record<string, string | number | boolean | undefined>);
 }
 
 /**
@@ -55,6 +75,13 @@ export async function getSupportRequests(params?: {
  */
 export async function getMySupportRequests(): Promise<SupportRequest[]> {
     return apiGet<SupportRequest[]>(`${BASE_URL}/my`);
+}
+
+/**
+ * Get available users for recipient picker
+ */
+export async function getSupportUsers(search?: string): Promise<SupportUser[]> {
+    return apiGet<SupportUser[]>(`${BASE_URL}/users-list`, search ? { search } : undefined);
 }
 
 /**

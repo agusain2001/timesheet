@@ -36,8 +36,10 @@ class RecentActivity(BaseModel):
 class PersonalDashboardResponse(BaseModel):
     my_tasks_count: int
     today_tasks_count: int
+    due_tasks_count: int
     overdue_tasks_count: int
     completed_today_count: int
+    completed_tasks_count: int
     upcoming_deadlines: List[UpcomingDeadline]
     hours_logged_today: float
     hours_logged_this_week: float
@@ -77,10 +79,9 @@ def get_personal_dashboard(
     now = datetime.utcnow()
     week_start = today - timedelta(days=today.weekday())
     
-    # My Tasks count (all non-completed tasks assigned to me)
+    # My Tasks count (ALL tasks assigned to me)
     my_tasks_count = db.query(Task).filter(
-        Task.assignee_id == current_user.id,
-        Task.status != TaskStatus.COMPLETED.value
+        Task.assignee_id == current_user.id
     ).count()
     
     # Tasks due today
@@ -93,14 +94,27 @@ def get_personal_dashboard(
         Task.status != TaskStatus.COMPLETED.value
     ).count()
     
-    # Overdue tasks
-    overdue_tasks_count = db.query(Task).filter(
+    # Due tasks (all non-completed, non-overdue tasks with a due date in the future)
+    due_tasks_count = db.query(Task).filter(
         Task.assignee_id == current_user.id,
         Task.status != TaskStatus.COMPLETED.value,
-        Task.due_date < now
+        Task.status != TaskStatus.OVERDUE.value,
+        Task.status != TaskStatus.CANCELLED.value
     ).count()
     
-    # Completed today
+    # Overdue tasks (only tasks with status "overdue" — matches the Overdue page filter)
+    overdue_tasks_count = db.query(Task).filter(
+        Task.assignee_id == current_user.id,
+        Task.status == TaskStatus.OVERDUE.value
+    ).count()
+    
+    # All completed tasks (total, not just today)
+    completed_tasks_count = db.query(Task).filter(
+        Task.assignee_id == current_user.id,
+        Task.status == TaskStatus.COMPLETED.value
+    ).count()
+    
+    # Completed today (for backward compatibility)
     completed_today_count = db.query(Task).filter(
         Task.assignee_id == current_user.id,
         Task.status == TaskStatus.COMPLETED.value,
@@ -212,8 +226,10 @@ def get_personal_dashboard(
     return PersonalDashboardResponse(
         my_tasks_count=my_tasks_count,
         today_tasks_count=today_tasks_count,
+        due_tasks_count=due_tasks_count,
         overdue_tasks_count=overdue_tasks_count,
         completed_today_count=completed_today_count,
+        completed_tasks_count=completed_tasks_count,
         upcoming_deadlines=upcoming_deadlines,
         hours_logged_today=round(hours_logged_today, 1),
         hours_logged_this_week=round(hours_logged_this_week, 1),

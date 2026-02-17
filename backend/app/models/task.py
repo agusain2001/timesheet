@@ -10,6 +10,9 @@ class TaskType(str, PyEnum):
     PERSONAL = "personal"
     PROJECT = "project"
     ASSIGNED = "assigned"
+    BUG = "bug"
+    FEATURE = "feature"
+    IMPROVEMENT = "improvement"
 
 
 class TaskPriority(str, PyEnum):
@@ -17,9 +20,11 @@ class TaskPriority(str, PyEnum):
     MEDIUM = "medium"
     HIGH = "high"
     URGENT = "urgent"
+    CRITICAL = "critical"
 
 
 class TaskStatus(str, PyEnum):
+    DRAFT = "draft"
     BACKLOG = "backlog"
     TODO = "todo"
     IN_PROGRESS = "in_progress"

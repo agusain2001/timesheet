@@ -142,7 +142,8 @@ def create_expense(
             )
             db.add(item)
             # Calculate with currency rate
-            total_amount += Decimal(str(item_data.amount)) * Decimal(str(item_data.currency_rate))
+            rate = Decimal(str(getattr(item_data, 'currency_rate', 1.0)))
+            total_amount += Decimal(str(item_data.amount)) * rate
     
     db_expense.total_amount = total_amount
     
@@ -351,14 +352,13 @@ def reject_expense(
     )
     db.add(approval)
     
-    reject_audit = create_audit_log(
+    create_audit_log(
         db=db,
         expense_id=expense.id,
         user_id=current_user.id,
         action="rejected",
         new_values={"status": ExpenseStatus.REJECTED.value, "rejection_reason": rejection.reason}
     )
-    db.add(reject_audit)
     
     db.commit()
     db.refresh(expense)

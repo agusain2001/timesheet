@@ -7,7 +7,8 @@ from app.database import engine, Base
 from app.routers import (
     auth, users, clients, departments, projects, tasks, 
     timesheets, expenses, support, dashboard, chatbot,
-    expense_dashboard, expense_reports, cost_centers, time_tracking
+    expense_dashboard, expense_reports, cost_centers, time_tracking,
+    my_time
 )
 # New routers for Task & Project Management System
 from app.routers import teams, workload, notifications, integrations, ai_features
@@ -80,6 +81,7 @@ app.include_router(workload.router, prefix="/api/workload", tags=["Workload & Ca
 # ========== Time & Expense Management ==========
 app.include_router(timesheets.router, prefix="/api/timesheets", tags=["Timesheets"])
 app.include_router(time_tracking.router, prefix="/api/time-tracking", tags=["Time Tracking"])
+app.include_router(my_time.router, prefix="/api/my-time", tags=["My Time"])
 app.include_router(expenses.router, prefix="/api/expenses", tags=["Expenses"])
 app.include_router(expense_dashboard.router, prefix="/api/expenses/dashboard", tags=["Expense Dashboard"])
 app.include_router(expense_reports.router, prefix="/api/expenses/reports", tags=["Expense Reports"])

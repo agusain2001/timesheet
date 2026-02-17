@@ -1,41 +1,43 @@
 /**
- * Dashboard API Service
+ * Dashboard API service
  */
 
 import { apiGet } from "./api";
 
-export interface DashboardStats {
-    total_tasks: number;
-    completed_today: number;
-    overdue_tasks: number;
-    total_hours_this_week: number;
-    avg_daily_tasks: number;
-    current_streak: number;
-    managed_employees: number;
-    total_assigned: number;
-    avg_workload: number;
-    departments: number;
+// ============ Types ============
+
+export interface UpcomingDeadline {
+    task_id: string;
+    task_name: string;
+    due_date: string;
+    priority: string;
+    project_name: string | null;
 }
 
-export interface ExpenseDashboardStats {
-    total_expenses: number;
-    pending_count: number;
-    approved_this_month: number;
-    pending_approval_amount: number;
-    my_expenses_count: number;
-    my_pending_count: number;
+export interface RecentActivity {
+    id: string;
+    type: string;
+    message: string;
+    timestamp: string;
+    link: string | null;
 }
 
-/**
- * Get dashboard statistics
- */
-export async function getDashboardStats(): Promise<DashboardStats> {
-    return apiGet<DashboardStats>("/dashboard/stats");
+export interface PersonalDashboard {
+    my_tasks_count: number;
+    today_tasks_count: number;
+    due_tasks_count: number;
+    overdue_tasks_count: number;
+    completed_today_count: number;
+    completed_tasks_count: number;
+    upcoming_deadlines: UpcomingDeadline[];
+    hours_logged_today: number;
+    hours_logged_this_week: number;
+    tasks_by_status: Record<string, number>;
+    recent_activity: RecentActivity[];
 }
 
-/**
- * Get expense dashboard statistics
- */
-export async function getExpenseDashboardStats(): Promise<ExpenseDashboardStats> {
-    return apiGet<ExpenseDashboardStats>("/expenses/dashboard/stats");
+// ============ API Functions ============
+
+export async function getPersonalDashboard(): Promise<PersonalDashboard> {
+    return apiGet<PersonalDashboard>("/api/dashboard/personal");
 }

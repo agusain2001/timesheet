@@ -31,6 +31,69 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+class UserProfileUpdate(BaseModel):
+    """Extended profile update schema for user profile page."""
+    full_name: Optional[str] = None
+    position: Optional[str] = None
+    avatar_url: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    # Business Details
+    region: Optional[str] = None
+    company_size: Optional[str] = None
+    business_sector: Optional[str] = None
+    website: Optional[str] = None
+    # Contact Information  
+    contact_person_name: Optional[str] = None
+    contact_person_role: Optional[str] = None
+    primary_phone: Optional[str] = None
+    secondary_phone: Optional[str] = None
+    # Financial & Billing
+    preferred_currency: Optional[str] = None
+    billing_type: Optional[str] = None
+    # Working preferences
+    timezone: Optional[str] = None
+    working_hours_start: Optional[str] = None
+    working_hours_end: Optional[str] = None
+
+class UserProfileResponse(BaseModel):
+    """Extended profile response for user profile page."""
+    id: str
+    email: str
+    full_name: str
+    employee_id: str = ""
+    alias: Optional[str] = None
+    user_type: str = "individual"
+    role: str
+    avatar_url: Optional[str] = None
+    position: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    # Business Details
+    region: Optional[str] = None
+    company_size: Optional[str] = None
+    business_sector: Optional[str] = None
+    website: Optional[str] = None
+    # Contact Information
+    contact_person_name: Optional[str] = None
+    contact_person_role: Optional[str] = None
+    primary_phone: Optional[str] = None
+    secondary_phone: Optional[str] = None
+    # Financial & Billing
+    preferred_currency: Optional[str] = None
+    billing_type: Optional[str] = None
+    # Working preferences
+    timezone: Optional[str] = None
+    working_hours_start: Optional[str] = None
+    working_hours_end: Optional[str] = None
+    # Meta
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
 class UserBrief(BaseModel):
     """Brief user info for embedded responses."""
     id: str
@@ -219,7 +282,7 @@ class TaskBase(BaseModel):
     due_date: Optional[datetime] = None
 
 class TaskCreate(TaskBase):
-    pass
+    status: Optional[str] = None
 
 class TaskUpdate(BaseModel):
     name: Optional[str] = None
@@ -242,6 +305,24 @@ class TaskResponse(TaskBase):
     client: Optional[ClientBrief] = None
     assignee: Optional[UserBrief] = None
     
+    class Config:
+        from_attributes = True
+
+
+# =============== Task Comment Schemas ===============
+class CommentCreate(BaseModel):
+    content: str
+
+class CommentResponse(BaseModel):
+    id: str
+    task_id: str
+    user_id: str
+    content: str
+    is_edited: bool = False
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    user: Optional[UserBrief] = None
+
     class Config:
         from_attributes = True
 
@@ -637,20 +718,35 @@ class ExpenseReportResponse(BaseModel):
 # =============== Support Schemas ===============
 class SupportRequestBase(BaseModel):
     message: str
+    subject: Optional[str] = None
+    priority: str = "normal"
+    related_module: Optional[str] = None
+    image_url: Optional[str] = None
 
 class SupportRequestCreate(SupportRequestBase):
-    pass
+    recipient_ids: Optional[List[str]] = None
+    is_draft: bool = False
 
 class SupportRequestUpdate(BaseModel):
     message: Optional[str] = None
+    subject: Optional[str] = None
+    priority: Optional[str] = None
+    related_module: Optional[str] = None
+    image_url: Optional[str] = None
     status: Optional[str] = None
+    is_draft: Optional[bool] = None
+    recipient_ids: Optional[List[str]] = None
 
 class SupportRequestResponse(SupportRequestBase):
     id: str
     user_id: str
     status: str
+    is_draft: bool = False
+    recipient_ids: Optional[List[str]] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
+    user: Optional[UserBrief] = None
     
     class Config:
         from_attributes = True

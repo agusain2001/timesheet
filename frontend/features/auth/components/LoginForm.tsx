@@ -21,7 +21,7 @@ export function LoginForm() {
         try {
             const { user } = await login(email, password);
             showSuccess(`Welcome back, ${user.full_name}!`);
-            router.push("/clients");
+            router.push("/home");
             router.refresh();
         } catch (err) {
             const message =
