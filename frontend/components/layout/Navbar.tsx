@@ -4,10 +4,10 @@ import { Search, Bell, Grid2x2Plus, LogOut, User, Settings } from "lucide-react"
 import { ThemeToggle } from "../ui/Toggle/ThemeToggle";
 import Image from "next/image";
 import { useTheme } from "next-themes";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { logout } from "@/lib/auth";
+import { logout, getToken } from "@/lib/auth";
 import { getProjects } from "@/services/projects";
 
 import AddTaskModal from "@/components/AddTaskModal";
@@ -24,16 +24,45 @@ export function Navbar() {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [modal, setModal] = useState<"task" | "client" | "project" | "expense" | "support" | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<HTMLDivElement>(null);
+  const API = process.env.NEXT_PUBLIC_API_URL || "";
 
   useEffect(() => setMounted(true), []);
+
+  // Fetch unread notification count
+  useEffect(() => {
+    if (!mounted) return;
+    const fetchUnread = async () => {
+      try {
+        const token = getToken();
+        const res = await fetch(`${API}/api/notifications/unread-count`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUnreadCount(data?.unread_count ?? 0);
+        }
+      } catch { }
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 60000); // refresh every minute
+    return () => clearInterval(interval);
+  }, [mounted, API]);
 
   const fetchProjectsForExpense = async () => {
     try {
       const data = await getProjects();
       setProjects(data.map(p => ({ id: p.id, name: p.name })));
     } catch (e) { }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (q) router.push(`/search?q=${encodeURIComponent(q)}`);
   };
 
   useEffect(() => {
@@ -63,8 +92,8 @@ export function Navbar() {
     <header className="flex items-center justify-between px-8 py-2 transition-colors duration-200">
       <Image src="/logo.png" alt="logo" height={34} width={140} />
 
-      <div className="relative w-96">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+      <form onSubmit={handleSearch} className="relative w-96">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none" />
         <Image
           className="absolute right-3 top-2.5 h-4 w-4"
           src="/ai-icon.png"
@@ -77,9 +106,12 @@ export function Navbar() {
             "w-full rounded-full pl-10 pr-4 py-2 text-sm",
             isDark ? "bg-[#2A2A2A]/90" : "bg-gray-200/60",
           )}
-          placeholder="Search"
+          placeholder="Search…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSearch(e as any); }}
         />
-      </div>
+      </form>
 
       <div className="flex items-center gap-6">
         <ThemeToggle />
@@ -114,7 +146,18 @@ export function Navbar() {
           )}
         </div>
 
-        <Bell className="cursor-pointer" />
+        {/* Notification Bell */}
+        <button
+          onClick={() => router.push("/notifications")}
+          className="relative text-foreground/70 hover:text-foreground transition"
+        >
+          <Bell className="w-5 h-5 cursor-pointer" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-indigo-500 text-white text-[9px] font-bold flex items-center justify-center">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+        </button>
 
         {/* User Avatar + Dropdown */}
         <div ref={menuRef} className="relative">

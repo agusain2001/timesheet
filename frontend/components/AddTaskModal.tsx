@@ -26,6 +26,17 @@ interface AddTaskModalProps {
     onTaskCreated?: () => void;
 }
 
+interface TaskTemplate {
+    id: string;
+    name: string;
+    priority?: string;
+    status?: string;
+    task_type?: string;
+    estimated_hours?: number;
+    description?: string;
+    checklist?: string[];
+}
+
 // ============ Config ============
 
 const TASK_TYPES = [
@@ -301,14 +312,17 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
     });
     const [projects, setProjects] = useState<ProjectOption[]>([]);
     const [users, setUsers] = useState<UserOption[]>([]);
+    const [templates, setTemplates] = useState<TaskTemplate[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [attachments, setAttachments] = useState<File[]>([]);
+    const [applyingTemplate, setApplyingTemplate] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
         apiGet<ProjectOption[]>("/api/projects").then(setProjects).catch(() => { });
         apiGet<UserOption[]>("/api/users").then(setUsers).catch(() => { });
+        apiGet<TaskTemplate[]>("/api/task-templates?limit=20").then(setTemplates).catch(() => { });
     }, [isOpen]);
 
     useEffect(() => {
@@ -317,6 +331,22 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
         window.addEventListener("keydown", handleKey);
         return () => window.removeEventListener("keydown", handleKey);
     }, [isOpen, onClose]);
+
+    const applyTemplate = async (tpl: TaskTemplate) => {
+        setApplyingTemplate(true);
+        try {
+            // call /use to increment counter, then pre-fill form
+            await apiPost(`/api/task-templates/${tpl.id}/use`, {});
+            setForm((prev) => ({
+                ...prev,
+                task_type: tpl.task_type || prev.task_type,
+                description: tpl.description || prev.description,
+                priority: tpl.priority || prev.priority,
+                status: tpl.status || prev.status,
+                estimated_hours: tpl.estimated_hours?.toString() || prev.estimated_hours,
+            }));
+        } catch { } finally { setApplyingTemplate(false); }
+    };
 
     const handleOverlayClick = (e: React.MouseEvent) => {
         if (e.target === overlayRef.current) onClose();
@@ -386,6 +416,26 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
                 <div className="p-6 space-y-5">
                     {error && (
                         <div className="p-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-600 dark:text-red-400 text-sm">{error}</div>
+                    )}
+
+                    {/* ---- From Template ---- */}
+                    {templates.length > 0 && (
+                        <div className="rounded-xl border border-foreground/8 p-4">
+                            <h3 className="text-sm font-semibold text-foreground mb-2">From Template</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {templates.map((tpl) => (
+                                    <button
+                                        key={tpl.id}
+                                        type="button"
+                                        onClick={() => applyTemplate(tpl)}
+                                        disabled={applyingTemplate}
+                                        className="px-2.5 py-1 rounded-lg text-xs bg-foreground/[0.04] border border-foreground/10 text-foreground/70 hover:bg-foreground/[0.08] hover:border-foreground/20 transition disabled:opacity-50"
+                                    >
+                                        {tpl.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     )}
 
                     {/* ---- Task Details ---- */}

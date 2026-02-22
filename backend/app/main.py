@@ -18,7 +18,7 @@ from app.routers import (
     manager_dashboards, websocket_notifications
 )
 # Phase 3: Advanced Features, MFA
-from app.routers import advanced_features, mfa
+from app.routers import advanced_features, mfa, task_templates
 # Phase 4: Views and Email Notifications
 from app.routers import views, email_notifications
 # Phase 5: GDPR, Permissions, Google Calendar
@@ -123,6 +123,9 @@ app.include_router(mfa.router, prefix="/api/mfa", tags=["Multi-Factor Authentica
 
 # ========== View Customization ==========
 app.include_router(views.router, prefix="/api/views", tags=["Saved Views"])
+
+# ========== Task Templates ==========
+app.include_router(task_templates.router, prefix="/api/task-templates", tags=["Task Templates"])
 
 # ========== Email Notifications ==========
 app.include_router(email_notifications.router, prefix="/api/notifications/email", tags=["Email Notifications"])
