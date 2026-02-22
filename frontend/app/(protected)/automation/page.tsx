@@ -2,141 +2,117 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-    Zap, Plus, Edit2, Trash2, ToggleLeft, ToggleRight,
-    X, Loader2, AlertCircle, ChevronDown, Play, Clock,
+    Zap, Plus, Power, Trash2, Edit2, Clock, Loader2, X, AlertCircle, CheckCircle2,
 } from "lucide-react";
-import { getToken } from "@/lib/auth";
+import {
+    getAutomationRules, createAutomationRule, updateAutomationRule,
+    deleteAutomationRule, getAutomationLogs,
+    type AutomationRule, type AutomationLog, type AutomationRuleCreate,
+    type TriggerEvent, type ActionType,
+} from "@/services/automation";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "";
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-async function apiFetch(path: string, opts: RequestInit = {}) {
-    const token = getToken();
-    const res = await fetch(`${API}/api${path}`, {
-        ...opts,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(opts.headers || {}) },
-    });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Request failed"); }
-    if (res.status === 204) return null;
-    return res.json();
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface AutomationRule {
-    id: string;
-    name: string;
-    description?: string;
-    trigger_event: string;
-    conditions: Record<string, any>[];
-    actions: Record<string, any>[];
-    is_active: boolean;
-    run_count: number;
-    last_run_at?: string;
-    created_at?: string;
-}
-
-interface AutomationLog {
-    id: string;
-    rule_name: string;
-    triggered_at: string;
-    status: string;
-    result?: string;
-}
-
-// ─── Trigger / Action options ─────────────────────────────────────────────────
-
-const TRIGGERS = [
+const TRIGGERS: { value: TriggerEvent; label: string }[] = [
     { value: "task_created", label: "Task Created" },
-    { value: "task_completed", label: "Task Completed" },
-    { value: "status_changed", label: "Status Changed" },
-    { value: "due_date_passed", label: "Due Date Passed" },
-    { value: "assignee_changed", label: "Assignee Changed" },
-    { value: "priority_changed", label: "Priority Changed" },
+    { value: "task_updated", label: "Task Updated" },
+    { value: "task_status_changed", label: "Status Changed" },
+    { value: "task_assigned", label: "Task Assigned" },
+    { value: "task_due_soon", label: "Task Due Soon" },
     { value: "task_overdue", label: "Task Overdue" },
+    { value: "task_completed", label: "Task Completed" },
     { value: "comment_added", label: "Comment Added" },
+    { value: "project_status_changed", label: "Project Status Changed" },
+    { value: "expense_submitted", label: "Expense Submitted" },
+    { value: "timesheet_submitted", label: "Timesheet Submitted" },
 ];
 
-const ACTIONS = [
-    { value: "change_status", label: "Change Status" },
-    { value: "assign_to", label: "Assign To User" },
+const ACTIONS: { value: ActionType; label: string }[] = [
     { value: "send_notification", label: "Send Notification" },
-    { value: "add_comment", label: "Add Comment" },
+    { value: "send_email", label: "Send Email" },
+    { value: "assign_task", label: "Assign Task" },
+    { value: "change_status", label: "Change Status" },
     { value: "change_priority", label: "Change Priority" },
-    { value: "set_due_date", label: "Set Due Date" },
-    { value: "add_label", label: "Add Label/Tag" },
-    { value: "webhook", label: "Trigger Webhook" },
+    { value: "add_label", label: "Add Label" },
+    { value: "create_subtask", label: "Create Subtask" },
+    { value: "notify_manager", label: "Notify Manager" },
+    { value: "escalate", label: "Escalate" },
+    { value: "webhook", label: "Call Webhook" },
 ];
 
 // ─── Rule Card ────────────────────────────────────────────────────────────────
 
-function RuleCard({
-    rule,
-    onEdit,
-    onDelete,
-    onToggle,
-}: {
+function RuleCard({ rule, onEdit, onDelete, onToggle }: {
     rule: AutomationRule;
     onEdit: (r: AutomationRule) => void;
     onDelete: (r: AutomationRule) => void;
     onToggle: (r: AutomationRule) => void;
 }) {
-    const trigger = TRIGGERS.find((t) => t.value === rule.trigger_event);
-    const lastRun = rule.last_run_at ? new Date(rule.last_run_at).toLocaleDateString() : "Never";
+    const triggerLabel = TRIGGERS.find((t) => t.value === rule.trigger_event)?.label ?? rule.trigger_event;
+    const actionLabels = rule.actions.map((a) =>
+        ACTIONS.find((x) => x.value === a.type)?.label ?? a.type
+    );
 
     return (
         <div className={`p-5 rounded-2xl border transition-all ${rule.is_active
-                ? "border-white/10 bg-white/5"
-                : "border-white/5 bg-white/2 opacity-60"
+            ? "border-white/10 bg-white/5"
+            : "border-white/5 bg-white/2 opacity-60"
             }`}>
-            <div className="flex items-start justify-between mb-3">
+            <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-sm font-semibold text-slate-200 truncate">{rule.name}</h3>
-                        {rule.is_active ? (
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-green-500/20 text-green-400 font-medium">Active</span>
-                        ) : (
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-white/10 text-slate-500 font-medium">Inactive</span>
-                        )}
-                    </div>
+                    <h3 className="font-semibold text-slate-200 truncate">{rule.name}</h3>
                     {rule.description && (
-                        <p className="text-xs text-slate-500 truncate">{rule.description}</p>
+                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{rule.description}</p>
                     )}
                 </div>
-                <div className="flex items-center gap-1 ml-3">
-                    <button onClick={() => onToggle(rule)} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors" title={rule.is_active ? "Disable" : "Enable"}>
-                        {rule.is_active ? <ToggleRight size={16} className="text-green-400" /> : <ToggleLeft size={16} />}
-                    </button>
-                    <button onClick={() => onEdit(rule)} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors">
-                        <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => onDelete(rule)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors">
-                        <Trash2 size={14} />
-                    </button>
+                <div className="flex items-center gap-1 shrink-0">
+                    <button
+                        onClick={() => onEdit(rule)}
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors"
+                    ><Edit2 size={13} /></button>
+                    <button
+                        onClick={() => onDelete(rule)}
+                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors"
+                    ><Trash2 size={13} /></button>
                 </div>
             </div>
 
-            {/* Trigger → Actions */}
-            <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 text-xs font-medium">
-                    ⚡ {trigger?.label || rule.trigger_event}
+            {/* Pipeline */}
+            <div className="flex items-center gap-2 flex-wrap text-xs mb-4">
+                <span className="px-2 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 font-medium">
+                    {triggerLabel}
                 </span>
-                <span className="text-slate-600 text-xs">→</span>
-                {rule.actions.slice(0, 3).map((a, i) => {
-                    const actionDef = ACTIONS.find((x) => x.value === (a.type || a.action));
-                    return (
-                        <span key={i} className="px-2.5 py-1 rounded-lg bg-violet-500/20 text-violet-300 text-xs font-medium">
-                            {actionDef?.label || a.type || a.action}
-                        </span>
-                    );
-                })}
-                {rule.actions.length > 3 && (
-                    <span className="text-xs text-slate-600">+{rule.actions.length - 3}</span>
+                <span className="text-slate-600">→</span>
+                {actionLabels.slice(0, 3).map((a, i) => (
+                    <span key={i} className="px-2 py-1 rounded-lg bg-white/10 text-slate-400">{a}</span>
+                ))}
+                {actionLabels.length > 3 && (
+                    <span className="text-slate-600">+{actionLabels.length - 3} more</span>
                 )}
             </div>
 
-            <div className="flex items-center gap-4 mt-3 text-xs text-slate-600">
-                <span className="flex items-center gap-1"><Play size={10} /> {rule.run_count} runs</span>
-                <span className="flex items-center gap-1"><Clock size={10} /> Last: {lastRun}</span>
+            {/* Footer */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 text-xs text-slate-600">
+                    <span className="flex items-center gap-1">
+                        <Zap size={10} /> {rule.trigger_count ?? 0} runs
+                    </span>
+                    {rule.last_triggered_at && (
+                        <span className="flex items-center gap-1">
+                            <Clock size={10} /> {new Date(rule.last_triggered_at).toLocaleDateString()}
+                        </span>
+                    )}
+                </div>
+                <button
+                    onClick={() => onToggle(rule)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${rule.is_active
+                        ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                        : "bg-slate-500/20 text-slate-500 hover:bg-slate-500/30"
+                        }`}
+                >
+                    <Power size={10} />
+                    {rule.is_active ? "Active" : "Disabled"}
+                </button>
             </div>
         </div>
     );
@@ -144,56 +120,54 @@ function RuleCard({
 
 // ─── Rule Form Modal ──────────────────────────────────────────────────────────
 
-function RuleFormModal({
-    rule,
-    onSave,
-    onClose,
-}: {
-    rule: Partial<AutomationRule> | null;
+function RuleModal({ rule, onSave, onClose }: {
+    rule: AutomationRule | null;
     onSave: () => void;
     onClose: () => void;
 }) {
-    const isEdit = !!rule?.id;
-    const [form, setForm] = useState({
-        name: rule?.name || "",
-        description: rule?.description || "",
-        trigger_event: rule?.trigger_event || "task_created",
-        conditions: rule?.conditions || [],
-        actions: rule?.actions || [{ type: "change_status", value: "" }],
+    const [form, setForm] = useState<AutomationRuleCreate>({
+        name: rule?.name ?? "",
+        description: rule?.description ?? "",
+        trigger_event: rule?.trigger_event ?? "task_created",
+        conditions: rule?.conditions ?? [],
+        actions: rule?.actions ?? [{ type: "send_notification", params: {} }],
         is_active: rule?.is_active ?? true,
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
 
+    const handleAddAction = () => setForm((f) => ({
+        ...f, actions: [...f.actions, { type: "send_notification", params: {} }],
+    }));
+    const handleRemoveAction = (i: number) => setForm((f) => ({
+        ...f, actions: f.actions.filter((_, idx) => idx !== i),
+    }));
+
     const handleSave = async () => {
         if (!form.name.trim()) { setError("Name is required"); return; }
-        setSaving(true);
-        setError("");
+        setSaving(true); setError("");
         try {
-            if (isEdit) {
-                await apiFetch(`/advanced/automation-rules/${rule!.id}`, { method: "PUT", body: JSON.stringify(form) });
-            } else {
-                await apiFetch("/advanced/automation-rules", { method: "POST", body: JSON.stringify(form) });
-            }
+            if (rule?.id) await updateAutomationRule(rule.id, form);
+            else await createAutomationRule(form);
             onSave();
-        } catch (e: any) { setError(e.message); }
-        finally { setSaving(false); }
+        } catch (e: any) {
+            setError(e?.message ?? "Save failed");
+        } finally { setSaving(false); }
     };
 
-    const addAction = () => setForm((f) => ({ ...f, actions: [...f.actions, { type: "send_notification", value: "" }] }));
-    const removeAction = (i: number) => setForm((f) => ({ ...f, actions: f.actions.filter((_, idx) => idx !== i) }));
-    const updateAction = (i: number, key: string, val: string) =>
-        setForm((f) => ({ ...f, actions: f.actions.map((a, idx) => idx === i ? { ...a, [key]: val } : a) }));
+    const fieldCls = "w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-sm placeholder-slate-600 focus:outline-none focus:border-indigo-500/50";
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
-                    <h2 className="text-lg font-semibold text-slate-200">{isEdit ? "Edit Rule" : "New Automation Rule"}</h2>
+                    <h2 className="text-lg font-semibold text-slate-200">
+                        {rule ? "Edit Rule" : "New Automation Rule"}
+                    </h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X size={20} /></button>
                 </div>
 
-                <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
                     {error && (
                         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
                             <AlertCircle size={14} /> {error}
@@ -201,75 +175,71 @@ function RuleFormModal({
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">Rule Name *</label>
+                        <label className="block text-sm text-slate-400 mb-1">Name *</label>
                         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-sm placeholder-slate-600 focus:outline-none focus:border-indigo-500/50"
-                            placeholder="e.g. Notify on overdue task" />
+                            className={fieldCls} placeholder="e.g. Notify on overdue task" />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">Description</label>
-                        <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-sm placeholder-slate-600 focus:outline-none focus:border-indigo-500/50"
-                            placeholder="What this rule does" />
+                        <label className="block text-sm text-slate-400 mb-1">Description</label>
+                        <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+                            className={`${fieldCls} resize-none`} rows={2} />
                     </div>
 
-                    {/* Trigger */}
                     <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">⚡ Trigger Event</label>
-                        <select value={form.trigger_event} onChange={(e) => setForm({ ...form, trigger_event: e.target.value })}
-                            className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-sm">
+                        <label className="block text-sm text-slate-400 mb-1">Trigger</label>
+                        <select
+                            value={form.trigger_event}
+                            onChange={(e) => setForm({ ...form, trigger_event: e.target.value as TriggerEvent })}
+                            className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-sm"
+                        >
                             {TRIGGERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                         </select>
                     </div>
 
-                    {/* Actions */}
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm font-medium text-slate-400">→ Actions</label>
-                            <button onClick={addAction} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
-                                <Plus size={11} /> Add Action
-                            </button>
+                            <label className="text-sm text-slate-400">Actions</label>
+                            <button onClick={handleAddAction} className="text-xs text-indigo-400 hover:text-indigo-300">+ Add</button>
                         </div>
-                        <div className="space-y-2">
-                            {form.actions.map((action, i) => (
-                                <div key={i} className="flex items-center gap-2">
-                                    <select
-                                        value={action.type || action.action || ""}
-                                        onChange={(e) => updateAction(i, "type", e.target.value)}
-                                        className="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-sm"
-                                    >
-                                        {ACTIONS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-                                    </select>
-                                    <input
-                                        value={action.value || ""}
-                                        onChange={(e) => updateAction(i, "value", e.target.value)}
-                                        placeholder="Value (optional)"
-                                        className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-sm placeholder-slate-600"
-                                    />
-                                    <button onClick={() => removeAction(i)} className="text-slate-600 hover:text-red-400 transition-colors">
+                        {form.actions.map((action, i) => (
+                            <div key={i} className="flex items-center gap-2 mb-2">
+                                <select
+                                    value={action.type}
+                                    onChange={(e) => {
+                                        const updated = [...form.actions];
+                                        updated[i] = { ...updated[i], type: e.target.value as ActionType };
+                                        setForm({ ...form, actions: updated });
+                                    }}
+                                    className="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-sm"
+                                >
+                                    {ACTIONS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                                </select>
+                                {form.actions.length > 1 && (
+                                    <button onClick={() => handleRemoveAction(i)} className="text-slate-600 hover:text-red-400">
                                         <X size={14} />
                                     </button>
-                                </div>
-                            ))}
-                        </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="sr-only peer" />
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <div className="relative">
+                            <input type="checkbox" className="sr-only peer" checked={form.is_active}
+                                onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                             <div className="w-10 h-5 bg-white/10 peer-checked:bg-indigo-500 rounded-full transition-colors relative after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-5" />
-                        </label>
-                        <span className="text-sm text-slate-400">Active</span>
-                    </div>
+                        </div>
+                        <span className="text-sm text-slate-400">Enable this rule</span>
+                    </label>
                 </div>
 
                 <div className="flex justify-end gap-3 p-6 border-t border-white/10">
                     <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200">Cancel</button>
                     <button onClick={handleSave} disabled={saving}
-                        className="px-4 py-2 rounded-lg text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-2 disabled:opacity-50">
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium disabled:opacity-50">
                         {saving && <Loader2 size={14} className="animate-spin" />}
-                        {isEdit ? "Save" : "Create Rule"}
+                        {rule ? "Save Changes" : "Create Rule"}
                     </button>
                 </div>
             </div>
@@ -277,124 +247,139 @@ function RuleFormModal({
     );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Automation Page ──────────────────────────────────────────────────────────
 
 export default function AutomationPage() {
     const [rules, setRules] = useState<AutomationRule[]>([]);
     const [logs, setLogs] = useState<AutomationLog[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showForm, setShowForm] = useState(false);
-    const [editRule, setEditRule] = useState<Partial<AutomationRule> | null>(null);
-    const [deleteRule, setDeleteRule] = useState<AutomationRule | null>(null);
     const [tab, setTab] = useState<"rules" | "logs">("rules");
+    const [editRule, setEditRule] = useState<AutomationRule | null | false>(false);
+    const [deleteTarget, setDeleteTarget] = useState<AutomationRule | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
-    const fetchData = useCallback(async () => {
+    const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
             const [r, l] = await Promise.all([
-                apiFetch("/advanced/automation-rules"),
-                apiFetch("/advanced/automation-logs?limit=50"),
+                getAutomationRules({ limit: 100 }),
+                getAutomationLogs({ limit: 50 }),
             ]);
-            setRules(r?.rules || r || []);
-            setLogs(l?.logs || l || []);
-        } catch { setRules([]); setLogs([]); }
+            setRules(r);
+            setLogs(l);
+        } catch { }
         finally { setLoading(false); }
     }, []);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { fetchAll(); }, [fetchAll]);
 
     const handleToggle = async (rule: AutomationRule) => {
         try {
-            await apiFetch(`/advanced/automation-rules/${rule.id}`, {
-                method: "PUT",
-                body: JSON.stringify({ is_active: !rule.is_active }),
-            });
-            fetchData();
-        } catch (e: any) { alert(e.message); }
+            const updated = await updateAutomationRule(rule.id, { is_active: !rule.is_active });
+            setRules((prev) => prev.map((r) => r.id === rule.id ? updated : r));
+        } catch { }
     };
 
     const handleDelete = async () => {
-        if (!deleteRule) return;
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await apiFetch(`/advanced/automation-rules/${deleteRule.id}`, { method: "DELETE" });
-            setDeleteRule(null);
-            fetchData();
-        } catch (e: any) { alert(e.message); }
+            await deleteAutomationRule(deleteTarget.id);
+            setRules((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+            setDeleteTarget(null);
+        } catch { } finally { setDeleting(false); }
+    };
+
+    const LOG_STATUS_MAP: Record<string, string> = {
+        success: "bg-green-500/20 text-green-400",
+        failed: "bg-red-500/20 text-red-400",
+        partial: "bg-amber-500/20 text-amber-400",
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-200 p-6 space-y-6">
+        <div className="min-h-screen p-6 space-y-6 bg-background text-foreground">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold flex items-center gap-2"><Zap size={22} className="text-indigo-400" /> Automation Rules</h1>
+                    <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+                        <Zap size={22} className="text-indigo-400" /> Automation
+                    </h1>
                     <p className="text-sm text-slate-500 mt-1">{rules.length} rules · {rules.filter((r) => r.is_active).length} active</p>
                 </div>
                 <button
-                    onClick={() => { setEditRule({}); setShowForm(true); }}
+                    onClick={() => setEditRule(null)}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
                 >
-                    <Plus size={15} /> New Rule
+                    <Plus size={16} /> New Rule
                 </button>
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1 w-fit">
+            <div className="flex gap-1 bg-white/5 border border-white/10 rounded-xl p-1 w-fit">
                 {(["rules", "logs"] as const).map((t) => (
                     <button key={t} onClick={() => setTab(t)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${tab === t ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-300"}`}>
-                        {t === "rules" ? `Rules (${rules.length})` : `Execution Log (${logs.length})`}
+                        className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize ${tab === t ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-300"
+                            }`}
+                    >
+                        {t === "logs" ? "Execution Log" : "Rules"}
                     </button>
                 ))}
             </div>
 
-            {/* Content */}
             {loading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-indigo-400" /></div>
+                <div className="flex items-center justify-center h-48">
+                    <Loader2 size={28} className="animate-spin text-indigo-400" />
+                </div>
             ) : tab === "rules" ? (
                 rules.length === 0 ? (
                     <div className="text-center py-16">
                         <Zap size={40} className="text-slate-700 mx-auto mb-3" />
-                        <p className="text-slate-500 text-sm mb-3">No automation rules yet</p>
-                        <button onClick={() => { setEditRule({}); setShowForm(true); }}
-                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm">
-                            Create First Rule
-                        </button>
+                        <p className="text-slate-500">No automation rules yet. Create one to get started.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {rules.map((r) => (
-                            <RuleCard key={r.id} rule={r}
-                                onEdit={(rule) => { setEditRule(rule); setShowForm(true); }}
-                                onDelete={setDeleteRule}
+                        {rules.map((rule) => (
+                            <RuleCard
+                                key={rule.id} rule={rule}
+                                onEdit={(r) => setEditRule(r)}
+                                onDelete={(r) => setDeleteTarget(r)}
                                 onToggle={handleToggle}
                             />
                         ))}
                     </div>
                 )
             ) : (
-                <div className="rounded-2xl border border-white/10 overflow-hidden">
+                /* Logs tab */
+                <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
                     <table className="w-full text-sm">
-                        <thead className="bg-white/5 border-b border-white/10">
-                            <tr>
-                                {["Rule", "Triggered At", "Status", "Result"].map((h) => (
-                                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
+                        <thead>
+                            <tr className="border-b border-white/10">
+                                {["Rule", "Event", "Entity", "Status", "Executed", "Actions"].map((h) => (
+                                    <th key={h} className="text-left px-4 py-3 text-xs text-slate-500 font-medium">{h}</th>
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/5">
+                        <tbody>
                             {logs.length === 0 ? (
-                                <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-600">No executions yet</td></tr>
+                                <tr>
+                                    <td colSpan={6} className="text-center py-10 text-slate-600">No logs yet</td>
+                                </tr>
                             ) : logs.map((log) => (
-                                <tr key={log.id} className="hover:bg-white/3 transition-colors">
-                                    <td className="px-4 py-3 text-slate-300">{log.rule_name}</td>
-                                    <td className="px-4 py-3 text-slate-500 text-xs">{new Date(log.triggered_at).toLocaleString()}</td>
+                                <tr key={log.id} className="border-b border-white/5 hover:bg-white/3 transition-colors">
+                                    <td className="px-4 py-3 text-slate-300 font-medium">{log.rule_name}</td>
+                                    <td className="px-4 py-3 text-slate-400 text-xs">{log.trigger_event?.replace(/_/g, " ")}</td>
+                                    <td className="px-4 py-3 text-slate-400 text-xs">{log.entity_type}/{log.entity_id?.slice(0, 8)}</td>
                                     <td className="px-4 py-3">
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.status === "success" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${LOG_STATUS_MAP[log.status] || "bg-slate-500/20 text-slate-400"}`}>
                                             {log.status}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-slate-500 text-xs truncate max-w-xs">{log.result || "—"}</td>
+                                    <td className="px-4 py-3 text-slate-500 text-xs">
+                                        {new Date(log.executed_at).toLocaleString()}
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-500 text-xs">
+                                        {log.actions_executed?.join(", ") ?? "—"}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -402,20 +387,30 @@ export default function AutomationPage() {
                 </div>
             )}
 
-            {/* Form Modal */}
-            {showForm && (
-                <RuleFormModal rule={editRule} onSave={() => { setShowForm(false); setEditRule(null); fetchData(); }} onClose={() => { setShowForm(false); setEditRule(null); }} />
+            {/* Rule form modal */}
+            {editRule !== false && (
+                <RuleModal
+                    rule={editRule}
+                    onSave={() => { setEditRule(false); fetchAll(); }}
+                    onClose={() => setEditRule(false)}
+                />
             )}
 
-            {/* Delete Confirm */}
-            {deleteRule && (
+            {/* Delete confirm */}
+            {deleteTarget && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-sm p-6">
-                        <h3 className="font-semibold text-slate-200 mb-2">Delete Rule?</h3>
-                        <p className="text-sm text-slate-500 mb-5"><strong className="text-slate-300">{deleteRule.name}</strong> will be permanently removed.</p>
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+                        <h3 className="text-base font-semibold text-slate-200 mb-2">Delete Rule</h3>
+                        <p className="text-sm text-slate-400 mb-5">
+                            Are you sure you want to delete "{deleteTarget.name}"?
+                        </p>
                         <div className="flex justify-end gap-3">
-                            <button onClick={() => setDeleteRule(null)} className="px-4 py-2 text-sm text-slate-400">Cancel</button>
-                            <button onClick={handleDelete} className="px-4 py-2 rounded-lg text-sm bg-red-600 hover:bg-red-500 text-white font-medium">Delete</button>
+                            <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200">Cancel</button>
+                            <button onClick={handleDelete} disabled={deleting}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium disabled:opacity-50">
+                                {deleting && <Loader2 size={14} className="animate-spin" />}
+                                Delete
+                            </button>
                         </div>
                     </div>
                 </div>
