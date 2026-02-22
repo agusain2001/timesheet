@@ -21,8 +21,8 @@ from app.routers import (
 from app.routers import advanced_features, mfa, task_templates
 # Phase 4: Views and Email Notifications
 from app.routers import views, email_notifications
-# Phase 5: GDPR, Permissions, Google Calendar
-from app.routers import gdpr, permissions, google_calendar
+# Phase 5: GDPR, Permissions, Google Calendar, Project Structure
+from app.routers import gdpr, permissions, google_calendar, project_structure
 # Settings
 from app.routers import settings as settings_router
 # OpenAPI documentation enhancement
@@ -138,6 +138,9 @@ app.include_router(permissions.router, prefix="/api", tags=["Permissions & Roles
 
 # ========== Google Calendar Integration ==========
 app.include_router(google_calendar.router, prefix="/api/integrations", tags=["Google Calendar"])
+
+# ========== Project Structure (Phases, Epics, Milestones) ==========
+app.include_router(project_structure.router, prefix="/api", tags=["Project Structure"])
 
 # ========== User Settings ==========
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
