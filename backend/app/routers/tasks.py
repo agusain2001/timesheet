@@ -1,7 +1,10 @@
 """Tasks router — full CRUD with role-based access control and dependency enforcement."""
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import os, uuid, shutil
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Task, User, Project, Client, TaskStatus, TaskDependency
@@ -444,3 +447,108 @@ def get_dependencies(
             for dep in successors if dep.successor
         ],
     }
+
+
+# ─── File Attachments ─────────────────────────────────────────────────────────
+
+# In-memory attachment store (keyed by task_id → list of attachment dicts)
+# In production this would be a database table.
+_attachments: dict = {}
+ATTACHMENTS_DIR = Path("uploads/attachments")
+ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+MAX_FILE_SIZE_MB = 20
+ALLOWED_EXTENSIONS = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+    ".zip", ".tar", ".gz",
+    ".txt", ".md", ".csv", ".json",
+}
+
+
+@router.get("/{task_id}/attachments")
+def list_attachments(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List all file attachments for a task."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return _attachments.get(task_id, [])
+
+
+@router.post("/{task_id}/attachments")
+async def upload_attachment(
+    task_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Upload a file attachment to a task."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Validate extension
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"File type '{ext}' not allowed")
+
+    # Read and check size
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"File too large (max {MAX_FILE_SIZE_MB}MB)")
+
+    # Save file
+    task_dir = ATTACHMENTS_DIR / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = task_dir / unique_name
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    attachment = {
+        "id": unique_name,
+        "filename": file.filename,
+        "stored_name": unique_name,
+        "size": len(content),
+        "content_type": file.content_type or "application/octet-stream",
+        "uploaded_by": current_user.full_name or current_user.email,
+        "uploaded_at": datetime.utcnow().isoformat(),
+        "url": f"/api/uploads/attachments/{task_id}/{unique_name}",
+    }
+
+    if task_id not in _attachments:
+        _attachments[task_id] = []
+    _attachments[task_id].append(attachment)
+
+    return attachment
+
+
+@router.delete("/{task_id}/attachments/{attachment_id}", status_code=204)
+def delete_attachment(
+    task_id: str,
+    attachment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Delete a file attachment from a task."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    attachments = _attachments.get(task_id, [])
+    attachment = next((a for a in attachments if a["id"] == attachment_id), None)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # Delete file from disk
+    file_path = ATTACHMENTS_DIR / task_id / attachment["stored_name"]
+    if file_path.exists():
+        file_path.unlink()
+
+    _attachments[task_id] = [a for a in attachments if a["id"] != attachment_id]
+    return None
