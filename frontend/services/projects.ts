@@ -12,17 +12,11 @@ export type ProjectPriority = "low" | "medium" | "high" | "critical";
 
 export interface ProjectManager {
     id: string;
-    project_id: string;
-    user_id: string;
+    employee_id: string;
+    employee_name?: string;
     role: string;
     start_date: string;
     end_date?: string;
-    user?: {
-        id: string;
-        full_name: string;
-        email: string;
-        avatar_url?: string;
-    };
 }
 
 export interface ProjectPhase {
@@ -181,7 +175,7 @@ export interface ProjectsParams {
     [key: string]: string | number | boolean | undefined;
 }
 
-const BASE_URL = "/projects";
+const BASE_URL = "/api/projects";
 
 // =============== Project CRUD ===============
 

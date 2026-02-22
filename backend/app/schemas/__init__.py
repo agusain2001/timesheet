@@ -188,7 +188,32 @@ class DepartmentUpdate(BaseModel):
 class DepartmentResponse(DepartmentBase):
     id: str
     managers: List[DepartmentManagerResponse] = []
+    member_count: int = 0
     
+    class Config:
+        from_attributes = True
+
+
+class DepartmentMemberResponse(BaseModel):
+    id: str
+    full_name: str
+    email: str
+    position: Optional[str] = None
+    role: str = "employee"
+    avatar_url: Optional[str] = None
+    employee_code: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentProjectResponse(BaseModel):
+    id: str
+    name: str
+    status: str = "active"
+    business_sector: Optional[str] = None
+    managed_by: Optional[str] = None  # primary manager name
+
     class Config:
         from_attributes = True
 

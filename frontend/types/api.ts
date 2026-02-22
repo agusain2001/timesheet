@@ -79,6 +79,14 @@ export interface ClientUpdate {
     notes?: string;
 }
 
+export interface ClientProject {
+    id: string;
+    name: string;
+    status: string;
+    business_sector?: string;
+    managed_by?: string;
+}
+
 // =============== Department Types ===============
 export interface DepartmentManager {
     id: string;
@@ -101,6 +109,7 @@ export interface Department {
     name: string;
     notes?: string;
     managers: DepartmentManager[];
+    member_count?: number;
 }
 
 export interface DepartmentCreate {
@@ -113,6 +122,24 @@ export interface DepartmentUpdate {
     name?: string;
     notes?: string;
     managers?: DepartmentManagerInput[];
+}
+
+export interface DepartmentMember {
+    id: string;
+    full_name: string;
+    email: string;
+    position?: string;
+    role: string;
+    avatar_url?: string;
+    employee_code?: string;
+}
+
+export interface DepartmentProject {
+    id: string;
+    name: string;
+    status: string;
+    business_sector?: string;
+    managed_by?: string;
 }
 
 // =============== Project Types ===============

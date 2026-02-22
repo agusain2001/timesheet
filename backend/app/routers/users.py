@@ -1,8 +1,11 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+import csv
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
+from app.models import User, Project, ProjectManager
 from app.schemas import UserResponse, UserUpdate, UserCreate, UserProfileResponse, UserProfileUpdate
 from app.utils import get_current_active_user, get_password_hash
 
@@ -183,25 +186,128 @@ def update_user_profile(
 
 
 @router.get("/", response_model=List[UserResponse])
+@router.get("/", response_model=List[UserResponse])
 def get_all_users(
     skip: int = 0,
     limit: int = 100,
     department_id: str = None,
     status: str = None,
+    search: str = None,
+    sort_by: str = None,
+    sort_order: str = "asc",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get all users with optional filters."""
+    """Get all users with optional filters and sorting."""
     query = db.query(User)
     
+    # Filtering
     if department_id:
         query = query.filter(User.department_id == department_id)
     if status == "active":
         query = query.filter(User.is_active == True)
     elif status == "inactive":
         query = query.filter(User.is_active == False)
+        
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            (User.full_name.ilike(search_term)) | 
+            (User.email.ilike(search_term))
+        )
+    
+    # Sorting
+    if sort_by:
+        # Map sort_by string to actual column
+        sort_column = None
+        if sort_by == "name":
+            sort_column = User.full_name
+        elif sort_by == "email":
+            sort_column = User.email
+        elif sort_by == "department":
+            sort_column = User.department_id # Sorting by department ID for now, ideal would be join
+        elif sort_by == "position":
+            sort_column = User.position
+        elif sort_by == "created_at":
+            sort_column = User.created_at
+            
+        if sort_column:
+            if sort_order == "desc":
+                query = query.order_by(sort_column.desc())
+            else:
+                query = query.order_by(sort_column.asc())
+    else:
+        # Default sort by creation date desc
+        query = query.order_by(User.created_at.desc())
     
     return query.offset(skip).limit(limit).all()
+
+
+@router.get("/{user_id}/projects")
+def get_user_projects(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get projects associated with a user (as manager or team member)."""
+    # Find projects where user is a manager
+    managed_projects = db.query(Project).join(ProjectManager).filter(
+        ProjectManager.user_id == user_id
+    ).all()
+    
+    projects = []
+    for p in managed_projects:
+        projects.append({
+            "id": p.id,
+            "name": p.name,
+            "role": "Manager", # Simplified
+            "business_sector": p.department.name if p.department else "N/A", # Fallback
+            "status": p.status
+        })
+        
+    return projects
+
+
+@router.post("/export")
+def export_users(
+    user_ids: List[str] = Body(..., embed=True),
+    format: str = "csv",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Export selected users to CSV."""
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    
+    if format == "csv":
+        output = BytesIO()
+        writer = csv.writer(output, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        
+        # Header
+        writer.writerow(["ID", "Name", "Email", "Role", "Department", "Position", "Phone", "Status", "Joined Date"])
+        
+        # Rows
+        for user in users:
+            dept_name = user.department.name if user.department else "N/A"
+            writer.writerow([
+                user.id,
+                user.full_name,
+                user.email,
+                user.role,
+                dept_name,
+                user.position or "",
+                user.phone or "",
+                "Active" if user.is_active else "Inactive",
+                user.created_at.strftime("%Y-%m-%d") if user.created_at else ""
+            ])
+            
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=employees_export.csv"}
+        )
+            
+    return {"message": "Format not supported"}
 
 
 @router.get("/{user_id}", response_model=UserResponse)

@@ -8,20 +8,41 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { logout } from "@/lib/auth";
+import { getProjects } from "@/services/projects";
+
+import AddTaskModal from "@/components/AddTaskModal";
+import NewExpenseModal from "@/components/NewExpenseModal";
+import { AddClientModal } from "@/components/ClientModals";
+import { AddProjectModal } from "@/components/ProjectModals";
+import { AddRequestModal } from "@/components/SupportModals";
 
 export function Navbar() {
   const { theme } = useTheme();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [modal, setModal] = useState<"task" | "client" | "project" | "expense" | "support" | null>(null);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
+  const quickAddRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMounted(true), []);
+
+  const fetchProjectsForExpense = async () => {
+    try {
+      const data = await getProjects();
+      setProjects(data.map(p => ({ id: p.id, name: p.name })));
+    } catch (e) { }
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowUserMenu(false);
+      }
+      if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
+        setShowQuickAdd(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -62,7 +83,37 @@ export function Navbar() {
 
       <div className="flex items-center gap-6">
         <ThemeToggle />
-        <Grid2x2Plus />
+
+        {/* Quick Add Menu */}
+        <div ref={quickAddRef} className="relative">
+          <button
+            onClick={() => setShowQuickAdd(!showQuickAdd)}
+            className="text-foreground/70 hover:text-foreground transition flex items-center"
+          >
+            <Grid2x2Plus className="w-5 h-5 cursor-pointer" />
+          </button>
+
+          {showQuickAdd && (
+            <div className="absolute right-0 top-10 z-50 w-48 bg-background border border-foreground/10 rounded-lg shadow-2xl overflow-hidden py-1">
+              <button onClick={() => { setShowQuickAdd(false); setModal("task"); }} className="w-full text-left px-4 py-2 hover:bg-foreground/5 text-sm text-foreground/80 transition">
+                New Task
+              </button>
+              <button onClick={() => { setShowQuickAdd(false); setModal("client"); }} className="w-full text-left px-4 py-2 hover:bg-foreground/5 text-sm text-foreground/80 transition">
+                New Client
+              </button>
+              <button onClick={() => { setShowQuickAdd(false); setModal("project"); }} className="w-full text-left px-4 py-2 hover:bg-foreground/5 text-sm text-foreground/80 transition">
+                New Project
+              </button>
+              <button onClick={() => { setShowQuickAdd(false); setModal("expense"); fetchProjectsForExpense(); }} className="w-full text-left px-4 py-2 hover:bg-foreground/5 text-sm text-foreground/80 transition">
+                New Expense
+              </button>
+              <button onClick={() => { setShowQuickAdd(false); setModal("support"); }} className="w-full text-left px-4 py-2 hover:bg-foreground/5 text-sm text-foreground/80 transition">
+                New Support Request
+              </button>
+            </div>
+          )}
+        </div>
+
         <Bell className="cursor-pointer" />
 
         {/* User Avatar + Dropdown */}
@@ -106,6 +157,13 @@ export function Navbar() {
           )}
         </div>
       </div>
+
+      {/* Global Modals */}
+      <AddTaskModal isOpen={modal === "task"} onClose={() => setModal(null)} onTaskCreated={() => { setModal(null); window.location.reload(); }} />
+      {modal === "client" && <AddClientModal onClose={() => setModal(null)} onCreated={() => { setModal(null); window.location.reload(); }} />}
+      {modal === "project" && <AddProjectModal onClose={() => setModal(null)} onCreated={() => { setModal(null); window.location.reload(); }} />}
+      <NewExpenseModal isOpen={modal === "expense"} onClose={() => setModal(null)} onExpenseCreated={() => { setModal(null); window.location.reload(); }} projects={projects} />
+      <AddRequestModal isOpen={modal === "support"} onClose={() => setModal(null)} onCreated={() => { setModal(null); window.location.reload(); }} />
     </header>
   );
 }
