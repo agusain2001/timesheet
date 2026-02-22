@@ -1,22 +1,33 @@
-from typing import List
+"""Tasks router — full CRUD with role-based access control and dependency enforcement."""
+from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Task, User, Project, Client, TaskStatus
+from app.models import Task, User, Project, Client, TaskStatus, TaskDependency
 from app.schemas import TaskCreate, TaskUpdate, TaskResponse, ProjectBrief, ClientBrief, UserBrief
-from app.utils import get_current_active_user
+from app.utils import (
+    get_current_active_user,
+    is_manager,
+    can_modify_task,
+    can_delete_task,
+    ForbiddenError,
+    NotFoundError,
+    DependencyBlockedError,
+)
 from app.services.notification_service import NotificationService
 
 router = APIRouter()
 
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def build_task_response(task: Task, db: Session) -> dict:
     """Build task response with project, client, and assignee info."""
     project_data = None
     client_data = None
     assignee_data = None
-    
+
     if task.project:
         project_data = ProjectBrief(
             id=task.project.id,
@@ -24,16 +35,11 @@ def build_task_response(task: Task, db: Session) -> dict:
             client_id=task.project.client_id,
             status=task.project.status or "active"
         )
-        # Get client from project
         if task.project.client_id:
             client = db.query(Client).filter(Client.id == task.project.client_id).first()
             if client:
-                client_data = ClientBrief(
-                    id=client.id,
-                    name=client.name,
-                    alias=client.alias
-                )
-    
+                client_data = ClientBrief(id=client.id, name=client.name, alias=client.alias)
+
     if task.assignee:
         assignee_data = UserBrief(
             id=task.assignee.id,
@@ -41,7 +47,18 @@ def build_task_response(task: Task, db: Session) -> dict:
             email=task.assignee.email,
             avatar_url=task.assignee.avatar_url
         )
-    
+
+    # Fetch blocking dependencies
+    blocking = db.query(TaskDependency).filter(
+        TaskDependency.successor_id == task.id,
+        TaskDependency.is_blocking == True
+    ).all()
+    blocked_by = []
+    for dep in blocking:
+        pred = dep.predecessor
+        if pred and pred.status not in (TaskStatus.COMPLETED.value, TaskStatus.CANCELLED.value):
+            blocked_by.append({"id": pred.id, "name": pred.name, "status": pred.status})
+
     return {
         "id": task.id,
         "name": task.name,
@@ -49,63 +66,113 @@ def build_task_response(task: Task, db: Session) -> dict:
         "task_type": task.task_type,
         "project_id": task.project_id,
         "department_id": task.department_id,
+        "team_id": task.team_id,
         "assignee_id": task.assignee_id,
+        "owner_id": task.owner_id,
         "priority": task.priority,
         "estimated_hours": task.estimated_hours,
+        "actual_hours": task.actual_hours,
+        "tags": task.tags or [],
+        "start_date": task.start_date,
         "due_date": task.due_date,
         "status": task.status,
         "created_at": task.created_at,
         "completed_at": task.completed_at,
         "project": project_data,
         "client": client_data,
-        "assignee": assignee_data
+        "assignee": assignee_data,
+        "blocked_by": blocked_by,
+        "is_blocked": len(blocked_by) > 0,
     }
 
 
+def _check_dependency_block(task: Task, new_status: str, db: Session):
+    """
+    Raise DependencyBlockedError if task cannot transition to new_status
+    because it has unfinished blocking predecessors.
+    """
+    active_statuses = {
+        TaskStatus.IN_PROGRESS.value,
+        TaskStatus.REVIEW.value,
+        TaskStatus.COMPLETED.value,
+    }
+    if new_status not in active_statuses:
+        return  # Only check when trying to make progress
+
+    blocking_deps = db.query(TaskDependency).filter(
+        TaskDependency.successor_id == task.id,
+        TaskDependency.is_blocking == True
+    ).all()
+
+    blocked_by = []
+    for dep in blocking_deps:
+        pred = dep.predecessor
+        if pred and pred.status not in (TaskStatus.COMPLETED.value, TaskStatus.CANCELLED.value):
+            blocked_by.append({"id": pred.id, "name": pred.name, "status": pred.status})
+
+    if blocked_by:
+        raise DependencyBlockedError(blocked_by)
+
+
+# ─── Endpoints ────────────────────────────────────────────────────────────────
+
 @router.get("/", response_model=List[TaskResponse])
 def get_all_tasks(
-    skip: int = 0,
-    limit: int = 100,
-    project_id: str = None,
-    department_id: str = None,
-    assignee_id: str = None,
-    task_type: str = None,
-    status_filter: str = None,
-    search: str = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    project_id: Optional[str] = None,
+    department_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+    assignee_id: Optional[str] = None,
+    task_type: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    priority: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get all tasks with optional filters."""
+    """Get tasks. Managers see all; others see only their own or assigned tasks."""
     query = db.query(Task)
-    
+
+    # Non-managers only see tasks they are involved in
+    if not is_manager(current_user):
+        query = query.filter(
+            (Task.assignee_id == current_user.id) |
+            (Task.owner_id == current_user.id)
+        )
+
     if project_id:
         query = query.filter(Task.project_id == project_id)
     if department_id:
         query = query.filter(Task.department_id == department_id)
+    if team_id:
+        query = query.filter(Task.team_id == team_id)
     if assignee_id:
         query = query.filter(Task.assignee_id == assignee_id)
     if task_type:
         query = query.filter(Task.task_type == task_type)
     if status_filter:
         query = query.filter(Task.status == status_filter)
+    if priority:
+        query = query.filter(Task.priority == priority)
     if search:
         query = query.filter(Task.name.ilike(f"%{search}%"))
-    
-    tasks = query.offset(skip).limit(limit).all()
+
+    tasks = query.order_by(Task.created_at.desc()).offset(skip).limit(limit).all()
     return [build_task_response(t, db) for t in tasks]
 
 
 @router.get("/my", response_model=List[TaskResponse])
 def get_my_tasks(
-    task_type: str = None,
-    status_filter: str = None,
+    task_type: Optional[str] = None,
+    status_filter: Optional[str] = None,
     active_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Get current user's tasks."""
     query = db.query(Task).filter(Task.assignee_id == current_user.id)
-    
+
     if task_type:
         query = query.filter(Task.task_type == task_type)
     if status_filter:
@@ -118,9 +185,40 @@ def get_my_tasks(
                 TaskStatus.CANCELLED.value
             ])
         )
-    
-    tasks = query.all()
+
+    tasks = query.order_by(Task.due_date.asc().nullslast()).all()
     return [build_task_response(t, db) for t in tasks]
+
+
+@router.get("/stats", response_model=dict)
+def get_task_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get task statistics for the current user."""
+    base = db.query(Task).filter(Task.assignee_id == current_user.id)
+    now = datetime.utcnow()
+
+    return {
+        "total": base.count(),
+        "by_status": {
+            "todo": base.filter(Task.status == TaskStatus.TODO.value).count(),
+            "in_progress": base.filter(Task.status == TaskStatus.IN_PROGRESS.value).count(),
+            "review": base.filter(Task.status == TaskStatus.REVIEW.value).count(),
+            "completed": base.filter(Task.status == TaskStatus.COMPLETED.value).count(),
+            "blocked": base.filter(Task.status == TaskStatus.BLOCKED.value).count(),
+            "cancelled": base.filter(Task.status == TaskStatus.CANCELLED.value).count(),
+        },
+        "overdue": base.filter(
+            Task.due_date < now,
+            Task.status.notin_([TaskStatus.COMPLETED.value, TaskStatus.CANCELLED.value])
+        ).count(),
+        "due_today": base.filter(
+            Task.due_date >= now.replace(hour=0, minute=0, second=0),
+            Task.due_date <= now.replace(hour=23, minute=59, second=59),
+            Task.status.notin_([TaskStatus.COMPLETED.value, TaskStatus.CANCELLED.value])
+        ).count(),
+    }
 
 
 @router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
@@ -131,17 +229,19 @@ def create_task(
 ):
     """Create a new task."""
     task_dict = task_data.model_dump(exclude_unset=True)
+    task_dict["owner_id"] = current_user.id
+
     db_task = Task(**task_dict)
-    
-    # If no assignee, assign to current user for personal tasks
+
+    # Auto-assign personal tasks to creator
     if not db_task.assignee_id and task_data.task_type == "personal":
         db_task.assignee_id = current_user.id
-    
+
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
-    
-    # Send notification to assignee if assigned to someone else
+
+    # Notify assignee if different from creator
     if db_task.assignee_id and db_task.assignee_id != current_user.id:
         NotificationService.notify_task_assigned(
             db=db,
@@ -150,7 +250,7 @@ def create_task(
             task_id=db_task.id,
             assigner_name=current_user.full_name
         )
-    
+
     return build_task_response(db_task, db)
 
 
@@ -163,7 +263,7 @@ def get_task(
     """Get a specific task by ID."""
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise NotFoundError("Task", task_id)
     return build_task_response(task, db)
 
 
@@ -174,26 +274,35 @@ def update_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update a task."""
+    """Update a task. Enforces role-based edit rights and dependency blocking."""
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
+        raise NotFoundError("Task", task_id)
+
+    if not can_modify_task(task, current_user):
+        raise ForbiddenError("modify this task")
+
     update_data = task_data.model_dump(exclude_unset=True)
     old_assignee_id = task.assignee_id
     old_status = task.status
-    
-    # Handle status changes
+
+    # ── Dependency Blocking Check ──────────────────────────────────────────
+    if "status" in update_data and update_data["status"] != old_status:
+        _check_dependency_block(task, update_data["status"], db)
+
+    # ── Completion timestamp ───────────────────────────────────────────────
     if "status" in update_data and update_data["status"] == TaskStatus.COMPLETED.value:
         task.completed_at = datetime.utcnow()
-    
+    elif "status" in update_data and update_data["status"] != TaskStatus.COMPLETED.value:
+        task.completed_at = None  # Reset if un-completing
+
     for field, value in update_data.items():
         setattr(task, field, value)
-    
+
     db.commit()
     db.refresh(task)
-    
-    # Notify new assignee if task was reassigned
+
+    # ── Notifications ──────────────────────────────────────────────────────
     if "assignee_id" in update_data and task.assignee_id != old_assignee_id:
         if task.assignee_id and task.assignee_id != current_user.id:
             NotificationService.notify_task_assigned(
@@ -203,13 +312,7 @@ def update_task(
                 task_id=task.id,
                 assigner_name=current_user.full_name
             )
-    
-    # Notify task owner if task was completed by someone else
-    if "status" in update_data and update_data["status"] == TaskStatus.COMPLETED.value:
-        if old_status != TaskStatus.COMPLETED.value:
-            # Could notify project manager or task creator here
-            pass
-    
+
     return build_task_response(task, db)
 
 
@@ -219,11 +322,125 @@ def delete_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a task."""
+    """Delete a task. Only task owners and managers can delete."""
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
+        raise NotFoundError("Task", task_id)
+
+    if not can_delete_task(task, current_user):
+        raise ForbiddenError("delete this task")
+
     db.delete(task)
     db.commit()
     return None
+
+
+# ─── Task Dependencies ────────────────────────────────────────────────────────
+
+@router.post("/{task_id}/dependencies", status_code=status.HTTP_201_CREATED)
+def add_dependency(
+    task_id: str,
+    predecessor_id: str,
+    dependency_type: str = "FS",
+    is_blocking: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Add a task dependency (predecessor → task_id)."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise NotFoundError("Task", task_id)
+
+    predecessor = db.query(Task).filter(Task.id == predecessor_id).first()
+    if not predecessor:
+        raise NotFoundError("Predecessor task", predecessor_id)
+
+    if not can_modify_task(task, current_user):
+        raise ForbiddenError("add dependencies to this task")
+
+    # Check for circular dependency
+    if predecessor_id == task_id:
+        raise HTTPException(status_code=400, detail="A task cannot depend on itself")
+
+    existing = db.query(TaskDependency).filter(
+        TaskDependency.predecessor_id == predecessor_id,
+        TaskDependency.successor_id == task_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Dependency already exists")
+
+    dep = TaskDependency(
+        predecessor_id=predecessor_id,
+        successor_id=task_id,
+        dependency_type=dependency_type,
+        is_blocking=is_blocking
+    )
+    db.add(dep)
+    db.commit()
+    return {"message": "Dependency added", "predecessor_id": predecessor_id, "successor_id": task_id}
+
+
+@router.delete("/{task_id}/dependencies/{predecessor_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_dependency(
+    task_id: str,
+    predecessor_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Remove a task dependency."""
+    dep = db.query(TaskDependency).filter(
+        TaskDependency.predecessor_id == predecessor_id,
+        TaskDependency.successor_id == task_id
+    ).first()
+    if not dep:
+        raise NotFoundError("Dependency")
+
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if task and not can_modify_task(task, current_user):
+        raise ForbiddenError("remove dependencies from this task")
+
+    db.delete(dep)
+    db.commit()
+    return None
+
+
+@router.get("/{task_id}/dependencies")
+def get_dependencies(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all dependencies for a task."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise NotFoundError("Task", task_id)
+
+    predecessors = db.query(TaskDependency).filter(
+        TaskDependency.successor_id == task_id
+    ).all()
+    successors = db.query(TaskDependency).filter(
+        TaskDependency.predecessor_id == task_id
+    ).all()
+
+    return {
+        "blocking_predecessors": [
+            {
+                "id": dep.predecessor.id,
+                "name": dep.predecessor.name,
+                "status": dep.predecessor.status,
+                "dependency_type": dep.dependency_type,
+                "is_blocking": dep.is_blocking,
+            }
+            for dep in predecessors if dep.predecessor
+        ],
+        "dependent_successors": [
+            {
+                "id": dep.successor.id,
+                "name": dep.successor.name,
+                "status": dep.successor.status,
+                "dependency_type": dep.dependency_type,
+                "is_blocking": dep.is_blocking,
+            }
+            for dep in successors if dep.successor
+        ],
+    }

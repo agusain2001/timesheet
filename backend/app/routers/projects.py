@@ -1,14 +1,21 @@
-from typing import List
+from typing import List, Optional
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Project, ProjectManager, User
+from app.models import Project, ProjectManager, User, Task
 from app.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse,
     ProjectManagerResponse
 )
-from app.utils import get_current_active_user
+from app.utils import (
+    get_current_active_user,
+    is_manager,
+    is_admin,
+    can_modify_project,
+    ForbiddenError,
+    NotFoundError,
+)
 
 router = APIRouter()
 
@@ -75,7 +82,9 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Create a new project."""
+    """Create a new project. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise ForbiddenError("create projects")
     db_project = Project(
         name=project_data.name,
         client_id=project_data.client_id,
@@ -130,10 +139,12 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update a project."""
+    """Update a project. Managers or assigned project managers can update."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFoundError("Project", project_id)
+    if not can_modify_project(project, current_user):
+        raise ForbiddenError("modify this project")
     
     # Update basic fields
     if project_data.name is not None:
@@ -186,14 +197,16 @@ def delete_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a project."""
+    """Delete a project. Requires admin or org_admin role."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
+        raise NotFoundError("Project", project_id)
+    if not is_admin(current_user):
+        raise ForbiddenError("delete projects")
     db.delete(project)
     db.commit()
     return None
+
 
 
 @router.get("/{project_id}/members")

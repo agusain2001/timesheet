@@ -27,6 +27,7 @@ from app.routers import gdpr, permissions, google_calendar
 from app.routers import settings as settings_router
 # OpenAPI documentation enhancement
 from app.openapi_config import setup_custom_openapi
+from app.utils.error_handlers import register_error_handlers
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -46,6 +47,9 @@ app = FastAPI(
 
 # Setup custom OpenAPI documentation
 setup_custom_openapi(app)
+
+# Register centralized error handlers
+register_error_handlers(app)
 
 # Configure CORS
 origins = settings.cors_origins.split(",")
