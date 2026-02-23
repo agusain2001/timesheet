@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = "http://localhost:3000"
     
+    # OAuth Base URL (frontend URL for redirects)
+    oauth_redirect_base_url: str = "http://localhost:3000"
+
+    # Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
+    # Microsoft (Outlook) OAuth
+    microsoft_client_id: str = ""
+    microsoft_client_secret: str = ""
+    microsoft_tenant_id: str = "common"
+
     class Config:
         env_file = ".env"
         extra = "ignore"
