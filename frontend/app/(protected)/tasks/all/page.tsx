@@ -100,7 +100,7 @@ export default function AllTasksPage() {
     }, [view, fetchTasks]);
 
     useEffect(() => {
-        apiFetch("/users?limit=100").then((d) => setUsers(d || [])).catch(() => { });
+        apiFetch("/api/users?limit=100").then((d) => setUsers(d || [])).catch(() => { });
     }, []);
 
     const handleStatusChange = async (taskId: string, newStatus: string) => {

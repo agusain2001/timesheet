@@ -49,7 +49,7 @@ export default function MFAPage() {
     const loadStatus = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await apiFetch("/mfa/status");
+            const data = await apiFetch("/api/mfa/status");
             setIsEnabled(data.is_enabled);
             setStep(data.is_enabled ? "enabled" : "status");
         } catch { }
@@ -61,7 +61,7 @@ export default function MFAPage() {
     const startSetup = async () => {
         setProcessing(true); setError("");
         try {
-            const data = await apiFetch("/mfa/setup", { method: "POST" });
+            const data = await apiFetch("/api/mfa/setup", { method: "POST" });
             setSetupData(data);
             setStep("setup");
         } catch (e: any) { setError(e?.message || "Failed to start setup"); }
@@ -72,7 +72,7 @@ export default function MFAPage() {
         if (code.length !== 6) { setError("Please enter the 6-digit code"); return; }
         setProcessing(true); setError("");
         try {
-            await apiFetch("/mfa/verify", { method: "POST", body: JSON.stringify({ code }) });
+            await apiFetch("/api/mfa/verify", { method: "POST", body: JSON.stringify({ code }) });
             setIsEnabled(true);
             setStep("enabled");
             showToast("MFA enabled successfully!");
@@ -84,7 +84,7 @@ export default function MFAPage() {
         if (!disableCode) { setError("Enter your current MFA code"); return; }
         setProcessing(true); setError("");
         try {
-            await apiFetch("/mfa/disable", { method: "POST", body: JSON.stringify({ code: disableCode }) });
+            await apiFetch("/api/mfa/disable", { method: "POST", body: JSON.stringify({ code: disableCode }) });
             setIsEnabled(false); setStep("status");
             setShowDisable(false); setDisableCode("");
             showToast("MFA has been disabled");
@@ -94,7 +94,7 @@ export default function MFAPage() {
 
     const loadBackupCodes = async () => {
         try {
-            const data = await apiFetch("/mfa/backup-codes");
+            const data = await apiFetch("/api/mfa/backup-codes");
             setBackupCodes(data.backup_codes ?? []);
         } catch { }
     };

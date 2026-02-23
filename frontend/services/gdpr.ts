@@ -42,18 +42,18 @@ export async function exportMyData(format: "json" | "zip" = "json"): Promise<GDP
 }
 
 export async function deleteMyData(confirm: boolean, keepAnonymized = true): Promise<{ success: boolean; message?: string }> {
-    return apiFetch("/gdpr/my-data", {
+    return apiFetch("/api/gdpr/my-data", {
         method: "DELETE",
         body: JSON.stringify({ confirm, keep_anonymized: keepAnonymized }),
     });
 }
 
 export async function getConsent(): Promise<GDPRConsent> {
-    return apiFetch("/gdpr/consent");
+    return apiFetch("/api/gdpr/consent");
 }
 
 export async function updateConsent(data: Partial<GDPRConsent>): Promise<GDPRConsent> {
-    return apiFetch("/gdpr/consent", { method: "PUT", body: JSON.stringify(data) });
+    return apiFetch("/api/gdpr/consent", { method: "PUT", body: JSON.stringify(data) });
 }
 
 export async function getAccessLog(limit = 50): Promise<unknown[]> {

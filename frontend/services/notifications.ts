@@ -4,7 +4,7 @@
 
 import { apiGet, apiPut, apiPost, apiDelete } from "./api";
 
-const BASE_URL = "/notifications";
+const BASE_URL = "/api/notifications";
 
 // =============== Types ===============
 

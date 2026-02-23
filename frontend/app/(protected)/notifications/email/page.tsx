@@ -104,9 +104,9 @@ export default function EmailNotificationsPage() {
         setLoading(true);
         try {
             const [p, r, d] = await Promise.all([
-                apiFetch("/notifications/email/preferences"),
-                apiFetch("/notifications/email/reminders"),
-                apiFetch("/notifications/email/digest"),
+                apiFetch("/api/notifications/email/preferences"),
+                apiFetch("/api/notifications/email/reminders"),
+                apiFetch("/api/notifications/email/digest"),
             ]);
             setPrefs(p); setReminder(r); setDigest(d);
         } catch { }
@@ -121,7 +121,7 @@ export default function EmailNotificationsPage() {
         if (!prefs) return;
         setSaving(true);
         try {
-            await apiFetch("/notifications/email/preferences", { method: "PUT", body: JSON.stringify(prefs) });
+            await apiFetch("/api/notifications/email/preferences", { method: "PUT", body: JSON.stringify(prefs) });
             showToast("Email preferences saved");
         } catch { showToast("Failed to save"); }
         finally { setSaving(false); }
@@ -131,7 +131,7 @@ export default function EmailNotificationsPage() {
         if (!reminder) return;
         setSaving(true);
         try {
-            await apiFetch("/notifications/email/reminders", { method: "PUT", body: JSON.stringify(reminder) });
+            await apiFetch("/api/notifications/email/reminders", { method: "PUT", body: JSON.stringify(reminder) });
             showToast("Reminder settings saved");
         } catch { showToast("Failed to save"); }
         finally { setSaving(false); }
@@ -141,7 +141,7 @@ export default function EmailNotificationsPage() {
         if (!digest) return;
         setSaving(true);
         try {
-            await apiFetch("/notifications/email/digest", { method: "PUT", body: JSON.stringify(digest) });
+            await apiFetch("/api/notifications/email/digest", { method: "PUT", body: JSON.stringify(digest) });
             showToast("Digest settings saved");
         } catch { showToast("Failed to save"); }
         finally { setSaving(false); }
@@ -149,7 +149,7 @@ export default function EmailNotificationsPage() {
 
     const sendTest = async () => {
         try {
-            await apiFetch("/notifications/email/test", { method: "POST" });
+            await apiFetch("/api/notifications/email/test", { method: "POST" });
             setTestSent(true);
             showToast("Test email sent to your address");
             setTimeout(() => setTestSent(false), 4000);
@@ -237,8 +237,8 @@ export default function EmailNotificationsPage() {
                                                 setReminder({ ...reminder, days_before_due: curr.includes(d) ? curr.filter((x) => x !== d) : [...curr, d].sort() });
                                             }}
                                             className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${reminder.days_before_due.includes(d)
-                                                    ? "bg-indigo-600 text-white"
-                                                    : "bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10"
+                                                ? "bg-indigo-600 text-white"
+                                                : "bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10"
                                                 }`}>
                                             {d}
                                         </button>

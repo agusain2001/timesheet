@@ -5,7 +5,7 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "./api";
 import type { Timesheet, TimesheetCreate, TimesheetUpdate } from "@/types/api";
 
-const BASE_URL = "/timesheets";
+const BASE_URL = "/api/timesheets";
 
 export interface TimesheetsParams {
     skip?: number;

@@ -195,7 +195,7 @@ function TemplateModal({ tpl, onSave, onClose }: {
         };
         try {
             if (tpl) await apiFetch(`/task-templates/${tpl.id}`, { method: "PUT", body: JSON.stringify(payload) });
-            else await apiFetch("/task-templates", { method: "POST", body: JSON.stringify(payload) });
+            else await apiFetch("/api/task-templates", { method: "POST", body: JSON.stringify(payload) });
             onSave();
         } catch (e: any) {
             setError(e?.message ?? "Save failed");
@@ -330,7 +330,7 @@ export default function TemplatesPage() {
     const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await apiFetch("/task-templates?limit=100");
+            const data = await apiFetch("/api/task-templates?limit=100");
             setTemplates(Array.isArray(data) ? data : (data?.items ?? []));
         } catch { setTemplates([]); }
         finally { setLoading(false); }
@@ -340,7 +340,7 @@ export default function TemplatesPage() {
 
     const handleDuplicate = async (tpl: Template) => {
         try {
-            await apiFetch("/task-templates", {
+            await apiFetch("/api/task-templates", {
                 method: "POST",
                 body: JSON.stringify({
                     name: `${tpl.name} (Copy)`,

@@ -77,7 +77,7 @@ export async function listWebhooks(projectId?: string): Promise<Webhook[]> {
 }
 
 export async function createWebhook(data: WebhookCreate): Promise<Webhook> {
-    return apiFetch("/integrations/webhooks", { method: "POST", body: JSON.stringify(data) });
+    return apiFetch("/api/integrations/webhooks", { method: "POST", body: JSON.stringify(data) });
 }
 
 export async function updateWebhook(id: string, data: Partial<WebhookCreate & { is_active: boolean }>): Promise<Webhook> {
@@ -106,7 +106,7 @@ export async function listIntegrations(type?: string): Promise<Integration[]> {
 }
 
 export async function createIntegration(data: IntegrationCreate): Promise<Integration> {
-    return apiFetch("/integrations/integrations", { method: "POST", body: JSON.stringify(data) });
+    return apiFetch("/api/integrations/integrations", { method: "POST", body: JSON.stringify(data) });
 }
 
 export async function deleteIntegration(id: string): Promise<void> {

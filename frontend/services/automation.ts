@@ -148,7 +148,7 @@ export interface AutomationRulesParams {
     [key: string]: string | number | boolean | undefined;
 }
 
-const BASE_URL = "/automation";
+const BASE_URL = "/api/automation";
 
 // =============== Automation Rules ===============
 

@@ -22,12 +22,15 @@ export function Navbar() {
   const [mounted, setMounted] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [modal, setModal] = useState<"task" | "client" | "project" | "expense" | "support" | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   const API = process.env.NEXT_PUBLIC_API_URL || "";
 
   useEffect(() => setMounted(true), []);
@@ -59,6 +62,19 @@ export function Navbar() {
     } catch (e) { }
   };
 
+  const fetchNotifications = async () => {
+    try {
+      const token = getToken();
+      const res = await fetch(`${API}/api/notifications?limit=5`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.items || []);
+      }
+    } catch { }
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const q = searchQuery.trim();
@@ -72,6 +88,9 @@ export function Navbar() {
       }
       if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
         setShowQuickAdd(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -147,17 +166,89 @@ export function Navbar() {
         </div>
 
         {/* Notification Bell */}
-        <button
-          onClick={() => router.push("/notifications")}
-          className="relative text-foreground/70 hover:text-foreground transition"
-        >
-          <Bell className="w-5 h-5 cursor-pointer" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-indigo-500 text-white text-[9px] font-bold flex items-center justify-center">
-              {unreadCount > 99 ? "99+" : unreadCount}
-            </span>
+        <div ref={notificationsRef} className="relative">
+          <button
+            onClick={() => {
+              if (!showNotifications) fetchNotifications();
+              setShowNotifications(!showNotifications);
+            }}
+            onDoubleClick={() => {
+              setShowNotifications(false);
+              router.push("/notifications");
+            }}
+            className="relative text-foreground/70 hover:text-foreground transition flex items-center"
+          >
+            <Bell className="w-5 h-5 cursor-pointer" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-indigo-500 text-white text-[9px] font-bold flex items-center justify-center pointer-events-none">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 top-10 z-50 w-80 bg-background border border-foreground/10 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/10 bg-foreground/[0.02]">
+                <h3 className="font-semibold text-foreground text-sm">Notifications</h3>
+                <button
+                  onClick={() => {
+                    setShowNotifications(false);
+                    router.push("/settings");
+                  }}
+                  className="p-1.5 rounded-lg text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition"
+                  title="Notification Settings"
+                >
+                  <Settings size={14} />
+                </button>
+              </div>
+
+              <div className="max-h-[320px] overflow-y-auto overscroll-contain">
+                {notifications.length > 0 ? (
+                  notifications.map((notif: any) => (
+                    <div
+                      key={notif.id}
+                      className={clsx(
+                        "p-4 border-b border-foreground/5 transition hover:bg-foreground/[0.02] cursor-pointer",
+                        !notif.is_read && "bg-indigo-500/5 dark:bg-indigo-500/10"
+                      )}
+                      onClick={() => {
+                        if (notif.link) {
+                          setShowNotifications(false);
+                          router.push(notif.link);
+                        }
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <span className="font-medium text-sm text-foreground">{notif.title}</span>
+                        <span className="text-[10px] text-foreground/40 whitespace-nowrap">
+                          {new Date(notif.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-foreground/60 line-clamp-2">{notif.message}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-6 text-center text-foreground/50 text-sm flex flex-col items-center">
+                    <Bell className="w-8 h-8 mb-2 opacity-20" />
+                    No notifications
+                  </div>
+                )}
+              </div>
+
+              <div className="p-2 border-t border-foreground/10 bg-foreground/[0.02]">
+                <button
+                  onClick={() => {
+                    setShowNotifications(false);
+                    router.push("/notifications");
+                  }}
+                  className="w-full py-2 text-xs font-medium text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+                >
+                  View All Notifications
+                </button>
+              </div>
+            </div>
           )}
-        </button>
+        </div>
 
         {/* User Avatar + Dropdown */}
         <div ref={menuRef} className="relative">

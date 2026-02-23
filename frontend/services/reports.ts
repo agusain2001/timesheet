@@ -71,7 +71,7 @@ export interface ScheduledReportCreate {
     recipients: string[];
 }
 
-const BASE_URL = "/reports";
+const BASE_URL = "/api/reports";
 
 // =============== Standard Reports ===============
 

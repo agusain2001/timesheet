@@ -166,8 +166,8 @@ function TeamCard({
     return (
         <div
             className={`rounded-2xl border transition-all cursor-pointer ${isSelected
-                    ? "border-indigo-500 bg-indigo-500/5"
-                    : "border-white/10 bg-white/5 hover:border-white/20"
+                ? "border-indigo-500 bg-indigo-500/5"
+                : "border-white/10 bg-white/5 hover:border-white/20"
                 }`}
             onClick={() => onSelect(team)}
         >
@@ -295,7 +295,7 @@ function TeamFormModal({
             if (isEdit) {
                 await apiFetch(`/teams/${team!.id}`, { method: "PUT", body: JSON.stringify(form) });
             } else {
-                await apiFetch("/teams", { method: "POST", body: JSON.stringify(form) });
+                await apiFetch("/api/teams", { method: "POST", body: JSON.stringify(form) });
             }
             onSave();
         } catch (err: any) {
@@ -743,9 +743,9 @@ export default function TeamsPage() {
         setLoading(true);
         try {
             const [t, u, d] = await Promise.all([
-                apiFetch("/teams"),
-                apiFetch("/users"),
-                apiFetch("/departments"),
+                apiFetch("/api/teams"),
+                apiFetch("/api/users"),
+                apiFetch("/api/departments"),
             ]);
             setTeams(t || []);
             setUsers(u || []);

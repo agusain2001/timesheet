@@ -57,7 +57,7 @@ export async function checkPermission(permission: string, resourceType?: string,
 }
 
 export async function getAllPermissions(): Promise<Permission[]> {
-    const data = await apiFetch("/permissions/");
+    const data = await apiFetch("/api/permissions/");
     return Array.isArray(data) ? data : (data?.permissions ?? []);
 }
 
@@ -68,7 +68,7 @@ export async function getRoles(workspaceId?: string): Promise<Role[]> {
 }
 
 export async function getMyRoles(): Promise<Role[]> {
-    const data = await apiFetch("/permissions/roles/my-roles");
+    const data = await apiFetch("/api/permissions/roles/my-roles");
     return Array.isArray(data) ? data : (data?.roles ?? []);
 }
 
@@ -79,7 +79,7 @@ export async function createRole(data: {
     level: string;
     permission_names: string[];
 }): Promise<{ success: boolean }> {
-    return apiFetch("/permissions/roles", { method: "POST", body: JSON.stringify(data) });
+    return apiFetch("/api/permissions/roles", { method: "POST", body: JSON.stringify(data) });
 }
 
 export async function assignRole(data: {
@@ -88,7 +88,7 @@ export async function assignRole(data: {
     scope_type?: string;
     scope_id?: string;
 }): Promise<{ success: boolean }> {
-    return apiFetch("/permissions/roles/assign", { method: "POST", body: JSON.stringify(data) });
+    return apiFetch("/api/permissions/roles/assign", { method: "POST", body: JSON.stringify(data) });
 }
 
 export async function revokeRole(data: {
@@ -97,5 +97,5 @@ export async function revokeRole(data: {
     scope_type?: string;
     scope_id?: string;
 }): Promise<{ success: boolean }> {
-    return apiFetch("/permissions/roles/revoke", { method: "DELETE", body: JSON.stringify(data) });
+    return apiFetch("/api/permissions/roles/revoke", { method: "DELETE", body: JSON.stringify(data) });
 }

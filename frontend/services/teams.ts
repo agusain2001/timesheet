@@ -130,7 +130,7 @@ export interface TeamsParams {
     [key: string]: string | number | boolean | undefined;
 }
 
-const BASE_URL = "/teams";
+const BASE_URL = "/api/teams";
 
 // =============== Team CRUD ===============
 

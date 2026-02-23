@@ -5,7 +5,7 @@
 import { apiPost } from "./api";
 import type { ChatMessage, ChatResponse } from "@/types/api";
 
-const BASE_URL = "/chatbot";
+const BASE_URL = "/api/chatbot";
 
 /**
  * Send a message to the AI chatbot

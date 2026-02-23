@@ -68,7 +68,7 @@ function ChatTab() {
 
         try {
             // Try NL task creation first
-            const res = await apiFetch("/ai/create-from-text", {
+            const res = await apiFetch("/api/ai/create-from-text", {
                 method: "POST",
                 body: JSON.stringify({ text }),
             });
@@ -96,8 +96,8 @@ function ChatTab() {
                             </div>
                         )}
                         <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm ${msg.role === "user"
-                                ? "bg-indigo-600 text-white rounded-tr-sm"
-                                : "bg-white/8 border border-white/10 text-slate-300 rounded-tl-sm"
+                            ? "bg-indigo-600 text-white rounded-tr-sm"
+                            : "bg-white/8 border border-white/10 text-slate-300 rounded-tl-sm"
                             }`}>
                             {msg.loading ? (
                                 <span className="flex items-center gap-2 text-slate-500">
@@ -146,7 +146,7 @@ function PrioritiesTab() {
     const [applying, setApplying] = useState<string | null>(null);
 
     useEffect(() => {
-        apiFetch("/ai/prioritize?limit=20")
+        apiFetch("/api/ai/prioritize?limit=20")
             .then(setItems).catch(() => setItems([]))
             .finally(() => setLoading(false));
     }, []);
@@ -206,7 +206,7 @@ function RisksTab() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        apiFetch("/ai/deadline-risks")
+        apiFetch("/api/ai/deadline-risks")
             .then(setRisks).catch(() => setRisks([]))
             .finally(() => setLoading(false));
     }, []);

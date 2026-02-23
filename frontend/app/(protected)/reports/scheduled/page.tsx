@@ -77,7 +77,7 @@ function ScheduleModal({ onSave, onClose }: { onSave: () => void; onClose: () =>
     const handleSave = async () => {
         setSaving(true); setError("");
         try {
-            await apiFetch("/reports/schedule", {
+            await apiFetch("/api/reports/schedule", {
                 method: "POST",
                 body: JSON.stringify({
                     report_type: form.report_type,
@@ -186,7 +186,7 @@ export default function ScheduledReportsPage() {
     const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await apiFetch("/reports/scheduled");
+            const data = await apiFetch("/api/reports/scheduled");
             setReports(data?.reports ?? []);
         } catch {
             setReports([]);
