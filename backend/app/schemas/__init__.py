@@ -117,6 +117,18 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+class RegisterRequest(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str
+    confirm_password: str
+
+class OAuthCallbackResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: "UserResponse"
+    is_new_user: bool = False
+
 
 # =============== Client Schemas ===============
 class ContactInfo(BaseModel):
