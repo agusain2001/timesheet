@@ -1,12 +1,12 @@
 """Manager and Executive Dashboard API router."""
 from typing import List, Optional
 from datetime import datetime, date, timedelta
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, case
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import User, Task, Project, Team, TeamMember, Department
+from app.models import User, Task, Project, Team, TeamMember, Department, TaskComment, TimeLog
 from app.utils import get_current_active_user
 
 router = APIRouter()
@@ -364,3 +364,220 @@ def get_executive_dashboard(
             "avg_completion": round(sum(p.progress for p in project_health) / len(project_health), 1) if project_health else 0
         }
     )
+
+
+# =============== Drill-down Endpoints ===============
+
+
+@router.get("/manager/user/{user_id}/summary")
+def get_user_summary_for_manager(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get a user's profile summary with tasks and hours for manager drill-down."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    now = datetime.utcnow()
+    week_start = now - timedelta(days=7)
+
+    # Active tasks
+    active_tasks = db.query(Task).options(
+        joinedload(Task.project)
+    ).filter(
+        Task.assignee_id == user_id,
+        Task.status.notin_(["done", "completed", "cancelled"])
+    ).order_by(Task.due_date.asc().nullslast()).limit(20).all()
+
+    # Completed this week
+    completed_week = db.query(Task).filter(
+        Task.assignee_id == user_id,
+        Task.status.in_(["done", "completed"]),
+        Task.completed_at >= week_start
+    ).count()
+
+    # Hours this week
+    hours_week = db.query(func.sum(TimeLog.hours)).filter(
+        TimeLog.user_id == user_id,
+        func.date(TimeLog.date) >= week_start.date()
+    ).scalar() or 0.0
+
+    # Total active tasks count
+    total_active = db.query(Task).filter(
+        Task.assignee_id == user_id,
+        Task.status.notin_(["done", "completed", "cancelled"])
+    ).count()
+
+    # Overdue count
+    overdue_count = db.query(Task).filter(
+        Task.assignee_id == user_id,
+        Task.status.notin_(["done", "completed", "cancelled"]),
+        Task.due_date < now
+    ).count()
+
+    dept = None
+    if user.department:
+        dept = {"id": str(user.department.id), "name": user.department.name}
+
+    tasks_list = []
+    for t in active_tasks:
+        tasks_list.append({
+            "id": str(t.id),
+            "name": t.name,
+            "status": t.status,
+            "priority": t.priority,
+            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "project_name": t.project.name if t.project else None,
+            "estimated_hours": t.estimated_hours,
+            "actual_hours": t.actual_hours,
+        })
+
+    return {
+        "user": {
+            "id": str(user.id),
+            "full_name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "position": user.position,
+            "avatar_url": user.avatar_url,
+            "department": dept,
+            "capacity_hours_week": user.capacity_hours_week or 40,
+        },
+        "tasks": tasks_list,
+        "total_active_tasks": total_active,
+        "completed_this_week": completed_week,
+        "hours_this_week": round(float(hours_week), 1),
+        "overdue_count": overdue_count,
+    }
+
+
+@router.get("/manager/tasks-by-status")
+def get_tasks_by_status(
+    status: Optional[str] = None,
+    team_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get tasks filtered by status for manager drill-down when clicking stat cards."""
+    query = db.query(Task).options(
+        joinedload(Task.assignee),
+        joinedload(Task.project)
+    )
+
+    # Filter by team if specified
+    if team_id:
+        member_ids = [str(m.user_id) for m in db.query(TeamMember).filter(TeamMember.team_id == team_id).all()]
+        if member_ids:
+            query = query.filter(Task.assignee_id.in_(member_ids))
+
+    # Filter by status
+    now = datetime.utcnow()
+    if status == "total":
+        query = query.filter(Task.status.notin_(["done", "completed", "cancelled"]))
+    elif status == "in_progress":
+        query = query.filter(Task.status == "in_progress")
+    elif status == "blocked":
+        query = query.filter(Task.status.in_(["blocked", "waiting"]))
+    elif status == "completed_week":
+        week_start = now - timedelta(days=7)
+        query = query.filter(
+            Task.status.in_(["done", "completed"]),
+            Task.completed_at >= week_start
+        )
+    elif status == "overdue":
+        query = query.filter(
+            Task.status.notin_(["done", "completed", "cancelled"]),
+            Task.due_date < now
+        )
+    elif status:
+        query = query.filter(Task.status == status)
+
+    tasks = query.order_by(Task.due_date.asc().nullslast()).limit(50).all()
+
+    result = []
+    for t in tasks:
+        result.append({
+            "id": str(t.id),
+            "name": t.name,
+            "status": t.status,
+            "priority": t.priority,
+            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "assignee_name": t.assignee.full_name if t.assignee else None,
+            "assignee_id": str(t.assignee_id) if t.assignee_id else None,
+            "project_name": t.project.name if t.project else None,
+            "project_id": str(t.project_id) if t.project_id else None,
+            "estimated_hours": t.estimated_hours,
+            "actual_hours": t.actual_hours,
+        })
+
+    return {"tasks": result, "total": len(result)}
+
+
+class QuickTaskUpdate(BaseModel):
+    status: Optional[str] = None
+    assignee_id: Optional[str] = None
+    comment: Optional[str] = None
+    priority: Optional[str] = None
+
+
+@router.put("/manager/tasks/{task_id}/quick-update")
+def quick_update_task(
+    task_id: str,
+    data: QuickTaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Quick update a task from the manager dashboard (status, assignee, comment, priority)."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    changes = {}
+
+    if data.status and data.status != task.status:
+        old_status = task.status
+        task.status = data.status
+        changes["status"] = {"old": old_status, "new": data.status}
+        if data.status in ["done", "completed"]:
+            task.completed_at = datetime.utcnow()
+
+    if data.assignee_id and data.assignee_id != str(task.assignee_id or ""):
+        new_assignee = db.query(User).filter(User.id == data.assignee_id).first()
+        if not new_assignee:
+            raise HTTPException(status_code=404, detail="Assignee not found")
+        old_assignee_id = str(task.assignee_id) if task.assignee_id else None
+        task.assignee_id = data.assignee_id
+        changes["assignee"] = {"old": old_assignee_id, "new": data.assignee_id}
+
+    if data.priority and data.priority != task.priority:
+        old_priority = task.priority
+        task.priority = data.priority
+        changes["priority"] = {"old": old_priority, "new": data.priority}
+
+    task.updated_at = datetime.utcnow()
+
+    # Add comment if provided
+    comment_obj = None
+    if data.comment and data.comment.strip():
+        comment_obj = TaskComment(
+            task_id=task_id,
+            user_id=str(current_user.id),
+            content=data.comment.strip(),
+        )
+        db.add(comment_obj)
+
+    db.commit()
+    db.refresh(task)
+
+    return {
+        "id": str(task.id),
+        "name": task.name,
+        "status": task.status,
+        "priority": task.priority,
+        "assignee_id": str(task.assignee_id) if task.assignee_id else None,
+        "changes": changes,
+        "comment_added": comment_obj is not None,
+    }
+

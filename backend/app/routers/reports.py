@@ -6,11 +6,26 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, case
 from pydantic import BaseModel
-from io import BytesIO
-import json
+from io import BytesIO, StringIO
+import json, csv
 from app.database import get_db
 from app.models import User, Task, Project, Team, TaskStatus
 from app.utils import get_current_active_user
+
+try:
+    import openpyxl
+    _has_openpyxl = True
+except ImportError:
+    _has_openpyxl = False
+
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    _has_reportlab = True
+except ImportError:
+    _has_reportlab = False
 
 router = APIRouter()
 
@@ -442,3 +457,408 @@ async def cancel_scheduled_report(
         return {"success": True, "message": "Report cancelled"}
     else:
         raise HTTPException(status_code=404, detail="Report not found")
+
+
+# ─── Report Export (CSV / Excel) ──────────────────────────────────────────────
+
+@router.get("/export/{report_type}")
+def export_report(
+    report_type: str,
+    format: str = Query("csv", enum=["csv", "xlsx"]),
+    project_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Export a report as CSV or Excel file."""
+    # Build rows based on report type
+    rows = []
+    headers = []
+
+    if report_type == "task-aging":
+        headers = ["ID", "Title", "Status", "Priority", "Age (days)", "Due Date", "Assignee", "Project"]
+        query = db.query(Task).filter(Task.is_deleted == False if hasattr(Task, "is_deleted") else True)
+        if project_id:
+            query = query.filter(Task.project_id == project_id)
+        tasks = query.all()
+        now = datetime.utcnow()
+        for t in tasks:
+            age = (now - t.created_at).days if t.created_at else 0
+            assignee = db.query(User).filter(User.id == t.assignee_id).first() if t.assignee_id else None
+            project = db.query(Project).filter(Project.id == t.project_id).first() if t.project_id else None
+            rows.append([
+                t.id, t.name or t.title if hasattr(t, "title") else t.name,
+                t.status, t.priority, age,
+                str(t.due_date) if t.due_date else "",
+                assignee.full_name if assignee else "",
+                project.name if project else "",
+            ])
+
+    elif report_type == "task-completion":
+        headers = ["Date", "Created", "Completed", "Net Change"]
+        today = datetime.utcnow().date()
+        for i in range(30):
+            from datetime import timedelta
+            d = today - timedelta(days=29 - i)
+            created = db.query(Task).filter(func.date(Task.created_at) == d).count()
+            completed = db.query(Task).filter(
+                func.date(Task.completed_at) == d
+            ).count() if hasattr(Task, "completed_at") else 0
+            rows.append([str(d), created, completed, completed - created])
+
+    elif report_type == "workload":
+        headers = ["User", "Active Tasks", "Completed Tasks", "Overdue Tasks"]
+        users = db.query(User).filter(User.is_active == True).all()
+        for u in users:
+            active = db.query(Task).filter(
+                Task.assignee_id == u.id,
+                Task.status.notin_(["done", "cancelled"])
+            ).count()
+            completed = db.query(Task).filter(
+                Task.assignee_id == u.id,
+                Task.status == "done"
+            ).count()
+            overdue = db.query(Task).filter(
+                Task.assignee_id == u.id,
+                Task.due_date < datetime.utcnow(),
+                Task.status.notin_(["done", "cancelled"])
+            ).count()
+            rows.append([u.full_name, active, completed, overdue])
+    else:
+        # Generic: all tasks
+        headers = ["ID", "Title", "Status", "Priority", "Due Date"]
+        tasks = db.query(Task).limit(500).all()
+        for t in tasks:
+            rows.append([t.id, getattr(t, "name", ""), t.status, t.priority, str(t.due_date) if t.due_date else ""])
+
+    if format == "csv":
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        writer.writerows(rows)
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={report_type}-report.csv"}
+        )
+    else:
+        # Excel via openpyxl
+        if not _has_openpyxl:
+            raise HTTPException(status_code=501, detail="openpyxl not installed; use CSV format")
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = report_type.replace("-", "_")
+        ws.append(headers)
+        for row in rows:
+            ws.append(row)
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={report_type}-report.xlsx"}
+        )
+
+
+# ─── Analytics Summary Dashboard ─────────────────────────────────────────────
+
+@router.get("/analytics-summary")
+def get_analytics_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get consolidated analytics summary for the reports dashboard."""
+    from datetime import timedelta
+    now = datetime.utcnow()
+    thirty_days_ago = now - timedelta(days=30)
+
+    # ── Task KPIs ──
+    total_tasks = db.query(Task).count()
+    completed_tasks = db.query(Task).filter(
+        Task.status.in_(["completed", "done"])
+    ).count()
+    overdue_tasks = db.query(Task).filter(
+        Task.due_date < now,
+        Task.status.notin_(["completed", "done", "cancelled"])
+    ).count()
+
+    # ── Active projects ──
+    active_projects = db.query(Project).filter(
+        Project.status.in_(["active", "in_progress"])
+    ).count() if hasattr(Project, "status") else db.query(Project).count()
+
+    # ── Hours logged (last 30 days) ──
+    from app.models import TimeEntry
+    try:
+        hours_result = db.query(func.sum(TimeEntry.hours)).filter(
+            TimeEntry.date >= thirty_days_ago.date()
+        ).scalar()
+        total_hours_logged = round(float(hours_result or 0), 1)
+    except Exception:
+        total_hours_logged = 0.0
+
+    # ── Completion rate ──
+    completion_rate = round((completed_tasks / total_tasks * 100), 1) if total_tasks > 0 else 0.0
+
+    # ── Average task age (open tasks) ──
+    open_tasks = db.query(Task).filter(
+        Task.status.notin_(["completed", "done", "cancelled"])
+    ).all()
+    avg_age = 0.0
+    if open_tasks:
+        total_age = sum((now - t.created_at).days for t in open_tasks if t.created_at)
+        avg_age = round(total_age / len(open_tasks), 1)
+
+    # ── Tasks by status ──
+    all_tasks_q = db.query(Task.status, func.count(Task.id)).group_by(Task.status).all()
+    tasks_by_status = {row[0]: row[1] for row in all_tasks_q}
+
+    # ── Tasks by priority ──
+    prio_q = db.query(Task.priority, func.count(Task.id)).group_by(Task.priority).all()
+    tasks_by_priority = {row[0]: row[1] for row in prio_q}
+
+    # ── 30-day completion trend ──
+    tasks_in_period = db.query(Task).filter(Task.created_at >= thirty_days_ago).all()
+    daily = {}
+    for i in range(30):
+        day = (thirty_days_ago + timedelta(days=i)).date()
+        daily[str(day)] = {"date": str(day), "created": 0, "completed": 0}
+    for t in tasks_in_period:
+        d = str(t.created_at.date())
+        if d in daily:
+            daily[d]["created"] += 1
+        if t.completed_at:
+            cd = str(t.completed_at.date())
+            if cd in daily:
+                daily[cd]["completed"] += 1
+    completion_trend = list(daily.values())
+
+    # ── Project summary ──
+    projects = db.query(Project).filter(
+        Project.status.notin_(["archived", "cancelled"]) if hasattr(Project, "status") else True
+    ).limit(20).all()
+    project_summary = []
+    for p in projects:
+        task_count = db.query(Task).filter(Task.project_id == p.id).count()
+        overdue_count = db.query(Task).filter(
+            Task.project_id == p.id,
+            Task.due_date < now,
+            Task.status.notin_(["completed", "done", "cancelled"])
+        ).count()
+        project_summary.append({
+            "id": str(p.id),
+            "name": p.name,
+            "status": p.status if hasattr(p, "status") else "active",
+            "progress": p.progress_percentage if hasattr(p, "progress_percentage") else 0,
+            "task_count": task_count,
+            "overdue_count": overdue_count,
+        })
+
+    # ── Top overdue tasks ──
+    overdue_items = db.query(Task).options(
+        joinedload(Task.assignee),
+        joinedload(Task.project)
+    ).filter(
+        Task.due_date < now,
+        Task.status.notin_(["completed", "done", "cancelled"])
+    ).order_by(Task.due_date.asc()).limit(10).all()
+    top_overdue = []
+    for t in overdue_items:
+        top_overdue.append({
+            "id": str(t.id),
+            "name": t.name,
+            "priority": t.priority,
+            "overdue_days": (now - t.due_date).days if t.due_date else 0,
+            "project_name": t.project.name if t.project else None,
+            "assignee_name": t.assignee.full_name if t.assignee else None,
+        })
+
+    return {
+        "total_tasks": total_tasks,
+        "completed_tasks": completed_tasks,
+        "overdue_tasks": overdue_tasks,
+        "active_projects": active_projects,
+        "total_hours_logged": total_hours_logged,
+        "avg_task_age_days": avg_age,
+        "completion_rate": completion_rate,
+        "tasks_by_status": tasks_by_status,
+        "tasks_by_priority": tasks_by_priority,
+        "completion_trend": completion_trend,
+        "project_summary": project_summary,
+        "top_overdue_tasks": top_overdue,
+    }
+
+
+@router.get("/workload-distribution")
+def get_workload_distribution(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get per-user workload distribution."""
+    now = datetime.utcnow()
+    from app.models import TimeEntry
+    from datetime import timedelta
+    thirty_ago = now - timedelta(days=30)
+
+    users = db.query(User).filter(User.is_active == True).all()
+    result = []
+    for u in users:
+        active = db.query(Task).filter(
+            Task.assignee_id == u.id,
+            Task.status.notin_(["completed", "done", "cancelled"])
+        ).count()
+        completed = db.query(Task).filter(
+            Task.assignee_id == u.id,
+            Task.status.in_(["completed", "done"])
+        ).count()
+        overdue = db.query(Task).filter(
+            Task.assignee_id == u.id,
+            Task.due_date < now,
+            Task.status.notin_(["completed", "done", "cancelled"])
+        ).count()
+        try:
+            hours = db.query(func.sum(TimeEntry.hours)).filter(
+                TimeEntry.user_id == u.id,
+                TimeEntry.date >= thirty_ago.date()
+            ).scalar() or 0
+        except Exception:
+            hours = 0
+        if active > 0 or completed > 0:
+            result.append({
+                "user_id": str(u.id),
+                "name": u.full_name,
+                "active_tasks": active,
+                "completed_tasks": completed,
+                "overdue_tasks": overdue,
+                "hours_logged_30d": round(float(hours), 1),
+            })
+    result.sort(key=lambda x: x["active_tasks"], reverse=True)
+    return {"users": result[:20]}
+
+
+# ─── Burn-Down / Burn-Up Charts ───────────────────────────────────────────────
+
+@router.get("/burn-down")
+def get_burn_down_chart(
+    project_id: str,
+    sprint_start: Optional[date] = None,
+    sprint_end: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Burn-down chart: ideal remaining vs actual remaining tasks per day."""
+    now = datetime.utcnow().date()
+    start = sprint_start or (now - timedelta(days=14))
+    end = sprint_end or (now + timedelta(days=14))
+    total_tasks = db.query(Task).filter(Task.project_id == project_id).count()
+    if total_tasks == 0:
+        return {"project_id": project_id, "total_tasks": 0, "data": []}
+    sprint_days = max((end - start).days, 1)
+    data = []
+    current = start
+    while current <= end:
+        completed_by_date = db.query(Task).filter(
+            and_(
+                Task.project_id == project_id,
+                Task.status.in_(["completed", "cancelled"]),
+                Task.completed_at <= datetime.combine(current, datetime.min.time()),
+            )
+        ).count()
+        day_index = (current - start).days
+        ideal = max(0, total_tasks - round(total_tasks * day_index / sprint_days))
+        actual = total_tasks - completed_by_date
+        data.append({"date": current.isoformat(), "ideal_remaining": ideal, "actual_remaining": actual})
+        current += timedelta(days=1)
+    return {"project_id": project_id, "total_tasks": total_tasks,
+            "sprint_start": start.isoformat(), "sprint_end": end.isoformat(), "data": data}
+
+
+@router.get("/burn-up")
+def get_burn_up_chart(
+    project_id: str,
+    sprint_start: Optional[date] = None,
+    sprint_end: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Burn-up chart: completed vs total scope per day."""
+    now = datetime.utcnow().date()
+    start = sprint_start or (now - timedelta(days=14))
+    end = sprint_end or (now + timedelta(days=14))
+    total_tasks = db.query(Task).filter(Task.project_id == project_id).count()
+    data = []
+    current = start
+    while current <= end:
+        completed_by_date = db.query(Task).filter(
+            and_(
+                Task.project_id == project_id,
+                Task.status == "completed",
+                Task.completed_at <= datetime.combine(current, datetime.min.time()),
+            )
+        ).count()
+        data.append({"date": current.isoformat(), "total_scope": total_tasks, "completed": completed_by_date})
+        current += timedelta(days=1)
+    return {"project_id": project_id, "total_tasks": total_tasks,
+            "sprint_start": start.isoformat(), "sprint_end": end.isoformat(), "data": data}
+
+
+# ─── PDF Export ───────────────────────────────────────────────────────────────
+
+@router.get("/export-pdf")
+def export_report_pdf(
+    report_type: str,
+    project_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Export any report as PDF (requires reportlab). Falls back to CSV."""
+    if not _has_reportlab:
+        buf = StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["report_type", "project_id", "note"])
+        writer.writerow([report_type, project_id or "", "Install reportlab for PDF support: pip install reportlab"])
+        buf.seek(0)
+        return StreamingResponse(iter([buf.read()]), media_type="text/csv",
+                                 headers={"Content-Disposition": f"attachment; filename={report_type}.csv"})
+
+    rows: list = []
+    headers: list = []
+    if report_type == "task_aging":
+        tasks = db.query(Task).filter(
+            *([] if not project_id else [Task.project_id == project_id]),
+            Task.status.notin_(["completed", "cancelled"]),
+        ).limit(200).all()
+        headers = ["Task", "Status", "Priority", "Age (days)", "Due Date"]
+        for t in tasks:
+            age = (datetime.utcnow() - t.created_at).days if t.created_at else 0
+            rows.append([t.name or "", str(t.status or ""), str(t.priority or ""),
+                         str(age), str(t.due_date.date() if t.due_date else "")])
+    else:
+        headers = ["Note"]
+        rows = [[f"PDF export for '{report_type}' — no template configured yet."]]
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = [
+        Paragraph(f"{report_type.replace('_', ' ').title()} Report", styles["Title"]),
+        Spacer(1, 12),
+    ]
+    table_data = [headers] + (rows if rows else [["No data"]])
+    tbl = Table(table_data)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F46E5")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#F8FAFC"), colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#CBD5E1")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(tbl)
+    doc.build(elements)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f"attachment; filename={report_type}-report.pdf"})

@@ -19,12 +19,18 @@ from app.routers import (
 )
 # Phase 3: Advanced Features, MFA
 from app.routers import advanced_features, mfa, task_templates
+# AI Agent (Agentic LLM with function calling)
+from app.routers import ai_agent
 # Phase 4: Views and Email Notifications
 from app.routers import views, email_notifications
-# Phase 5: GDPR, Permissions, Google Calendar, Project Structure
-from app.routers import gdpr, permissions, google_calendar, project_structure
+# Phase 5: GDPR, Permissions, Google Calendar, Project Structure, Workspaces
+from app.routers import gdpr, permissions, google_calendar, project_structure, workspaces
 # Settings
 from app.routers import settings as settings_router
+# Automation engine router
+from app.routers import automation
+# Chat integrations (Slack & Teams)
+from app.routers import chat_integrations
 # OpenAPI documentation enhancement
 from app.openapi_config import setup_custom_openapi
 from app.utils.error_handlers import register_error_handlers
@@ -104,6 +110,8 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"]
 # ========== Integrations & AI Features ==========
 app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations & Webhooks"])
 app.include_router(ai_features.router, prefix="/api/ai", tags=["AI Features"])
+app.include_router(ai_agent.router, prefix="/api/ai-agent", tags=["AI Agent"])
+
 
 # ========== Calendar & Timeline Views ==========
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
@@ -144,6 +152,15 @@ app.include_router(project_structure.router, prefix="/api", tags=["Project Struc
 
 # ========== User Settings ==========
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
+
+# ========== Workspaces ==========
+app.include_router(workspaces.router, prefix="/api/workspaces", tags=["Workspaces"])
+
+# ========== Automation Rules Engine ==========
+app.include_router(automation.router, prefix="/api/automation", tags=["Automation"])
+
+# ========== Chat Integrations (Slack & Teams) ==========
+app.include_router(chat_integrations.router, prefix="/api/integrations/chat", tags=["Chat Integrations"])
 
 
 @app.get("/")

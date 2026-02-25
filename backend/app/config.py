@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 1440  # 24 hours
     
     # Google Gemini
-    gemini_api_key: str = "AIzaSyB5hMK93SXdRFEEibtQHqyh1TyKr2Hz5pQ"
+    gemini_api_key: str = "AIzaSyBoSNmSGPXxlPr91tRCihkIHeZ7IcqEJQU"
     
     # CORS
     cors_origins: str = "http://localhost:3000"

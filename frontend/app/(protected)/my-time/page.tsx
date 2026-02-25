@@ -178,8 +178,8 @@ function FilterPill({
             <button
                 onClick={() => setOpen(!open)}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 ${isActive
-                        ? "border-blue-500/60 bg-blue-500/15 text-blue-500 shadow-sm shadow-blue-500/10"
-                        : "border-foreground/15 bg-foreground/[0.04] text-foreground/60 hover:bg-foreground/[0.07] hover:text-foreground/80 hover:border-foreground/25"
+                    ? "border-blue-500/60 bg-blue-500/15 text-blue-500 shadow-sm shadow-blue-500/10"
+                    : "border-foreground/15 bg-foreground/[0.04] text-foreground/60 hover:bg-foreground/[0.07] hover:text-foreground/80 hover:border-foreground/25"
                     }`}
             >
                 <FilterIcon />
@@ -337,7 +337,7 @@ function WeeklyProgressCard({ summary }: { summary: MyTimeSummary }) {
             </div>
             <div className="h-1 bg-foreground/8 rounded-full overflow-hidden mb-5">
                 <div
-                    className="h-full bg-gradient-to-r from-violet-500 to-purple-400 rounded-full transition-all duration-1000"
+                    className="h-full bg-gradient-to-r from-blue-500 to-purple-400 rounded-full transition-all duration-1000"
                     style={{ width: `${weekPct}%` }}
                 />
             </div>
@@ -387,8 +387,8 @@ function ActionMenuItem({ icon, label, onClick, danger }: { icon: React.ReactNod
         <button
             onClick={onClick}
             className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 transition ${danger
-                    ? "text-red-500 hover:bg-red-500/8"
-                    : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground"
+                ? "text-red-500 hover:bg-red-500/8"
+                : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground"
                 }`}
         >
             <span className="shrink-0">{icon}</span>
@@ -520,8 +520,8 @@ function TaskRow({
                 <button
                     onClick={onToggleState}
                     className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-all duration-200 ${isWorking
-                            ? "border-blue-500/30 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
-                            : "border-foreground/12 bg-foreground/[0.03] text-foreground/50 hover:bg-foreground/8 hover:text-foreground/70"
+                        ? "border-blue-500/30 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
+                        : "border-foreground/12 bg-foreground/[0.03] text-foreground/50 hover:bg-foreground/8 hover:text-foreground/70"
                         }`}
                 >
                     {isWorking ? (
@@ -761,8 +761,27 @@ export default function MyTimePage() {
     const currentSummary = summary!;
     const activeFiltersCount = Object.keys(filters).length;
 
+    // Over-allocation detection
+    const isOverAllocated = (summary?.total_hours ?? 0) > (summary?.expected_hours ?? 8) || workingCount > 1;
+    const overAllocMsg = workingCount > 1
+        ? `${workingCount} tasks are running simultaneously — consider pausing all but one.`
+        : `You've logged ${summary?.total_hours?.toFixed(1)}h today, exceeding your ${summary?.expected_hours ?? 8}h target.`;
+
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-8">
+
+            {/* ── Over-allocation Alert ── */}
+            {isOverAllocated && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400">
+                    <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                    <div>
+                        <p className="text-sm font-semibold">Over-allocation detected</p>
+                        <p className="text-xs mt-0.5 text-amber-400/70">{overAllocMsg}</p>
+                    </div>
+                </div>
+            )}
 
             {/* ── Header ── */}
             <div className="flex items-center justify-between">

@@ -1,9 +1,11 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 import csv
-from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from app.database import get_db
 from app.models import User, Project, ProjectManager
 from app.schemas import UserResponse, UserUpdate, UserCreate, UserProfileResponse, UserProfileUpdate
@@ -241,6 +243,235 @@ def get_all_users(
         query = query.order_by(User.created_at.desc())
     
     return query.offset(skip).limit(limit).all()
+
+
+
+@router.get("/{user_id}/profile-summary")
+def get_user_profile_summary(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Full 360° employee summary for manager view:
+    - Basic profile
+    - Active & recently completed tasks
+    - Active & past projects
+    - Teams membership
+    - Logged hours (this week, month, total, last 8 weeks chart)
+    - Task stats by status/priority
+    - Recent activity (last 10 task updates)
+    """
+    from app.models.task import Task
+    from app.models.time_tracking import TimeLog
+    from app.models.team import TeamMember, Team
+    from app.models.task_collaboration import TaskAuditLog
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    now = datetime.utcnow()
+    week_start = now - timedelta(days=7)
+    month_start = now - timedelta(days=30)
+
+    # ── Tasks ──────────────────────────────────────────────────────────────────
+    all_tasks = db.query(Task).options(
+        joinedload(Task.project)
+    ).filter(Task.assignee_id == user_id).all()
+
+    def task_dict(t):
+        return {
+            "id": str(t.id),
+            "name": t.name,
+            "status": t.status,
+            "priority": t.priority,
+            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+            "project_name": t.project.name if t.project else None,
+            "project_id": str(t.project_id) if t.project_id else None,
+            "estimated_hours": t.estimated_hours,
+            "actual_hours": t.actual_hours or 0,
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+        }
+
+    active_tasks = [task_dict(t) for t in all_tasks
+                    if t.status not in ("done", "completed", "cancelled")]
+    completed_tasks = sorted(
+        [task_dict(t) for t in all_tasks
+         if t.status in ("done", "completed") and t.completed_at and t.completed_at >= month_start],
+        key=lambda x: x["completed_at"] or "", reverse=True
+    )[:20]
+
+    # Task stats
+    status_counts: dict = {}
+    priority_counts: dict = {}
+    for t in all_tasks:
+        status_counts[t.status] = status_counts.get(t.status, 0) + 1
+        priority_counts[t.priority] = priority_counts.get(t.priority, 0) + 1
+
+    overdue_count = sum(
+        1 for t in all_tasks
+        if t.status not in ("done", "completed", "cancelled")
+        and t.due_date and t.due_date < now
+    )
+
+    # ── Projects ───────────────────────────────────────────────────────────────
+    # Projects where user is assigned to tasks
+    project_ids_from_tasks = list({t.project_id for t in all_tasks if t.project_id})
+    # Projects where user is a manager
+    managed_ids = [pm.project_id for pm in db.query(ProjectManager).filter(ProjectManager.user_id == user_id).all()]
+    all_project_ids = list(set(project_ids_from_tasks + managed_ids))
+
+    projects_raw = db.query(Project).filter(Project.id.in_(all_project_ids)).all() if all_project_ids else []
+
+    def project_dict(p, role="member"):
+        total = db.query(Task).filter(Task.project_id == p.id).count()
+        done = db.query(Task).filter(Task.project_id == p.id, Task.status.in_(["done", "completed"])).count()
+        progress = round((done / total * 100) if total > 0 else 0, 1)
+        return {
+            "id": str(p.id),
+            "name": p.name,
+            "code": p.code,
+            "status": p.status,
+            "priority": p.priority,
+            "progress": progress,
+            "total_tasks": total,
+            "completed_tasks": done,
+            "start_date": p.start_date.isoformat() if p.start_date else None,
+            "end_date": p.end_date.isoformat() if p.end_date else None,
+            "role": "Manager" if str(p.id) in [str(m) for m in managed_ids] else role,
+        }
+
+    active_statuses = {"active", "planning", "on_hold", "in_progress"}
+    active_projects = [project_dict(p) for p in projects_raw if p.status in active_statuses]
+    past_projects = [project_dict(p) for p in projects_raw if p.status not in active_statuses]
+
+    # ── Teams ──────────────────────────────────────────────────────────────────
+    memberships = db.query(TeamMember).options(
+        joinedload(TeamMember.team)
+    ).filter(TeamMember.user_id == user_id, TeamMember.is_active == True).all()
+
+    teams_list = []
+    for m in memberships:
+        if m.team:
+            member_count = db.query(TeamMember).filter(
+                TeamMember.team_id == m.team_id, TeamMember.is_active == True
+            ).count()
+            lead_name = None
+            if m.team.lead_id:
+                lead = db.query(User).filter(User.id == m.team.lead_id).first()
+                lead_name = lead.full_name if lead else None
+            teams_list.append({
+                "id": str(m.team.id),
+                "name": m.team.name,
+                "description": m.team.description,
+                "role": m.role,
+                "member_count": member_count,
+                "lead_name": lead_name,
+                "allocation_percentage": m.allocation_percentage,
+            })
+
+    # ── Hours ──────────────────────────────────────────────────────────────────
+    hours_week = db.query(func.sum(TimeLog.hours)).filter(
+        TimeLog.user_id == user_id,
+        TimeLog.date >= week_start
+    ).scalar() or 0.0
+
+    hours_month = db.query(func.sum(TimeLog.hours)).filter(
+        TimeLog.user_id == user_id,
+        TimeLog.date >= month_start
+    ).scalar() or 0.0
+
+    hours_total = db.query(func.sum(TimeLog.hours)).filter(
+        TimeLog.user_id == user_id
+    ).scalar() or 0.0
+
+    # Per-week chart — last 8 weeks
+    weekly_hours = []
+    for i in range(7, -1, -1):
+        wk_start = now - timedelta(days=7 * (i + 1))
+        wk_end = now - timedelta(days=7 * i)
+        wk_hours = db.query(func.sum(TimeLog.hours)).filter(
+            TimeLog.user_id == user_id,
+            TimeLog.date >= wk_start,
+            TimeLog.date < wk_end,
+        ).scalar() or 0.0
+        weekly_hours.append({
+            "week": wk_start.strftime("W%W '%y"),
+            "hours": round(float(wk_hours), 1),
+        })
+
+    # ── Recent activity (audit log) ────────────────────────────────────────────
+    recent_activity = []
+    try:
+        logs = db.query(TaskAuditLog).options(
+            joinedload(TaskAuditLog.task)
+        ).filter(
+            TaskAuditLog.user_id == user_id
+        ).order_by(TaskAuditLog.created_at.desc()).limit(10).all()
+        for log in logs:
+            recent_activity.append({
+                "type": log.action,
+                "task_name": log.task.name if log.task else "Unknown",
+                "task_id": str(log.task_id) if log.task_id else None,
+                "description": log.description or f"{log.action} on task",
+                "timestamp": log.created_at.isoformat() if log.created_at else None,
+            })
+    except Exception:
+        pass  # audit log may not exist
+
+    # ── Department ────────────────────────────────────────────────────────────
+    dept = None
+    if user.department:
+        dept = {"id": str(user.department.id), "name": user.department.name}
+
+    return {
+        "user": {
+            "id": str(user.id),
+            "full_name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "position": user.position,
+            "avatar_url": user.avatar_url,
+            "phone": user.phone,
+            "bio": user.bio,
+            "skills": user.skills or [],
+            "expertise_level": user.expertise_level,
+            "timezone": user.timezone,
+            "working_hours_start": user.working_hours_start,
+            "working_hours_end": user.working_hours_end,
+            "availability_status": user.availability_status,
+            "capacity_hours_week": user.capacity_hours_week or 40,
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+            "department": dept,
+        },
+        "active_tasks": active_tasks,
+        "completed_tasks_last_30d": completed_tasks,
+        "projects": {
+            "active": active_projects,
+            "past": past_projects,
+        },
+        "teams": teams_list,
+        "hours": {
+            "this_week": round(float(hours_week), 1),
+            "this_month": round(float(hours_month), 1),
+            "total": round(float(hours_total), 1),
+            "by_week": weekly_hours,
+        },
+        "task_stats": {
+            "total": len(all_tasks),
+            "active": len(active_tasks),
+            "completed_total": status_counts.get("done", 0) + status_counts.get("completed", 0),
+            "overdue": overdue_count,
+            "in_progress": status_counts.get("in_progress", 0),
+            "by_status": status_counts,
+            "by_priority": priority_counts,
+        },
+        "recent_activity": recent_activity,
+    }
 
 
 @router.get("/{user_id}/projects")

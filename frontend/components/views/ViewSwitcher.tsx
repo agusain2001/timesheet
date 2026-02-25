@@ -95,15 +95,15 @@ export function ViewSwitcher({ currentView, onChange, onSaveView, onShareView }:
     return (
         <div className="flex items-center gap-2">
             {/* View tabs */}
-            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 gap-0.5">
+            <div className="flex items-center bg-foreground/[0.05] border border-foreground/10 rounded-xl p-1 gap-0.5">
                 {VIEWS.map(({ id, label, Icon }) => (
                     <button
                         key={id}
                         onClick={() => onChange(id)}
                         title={label}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${currentView === id
-                                ? "bg-indigo-600 text-white shadow-sm"
-                                : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                                ? "bg-blue-600 text-white shadow-sm"
+                                : "text-foreground/50 hover:text-foreground/80 hover:bg-foreground/[0.05]"
                             }`}
                     >
                         <Icon size={13} />
@@ -116,7 +116,7 @@ export function ViewSwitcher({ currentView, onChange, onSaveView, onShareView }:
             {onSaveView && (
                 <button
                     onClick={onSaveView}
-                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 text-xs transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-foreground/[0.05] border border-foreground/10 text-foreground/50 hover:text-foreground/80 text-xs transition-colors"
                     title="Save view"
                 >
                     <BookmarkPlus size={13} />
@@ -125,7 +125,7 @@ export function ViewSwitcher({ currentView, onChange, onSaveView, onShareView }:
             {onShareView && (
                 <button
                     onClick={onShareView}
-                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 text-xs transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-foreground/[0.05] border border-foreground/10 text-foreground/50 hover:text-foreground/80 text-xs transition-colors"
                     title="Share view"
                 >
                     <Share2 size={13} />
@@ -159,12 +159,12 @@ export function ViewToolbar({
             <div className="flex items-center gap-2 flex-wrap">
                 {/* Search */}
                 <div className="relative">
-                    <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/50" />
                     <input
                         value={filters.search}
                         onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
                         placeholder="Search tasks..."
-                        className="pl-8 pr-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 placeholder-slate-600 text-xs focus:outline-none focus:border-indigo-500/40 w-48"
+                        className="pl-8 pr-3 py-2 rounded-xl bg-foreground/[0.05] border border-foreground/10 text-foreground/80 placeholder-foreground/40 text-xs focus:outline-none focus:border-blue-500/40 w-48"
                     />
                 </div>
 
@@ -172,14 +172,14 @@ export function ViewToolbar({
                 <button
                     onClick={() => setShowFilters(!showFilters)}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs transition-colors ${showFilters || activeFilterCount > 0
-                            ? "bg-indigo-600/20 border-indigo-500/40 text-indigo-400"
-                            : "bg-white/5 border-white/10 text-slate-500 hover:text-slate-300"
+                            ? "bg-blue-600/20 border-blue-500/40 text-blue-400"
+                            : "bg-foreground/[0.05] border-foreground/10 text-foreground/50 hover:text-foreground/80"
                         }`}
                 >
                     <Filter size={12} />
                     Filters
                     {activeFilterCount > 0 && (
-                        <span className="w-4 h-4 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center">
+                        <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center">
                             {activeFilterCount}
                         </span>
                     )}
@@ -187,39 +187,39 @@ export function ViewToolbar({
 
                 {/* Sort */}
                 <div className="relative">
-                    <ArrowUpDown size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    <ArrowUpDown size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/50 pointer-events-none" />
                     <select
                         value={sortBy}
                         onChange={(e) => onSortChange(e.target.value)}
-                        className="pl-8 pr-6 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 text-xs appearance-none focus:outline-none focus:border-indigo-500/40"
+                        className="pl-8 pr-6 py-2 rounded-xl bg-foreground/[0.05] border border-foreground/10 text-foreground/60 text-xs appearance-none focus:outline-none focus:border-blue-500/40"
                     >
                         {SORT_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                     </select>
-                    <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
+                    <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground/50 pointer-events-none" />
                 </div>
 
                 {/* Group by */}
                 <div className="relative">
-                    <Rows3 size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    <Rows3 size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/50 pointer-events-none" />
                     <select
                         value={groupBy}
                         onChange={(e) => onGroupChange(e.target.value)}
-                        className="pl-8 pr-6 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 text-xs appearance-none focus:outline-none focus:border-indigo-500/40"
+                        className="pl-8 pr-6 py-2 rounded-xl bg-foreground/[0.05] border border-foreground/10 text-foreground/60 text-xs appearance-none focus:outline-none focus:border-blue-500/40"
                     >
                         {GROUP_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                     </select>
-                    <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
+                    <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground/50 pointer-events-none" />
                 </div>
 
                 {/* Clear filters */}
                 {activeFilterCount > 0 && (
                     <button
                         onClick={handleClear}
-                        className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
+                        className="flex items-center gap-1 text-xs text-foreground/50 hover:text-red-400 transition-colors"
                     >
                         <X size={12} /> Clear
                     </button>
@@ -228,11 +228,11 @@ export function ViewToolbar({
 
             {/* Expanded filter panel */}
             {showFilters && (
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/10 flex-wrap">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-foreground/[0.01] border border-foreground/10 flex-wrap">
                     <select
                         value={filters.status}
                         onChange={(e) => onFiltersChange({ ...filters, status: e.target.value })}
-                        className="px-3 py-2 rounded-lg bg-slate-800 border border-white/10 text-slate-300 text-xs"
+                        className="px-3 py-2 rounded-lg bg-foreground/[0.05] border border-foreground/10 text-foreground/80 text-xs"
                     >
                         {STATUS_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
@@ -242,7 +242,7 @@ export function ViewToolbar({
                     <select
                         value={filters.priority}
                         onChange={(e) => onFiltersChange({ ...filters, priority: e.target.value })}
-                        className="px-3 py-2 rounded-lg bg-slate-800 border border-white/10 text-slate-300 text-xs"
+                        className="px-3 py-2 rounded-lg bg-foreground/[0.05] border border-foreground/10 text-foreground/80 text-xs"
                     >
                         {PRIORITY_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
@@ -253,7 +253,7 @@ export function ViewToolbar({
                         <select
                             value={filters.assignee}
                             onChange={(e) => onFiltersChange({ ...filters, assignee: e.target.value })}
-                            className="px-3 py-2 rounded-lg bg-slate-800 border border-white/10 text-slate-300 text-xs"
+                            className="px-3 py-2 rounded-lg bg-foreground/[0.05] border border-foreground/10 text-foreground/80 text-xs"
                         >
                             <option value="">All Assignees</option>
                             {users.map((u) => (

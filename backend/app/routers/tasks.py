@@ -19,6 +19,7 @@ from app.utils import (
     DependencyBlockedError,
 )
 from app.services.notification_service import NotificationService
+from app.services.automation_engine import run_automation_rules
 
 router = APIRouter()
 
@@ -254,6 +255,9 @@ def create_task(
             assigner_name=current_user.full_name
         )
 
+    # Run automation rules for task_created event
+    run_automation_rules(db_task, "task_created", db, actor_id=str(current_user.id))
+
     return build_task_response(db_task, db)
 
 
@@ -315,6 +319,10 @@ def update_task(
                 task_id=task.id,
                 assigner_name=current_user.full_name
             )
+
+    # Run automation rules for task_updated (or status_changed)
+    event = "status_changed" if "status" in update_data else "task_updated"
+    run_automation_rules(task, event, db, actor_id=str(current_user.id))
 
     return build_task_response(task, db)
 
@@ -552,3 +560,156 @@ def delete_attachment(
 
     _attachments[task_id] = [a for a in attachments if a["id"] != attachment_id]
     return None
+
+
+# ─── Audit Log ────────────────────────────────────────────────────────────────
+
+@router.get("/{task_id}/audit-log")
+def get_task_audit_log(
+    task_id: str,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get the audit log (change history) for a task."""
+    from app.models.task_collaboration import TaskAuditLog
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    logs = (
+        db.query(TaskAuditLog)
+        .filter(TaskAuditLog.task_id == task_id)
+        .order_by(TaskAuditLog.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    result = []
+    for log in logs:
+        changed_by_user = db.query(User).filter(User.id == log.changed_by).first() if log.changed_by else None
+        result.append({
+            "id": log.id,
+            "task_id": log.task_id,
+            "field_changed": log.field_changed if hasattr(log, "field_changed") else log.action,
+            "old_value": log.old_value if hasattr(log, "old_value") else None,
+            "new_value": log.new_value if hasattr(log, "new_value") else None,
+            "changed_by": log.changed_by,
+            "changed_by_name": changed_by_user.full_name if changed_by_user else None,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        })
+
+    return result
+
+
+# ─── Custom Fields ────────────────────────────────────────────────────────────
+
+from app.models.custom_field import CustomFieldDefinition, CustomFieldValue, FieldType as CFType
+
+
+@router.get("/projects/{project_id}/custom-fields")
+def list_custom_fields(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List all custom field definitions for a project."""
+    fields = (
+        db.query(CustomFieldDefinition)
+        .filter(CustomFieldDefinition.project_id == project_id)
+        .order_by(CustomFieldDefinition.display_order)
+        .all()
+    )
+    return [
+        {
+            "id": f.id,
+            "project_id": f.project_id,
+            "name": f.name,
+            "field_type": f.field_type,
+            "options": f.options,
+            "is_required": f.is_required,
+            "display_order": f.display_order,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+        }
+        for f in fields
+    ]
+
+
+@router.post("/projects/{project_id}/custom-fields")
+def create_custom_field(
+    project_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create a custom field definition for a project."""
+    field = CustomFieldDefinition(
+        project_id=project_id,
+        name=payload.get("name", "Field"),
+        field_type=payload.get("field_type", "text"),
+        options=payload.get("options"),
+        is_required=payload.get("is_required", False),
+        display_order=str(payload.get("display_order", 0)),
+    )
+    db.add(field)
+    db.commit()
+    db.refresh(field)
+    return {"id": field.id, "name": field.name, "field_type": field.field_type, "options": field.options}
+
+
+@router.delete("/projects/{project_id}/custom-fields/{field_id}")
+def delete_custom_field(
+    project_id: str,
+    field_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Delete a custom field definition."""
+    field = db.query(CustomFieldDefinition).filter(
+        CustomFieldDefinition.id == field_id,
+        CustomFieldDefinition.project_id == project_id,
+    ).first()
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found")
+    db.delete(field)
+    db.commit()
+    return {"deleted": True}
+
+
+@router.get("/{task_id}/custom-field-values")
+def get_task_custom_field_values(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get all custom field values for a task."""
+    values = db.query(CustomFieldValue).filter(CustomFieldValue.task_id == task_id).all()
+    return [{"field_id": v.field_id, "value": v.value} for v in values]
+
+
+@router.put("/{task_id}/custom-field-values")
+def upsert_task_custom_field_values(
+    task_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Upsert custom field values for a task. payload: {field_id: value, ...}"""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    field_values: dict = payload.get("values", payload)
+    for field_id, value in field_values.items():
+        existing = db.query(CustomFieldValue).filter(
+            CustomFieldValue.task_id == task_id,
+            CustomFieldValue.field_id == field_id,
+        ).first()
+        if existing:
+            existing.value = str(value) if value is not None else None
+        else:
+            db.add(CustomFieldValue(task_id=task_id, field_id=field_id, value=str(value) if value is not None else None))
+    db.commit()
+    return {"updated": True}

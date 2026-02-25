@@ -259,6 +259,15 @@ export default function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProp
                                 {/* Attachments */}
                                 <AttachmentsSection taskId={task.id} />
 
+                                {/* Subtasks */}
+                                <SubtasksSection taskId={task.id} />
+
+                                {/* Dependencies */}
+                                <DependenciesSection taskId={task.id} />
+
+                                {/* Activity / Audit Trail */}
+                                <AuditTrailSection taskId={task.id} />
+
                             </div>
                         </>
                     )}
@@ -398,8 +407,8 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
                 onDrop={(e) => { e.preventDefault(); setDragOver(false); upload(e.dataTransfer.files); }}
                 onClick={() => fileRef.current?.click()}
                 className={`cursor-pointer rounded-xl border-2 border-dashed py-5 flex flex-col items-center gap-2 transition-colors ${dragOver
-                        ? "border-indigo-500 bg-indigo-500/5"
-                        : "border-foreground/10 hover:border-foreground/20 hover:bg-foreground/[0.02]"
+                    ? "border-blue-500 bg-blue-500/5"
+                    : "border-foreground/10 hover:border-foreground/20 hover:bg-foreground/[0.02]"
                     }`}
             >
                 <span className="text-2xl">{uploading ? "⏳" : "📤"}</span>
@@ -420,7 +429,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
                             <span className="text-lg shrink-0">{fileIcon(att.content_type)}</span>
                             <div className="flex-1 min-w-0">
                                 <a href={`${API}${att.url}`} target="_blank" rel="noreferrer"
-                                    className="text-sm font-medium text-foreground/80 hover:text-indigo-500 truncate block transition-colors">
+                                    className="text-sm font-medium text-foreground/80 hover:text-blue-500 truncate block transition-colors">
                                     {att.filename}
                                 </a>
                                 <p className="text-[10px] text-foreground/40">
@@ -439,6 +448,270 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
                     ))}
                 </div>
             )}
+        </Section>
+    );
+}
+
+// ============ Subtasks Section ============
+
+interface Subtask {
+    id: string;
+    name: string;
+    status: string;
+    assignee?: { full_name: string } | null;
+}
+
+function SubtasksSection({ taskId }: { taskId: string }) {
+    const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+    const [newTitle, setNewTitle] = useState("");
+    const [adding, setAdding] = useState(false);
+    const [showForm, setShowForm] = useState(false);
+
+    useEffect(() => {
+        const token = getToken();
+        fetch(`${API}/api/tasks?parent_task_id=${taskId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then(r => r.ok ? r.json() : { items: [] })
+            .then(d => setSubtasks(d.items ?? []))
+            .catch(() => { });
+    }, [taskId]);
+
+    const createSubtask = async () => {
+        if (!newTitle.trim()) return;
+        const token = getToken();
+        setAdding(true);
+        try {
+            const res = await fetch(`${API}/api/tasks`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ name: newTitle.trim(), parent_task_id: taskId, task_type: "personal", status: "todo", priority: "medium" }),
+            });
+            if (res.ok) {
+                const newTask = await res.json();
+                setSubtasks(prev => [...prev, newTask]);
+                setNewTitle("");
+                setShowForm(false);
+            }
+        } finally { setAdding(false); }
+    };
+
+    const toggleSubtask = async (sub: Subtask) => {
+        const token = getToken();
+        const newStatus = sub.status === "done" ? "todo" : "done";
+        await fetch(`${API}/api/tasks/${sub.id}`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus }),
+        });
+        setSubtasks(prev => prev.map(s => s.id === sub.id ? { ...s, status: newStatus } : s));
+    };
+
+    const completed = subtasks.filter(s => s.status === "done").length;
+
+    return (
+        <Section title={`Subtasks${subtasks.length > 0 ? ` (${completed}/${subtasks.length})` : ""}`}>
+            {subtasks.length > 0 && (
+                <>
+                    {subtasks.length > 1 && (
+                        <div className="mb-2">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="flex-1 h-1.5 bg-foreground/10 rounded-full overflow-hidden">
+                                    <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(completed / subtasks.length) * 100}%` }} />
+                                </div>
+                                <span className="text-xs text-foreground/40">{Math.round((completed / subtasks.length) * 100)}%</span>
+                            </div>
+                        </div>
+                    )}
+                    <div className="space-y-1.5">
+                        {subtasks.map(sub => (
+                            <div key={sub.id} className="flex items-center gap-2.5 group px-2 py-1.5 rounded-lg hover:bg-foreground/[0.03] transition-colors">
+                                <button
+                                    onClick={() => toggleSubtask(sub)}
+                                    className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${sub.status === "done" ? "bg-green-500 border-green-500" : "border-foreground/20 hover:border-green-500"}`}
+                                >
+                                    {sub.status === "done" && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                </button>
+                                <span className={`text-sm flex-1 ${sub.status === "done" ? "line-through text-foreground/40" : "text-foreground/80"}`}>{sub.name}</span>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+            {showForm ? (
+                <div className="flex gap-2 mt-2">
+                    <input
+                        autoFocus
+                        value={newTitle}
+                        onChange={e => setNewTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") createSubtask(); if (e.key === "Escape") { setShowForm(false); setNewTitle(""); } }}
+                        placeholder="Subtask title..."
+                        className="flex-1 text-sm px-3 py-1.5 bg-foreground/5 border border-foreground/10 rounded-lg outline-none focus:border-blue-500 text-foreground"
+                    />
+                    <button onClick={createSubtask} disabled={adding} className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 transition-colors">
+                        {adding ? "..." : "Add"}
+                    </button>
+                    <button onClick={() => { setShowForm(false); setNewTitle(""); }} className="text-xs px-3 py-1.5 text-foreground/50 hover:text-foreground transition-colors">Cancel</button>
+                </div>
+            ) : (
+                <button onClick={() => setShowForm(true)} className="mt-2 flex items-center gap-1.5 text-xs text-foreground/40 hover:text-blue-500 transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    Add Subtask
+                </button>
+            )}
+        </Section>
+    );
+}
+
+// ============ Dependencies Section ============
+
+interface TaskDep { id: string; predecessor_id?: string; dependent_id?: string; dependency_type: string; task_name?: string; }
+
+function DependenciesSection({ taskId }: { taskId: string }) {
+    const [deps, setDeps] = useState<{ blockers: TaskDep[]; dependents: TaskDep[] }>({ blockers: [], dependents: [] });
+    const [allTasks, setAllTasks] = useState<{ id: string; name: string }[]>([]);
+    const [selectedId, setSelectedId] = useState("");
+    const [adding, setAdding] = useState(false);
+    const [showAdd, setShowAdd] = useState(false);
+
+    const loadDeps = async () => {
+        const token = getToken();
+        try {
+            const res = await fetch(`${API}/api/tasks/${taskId}/dependencies`, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) setDeps(await res.json());
+        } catch { }
+    };
+
+    useEffect(() => {
+        loadDeps();
+        const token = getToken();
+        fetch(`${API}/api/tasks?limit=100`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.ok ? r.json() : { items: [] })
+            .then(d => setAllTasks((d.items ?? []).filter((t: any) => t.id !== taskId)))
+            .catch(() => { });
+    }, [taskId]);
+
+    const addDep = async () => {
+        if (!selectedId) return;
+        setAdding(true);
+        const token = getToken();
+        try {
+            await fetch(`${API}/api/tasks/${taskId}/dependencies?predecessor_id=${selectedId}`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setSelectedId(""); setShowAdd(false);
+            await loadDeps();
+        } finally { setAdding(false); }
+    };
+
+    const removeDep = async (predecessorId: string) => {
+        const token = getToken();
+        await fetch(`${API}/api/tasks/${taskId}/dependencies?predecessor_id=${predecessorId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        await loadDeps();
+    };
+
+    const blockers = deps?.blockers || [];
+    const dependents = deps?.dependents || [];
+    const totalDeps = blockers.length + dependents.length;
+
+    return (
+        <Section title={`Dependencies${totalDeps > 0 ? ` (${totalDeps})` : ""}`}>
+            {blockers.length > 0 && (
+                <div className="mb-3">
+                    <p className="text-xs font-medium text-orange-500 mb-1.5">🔒 Blocked By</p>
+                    <div className="space-y-1.5">
+                        {blockers.map(dep => (
+                            <div key={dep.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-orange-500/5 border border-orange-500/10 group">
+                                <span className="flex-1 text-sm text-foreground/70">{dep.task_name || dep.predecessor_id}</span>
+                                <span className="text-[10px] text-orange-500/70 uppercase tracking-wide">{dep.dependency_type || "FS"}</span>
+                                <button onClick={() => removeDep(dep.predecessor_id || "")} className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-foreground/30 hover:text-red-500 transition-all text-xs">✕</button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+            {dependents.length > 0 && (
+                <div className="mb-3">
+                    <p className="text-xs font-medium text-blue-500 mb-1.5">→ Blocks</p>
+                    <div className="space-y-1.5">
+                        {dependents.map(dep => (
+                            <div key={dep.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                                <span className="flex-1 text-sm text-foreground/70">{dep.task_name || dep.dependent_id}</span>
+                                <span className="text-[10px] text-blue-500/70 uppercase tracking-wide">{dep.dependency_type || "FS"}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+            {showAdd ? (
+                <div className="flex gap-2 mt-2">
+                    <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="flex-1 text-sm px-2 py-1.5 bg-foreground/5 border border-foreground/10 rounded-lg outline-none focus:border-blue-500 text-foreground">
+                        <option value="">Select a blocking task…</option>
+                        {allTasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    <button onClick={addDep} disabled={adding || !selectedId} className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">Add</button>
+                    <button onClick={() => setShowAdd(false)} className="text-xs px-2 py-1.5 text-foreground/40 hover:text-foreground">✕</button>
+                </div>
+            ) : (
+                <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 text-xs text-foreground/40 hover:text-blue-500 transition-colors mt-1">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    Add Dependency
+                </button>
+            )}
+        </Section>
+    );
+}
+
+// ============ Audit Trail Section ============
+
+interface AuditLogEntry { id: string; field_changed: string; old_value?: string; new_value?: string; changed_by_name?: string; created_at: string; }
+
+function AuditTrailSection({ taskId }: { taskId: string }) {
+    const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const token = getToken();
+        fetch(`${API}/api/tasks/${taskId}/audit-log`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.ok ? r.json() : [])
+            .then(data => setLogs(Array.isArray(data) ? data : data.items ?? []))
+            .catch(() => { })
+            .finally(() => setLoading(false));
+    }, [taskId]);
+
+    if (loading) return <Section title="Activity"><p className="text-xs text-foreground/40 py-2">Loading…</p></Section>;
+    if (!logs.length) return (
+        <Section title="Activity">
+            <p className="text-xs text-foreground/40 py-2">No activity recorded yet.</p>
+        </Section>
+    );
+
+    return (
+        <Section title={`Activity (${logs.length})`}>
+            <div className="space-y-3">
+                {logs.slice(0, 20).map(log => (
+                    <div key={log.id} className="flex items-start gap-3">
+                        <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-[10px]">📝</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm text-foreground/70">
+                                <span className="font-medium text-foreground/90">{log.changed_by_name || "Someone"}</span>
+                                {" changed "}
+                                <span className="font-medium text-blue-400">{log.field_changed?.replace(/_/g, " ")}</span>
+                                {log.old_value && log.new_value && (
+                                    <> from <span className="text-foreground/50">{log.old_value}</span> to <span className="text-foreground/80">{log.new_value}</span></>
+                                )}
+                            </p>
+                            <p className="text-[10px] text-foreground/30 mt-0.5">{timeAgo(log.created_at)}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </Section>
     );
 }

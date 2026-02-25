@@ -197,3 +197,82 @@ def create_sample_notifications(
     
     db.commit()
     return {"message": f"Created {len(created)} sample notifications", "count": len(created)}
+
+
+# ─── Notification Rules (Reminders & Escalations) ────────────────────────────
+
+class NotificationRuleCreate(BaseModel):
+    rule_type: str  # "reminder" or "escalation"
+    name: str
+    trigger_event: str  # "due_soon", "overdue", "status_changed"
+    trigger_offset_hours: Optional[int] = None  # e.g. 24 = 24h before due
+    action_type: str  # "notify_assignee", "notify_lead", "notify_pm"
+    escalation_after_hours: Optional[int] = None
+    is_active: bool = True
+
+
+@router.get("/rules")
+def list_notification_rules(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List notification rules for the current user."""
+    from app.models import NotificationRule
+    rules = db.query(NotificationRule).filter(
+        NotificationRule.user_id == current_user.id
+    ).all()
+    return [
+        {
+            "id": r.id,
+            "rule_type": r.rule_type if hasattr(r, "rule_type") else "reminder",
+            "name": r.name if hasattr(r, "name") else str(r.id),
+            "trigger_event": r.trigger_event if hasattr(r, "trigger_event") else "",
+            "action_type": r.action_type if hasattr(r, "action_type") else "notify_assignee",
+            "is_active": r.is_active if hasattr(r, "is_active") else True,
+            "created_at": r.created_at.isoformat() if hasattr(r, "created_at") and r.created_at else None,
+        }
+        for r in rules
+    ]
+
+
+@router.post("/rules", status_code=201)
+def create_notification_rule(
+    data: NotificationRuleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create a notification/escalation rule."""
+    import uuid as _uuid
+    from app.models import NotificationRule
+    rule = NotificationRule(
+        id=str(_uuid.uuid4()),
+        user_id=current_user.id,
+    )
+    # Set fields using setattr to handle optional model columns safely 
+    for field, value in data.model_dump().items():
+        if hasattr(rule, field):
+            setattr(rule, field, value)
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return {"id": rule.id, "message": "Notification rule created"}
+
+
+@router.delete("/rules/{rule_id}", status_code=204)
+def delete_notification_rule(
+    rule_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Delete a notification rule."""
+    from app.models import NotificationRule
+    rule = db.query(NotificationRule).filter(
+        NotificationRule.id == rule_id,
+        NotificationRule.user_id == current_user.id
+    ).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    db.delete(rule)
+    db.commit()
+    return None
+

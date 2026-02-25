@@ -54,7 +54,7 @@ function WebhookCard({ wh, onToggle, onDelete, onTest, onViewLogs }: {
 
     return (
         <div className={`p-4 rounded-2xl border transition-all ${wh.is_active
-                ? "border-foreground/10 bg-foreground/[0.02] dark:bg-white/3"
+                ? "border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.01]"
                 : "border-foreground/5 bg-foreground/[0.01] dark:bg-white/[0.01] opacity-60"
             }`}>
             <div className="flex items-start justify-between gap-3">
@@ -67,7 +67,7 @@ function WebhookCard({ wh, onToggle, onDelete, onTest, onViewLogs }: {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                     <button onClick={handleTest} disabled={testing}
-                        className="p-1.5 rounded-lg text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 transition-colors" title="Test">
+                        className="p-1.5 rounded-lg text-foreground/40 hover:text-blue-500 hover:bg-blue-500/10 transition-colors" title="Test">
                         {testing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
                     </button>
                     <button onClick={() => onViewLogs(wh.id)}
@@ -87,7 +87,7 @@ function WebhookCard({ wh, onToggle, onDelete, onTest, onViewLogs }: {
             </div>
             <div className="flex flex-wrap gap-1.5 mt-3">
                 {wh.events.map((e) => (
-                    <span key={e} className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/10 text-indigo-500 dark:bg-indigo-500/15 dark:text-indigo-400">{e}</span>
+                    <span key={e} className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/10 text-blue-500 dark:bg-blue-500/15 dark:text-blue-400">{e}</span>
                 ))}
             </div>
             {wh.failure_count > 0 && (
@@ -121,7 +121,7 @@ function WebhookModal({ onSave, onClose }: { onSave: (wh: Webhook) => void; onCl
         finally { setSaving(false); }
     };
 
-    const fieldCls = "w-full px-3 py-2.5 rounded-xl bg-foreground/[0.04] border border-foreground/10 text-foreground placeholder-foreground/30 focus:outline-none focus:border-indigo-500/50 text-sm";
+    const fieldCls = "w-full px-3 py-2.5 rounded-xl bg-foreground/[0.04] border border-foreground/10 text-foreground placeholder-foreground/30 focus:outline-none focus:border-blue-500/50 text-sm";
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -150,7 +150,7 @@ function WebhookModal({ onSave, onClose }: { onSave: (wh: Webhook) => void; onCl
                             {WEBHOOK_EVENTS.map((ev) => (
                                 <button key={ev} type="button" onClick={() => toggle(ev)}
                                     className={`px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors ${form.events.includes(ev)
-                                            ? "bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 border border-indigo-500/30"
+                                            ? "bg-blue-500/20 text-blue-500 dark:text-blue-400 border border-blue-500/30"
                                             : "bg-foreground/[0.03] text-foreground/60 border border-foreground/10 hover:bg-foreground/[0.06]"
                                         }`}>
                                     {ev}
@@ -162,7 +162,7 @@ function WebhookModal({ onSave, onClose }: { onSave: (wh: Webhook) => void; onCl
                 <div className="flex justify-end gap-3 p-5 border-t border-foreground/10">
                     <button onClick={onClose} className="px-4 py-2 text-sm text-foreground/50 hover:text-foreground">Cancel</button>
                     <button onClick={handleSave} disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium disabled:opacity-50">
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
                         {saving && <Loader2 size={13} className="animate-spin" />} Create Webhook
                     </button>
                 </div>
@@ -190,7 +190,7 @@ function LogsModal({ webhookId, onClose }: { webhookId: string; onClose: () => v
                 </div>
                 <div className="flex-1 overflow-y-auto">
                     {loading ? (
-                        <div className="flex items-center justify-center py-12"><Loader2 size={24} className="animate-spin text-indigo-400" /></div>
+                        <div className="flex items-center justify-center py-12"><Loader2 size={24} className="animate-spin text-blue-400" /></div>
                     ) : logs.length === 0 ? (
                         <p className="text-center text-foreground/40 py-12 text-sm">No delivery logs yet</p>
                     ) : (
@@ -301,7 +301,7 @@ export default function IntegrationsPage() {
         <div className="min-h-screen p-6 space-y-6 bg-background text-foreground">
             {/* Toast */}
             {toast && (
-                <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 text-white text-sm shadow-2xl">
+                <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white text-sm shadow-2xl">
                     <Check size={14} /> {toast}
                 </div>
             )}
@@ -310,13 +310,13 @@ export default function IntegrationsPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                        <Link2 size={22} className="text-indigo-500 dark:text-indigo-400" /> Integrations
+                        <Link2 size={22} className="text-blue-500 dark:text-blue-400" /> Integrations
                     </h1>
                     <p className="text-sm text-foreground/50 mt-1">Connect external apps and configure webhook delivery</p>
                 </div>
                 {tab === "webhooks" && (
                     <button onClick={() => setShowWebhookModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors">
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
                         <Plus size={15} /> New Webhook
                     </button>
                 )}
@@ -327,7 +327,7 @@ export default function IntegrationsPage() {
                 {TABS.map(({ id, label, icon: Icon }) => (
                     <button key={id} onClick={() => setTab(id)}
                         className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === id
-                                ? "bg-indigo-600 text-white"
+                                ? "bg-blue-600 text-white"
                                 : "text-foreground/50 hover:text-foreground"
                             }`}>
                         <Icon size={14} /> {label}
@@ -336,7 +336,7 @@ export default function IntegrationsPage() {
             </div>
 
             {loading ? (
-                <div className="flex items-center justify-center py-16"><Loader2 size={28} className="animate-spin text-indigo-400" /></div>
+                <div className="flex items-center justify-center py-16"><Loader2 size={28} className="animate-spin text-blue-400" /></div>
             ) : tab === "integrations" ? (
                 /* ── App Integrations ── */
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -346,7 +346,7 @@ export default function IntegrationsPage() {
                         return (
                             <div key={p.provider} className={`p-5 rounded-2xl border transition-all ${connected
                                     ? "border-green-500/20 bg-green-500/5 dark:bg-green-500/5"
-                                    : "border-foreground/10 bg-foreground/[0.02] dark:bg-white/3 hover:bg-foreground/[0.04] dark:hover:bg-white/5"
+                                    : "border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.01] hover:bg-foreground/[0.04] dark:hover:bg-foreground/[0.02]"
                                 }`}>
                                 <div className="flex items-center gap-3 mb-3">
                                     <span className="text-2xl">{p.icon}</span>
@@ -367,7 +367,7 @@ export default function IntegrationsPage() {
                                     <button
                                         onClick={() => handleConnectIntegration(p.type, p.provider, p.label)}
                                         disabled={addingIntegration}
-                                        className="w-full py-2 rounded-xl bg-indigo-600/15 border border-indigo-500/20 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-600/25 text-xs font-medium transition-colors disabled:opacity-50">
+                                        className="w-full py-2 rounded-xl bg-blue-600/15 border border-blue-500/20 text-blue-500 dark:text-blue-400 hover:bg-blue-600/25 text-xs font-medium transition-colors disabled:opacity-50">
                                         Connect
                                     </button>
                                 )}
@@ -383,7 +383,7 @@ export default function IntegrationsPage() {
                             <Zap size={40} className="text-foreground/20 mx-auto mb-3" />
                             <p className="text-foreground/40 text-sm">No webhooks yet</p>
                             <button onClick={() => setShowWebhookModal(true)}
-                                className="mt-4 text-indigo-500 dark:text-indigo-400 hover:underline text-sm flex items-center gap-1 mx-auto">
+                                className="mt-4 text-blue-500 dark:text-blue-400 hover:underline text-sm flex items-center gap-1 mx-auto">
                                 <Plus size={13} /> Create your first webhook
                             </button>
                         </div>

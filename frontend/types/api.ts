@@ -464,4 +464,62 @@ export interface ChatMessage {
 export interface ChatResponse {
     response: string;
     context_used?: string;
+    attachments?: ChatAttachment[];
+    extracted_data?: Record<string, unknown>;
 }
+
+export interface ChatAttachment {
+    fileName: string;
+    fileUrl: string;
+    fileType: string;
+    size: number;
+}
+
+export interface ChatHistoryItem {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    attachments: ChatAttachment[];
+    metadata: Record<string, unknown>;
+    created_at: string;
+}
+
+export interface DocumentScanResult {
+    file_name: string;
+    file_type: string;
+    raw_text?: string;
+    vendor_name?: string;
+    date?: string;
+    total_amount?: number;
+    currency: string;
+    category?: string;
+    description?: string;
+    summary?: string;
+    confidence: string;
+}
+
+export interface DocumentScanResponse {
+    success: boolean;
+    message: string;
+    results: DocumentScanResult[];
+}
+
+export interface SaveToActivityRequest {
+    activity_type: "expense" | "task";
+    title: string;
+    description?: string;
+    project_id?: string;
+    vendor?: string;
+    amount?: number;
+    currency?: string;
+    category?: string;
+    date?: string;
+}
+
+export interface SaveToActivityResponse {
+    success: boolean;
+    message: string;
+    activity_id?: string;
+    activity_type?: string;
+}
+

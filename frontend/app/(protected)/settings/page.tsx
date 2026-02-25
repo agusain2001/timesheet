@@ -14,6 +14,7 @@ import {
     SettingsProfile, SecuritySettings, NotificationPrefs, PrivacySettings,
     DeviceSession
 } from "@/services/settings";
+import { useRouter } from "next/navigation";
 
 // ─── helpers ──────────────────────────────────────────────
 
@@ -242,6 +243,7 @@ function LogoutDeviceConfirm({ session, onConfirm, onCancel }: {
 type ModalType = "profile" | "security" | "notifications" | "privacy" | null;
 
 export default function SettingsPage() {
+    const router = useRouter();
     const [activeModal, setActiveModal] = useState<ModalType>(null);
     const [toast, setToast] = useState<Toast | null>(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
@@ -478,6 +480,14 @@ export default function SettingsPage() {
             color: "#10b981",
             meta: "Last updated 5 days ago",
         },
+        {
+            key: "integrations" as any,
+            title: "Integrations",
+            description: "Manage connected services, API keys, and third-party tools.",
+            color: "#ec4899",
+            meta: "Connect your tools",
+            href: "/integrations",
+        },
     ];
 
     // ── Render ────────────────────────────────────────────
@@ -497,7 +507,13 @@ export default function SettingsPage() {
                 {CARDS.map((card) => (
                     <button
                         key={card.key}
-                        onClick={() => setActiveModal(card.key)}
+                        onClick={() => {
+                            if (card.href) {
+                                router.push(card.href);
+                            } else {
+                                setActiveModal(card.key);
+                            }
+                        }}
                         className="w-full text-left group rounded-xl border border-foreground/10 bg-foreground/[0.02] hover:bg-foreground/[0.05] transition-all duration-200 p-5 cursor-pointer"
                     >
                         <div className="flex items-start gap-4">

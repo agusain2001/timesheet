@@ -819,3 +819,58 @@ class ChatMessage(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     context_used: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    extracted_data: Optional[Dict[str, Any]] = None
+
+class ChatAttachment(BaseModel):
+    file_name: str
+    file_url: str
+    file_type: str
+    size: int
+
+class ChatHistoryItem(BaseModel):
+    id: str
+    role: str
+    content: str
+    attachments: List[Dict[str, Any]] = []
+    metadata: Dict[str, Any] = {}
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class DocumentScanResult(BaseModel):
+    file_name: str
+    file_type: str
+    raw_text: Optional[str] = None
+    vendor_name: Optional[str] = None
+    date: Optional[str] = None
+    total_amount: Optional[float] = None
+    currency: str = "EGP"
+    category: Optional[str] = None
+    description: Optional[str] = None
+    summary: Optional[str] = None
+    confidence: str = "medium"
+
+class DocumentScanResponse(BaseModel):
+    success: bool
+    message: str
+    results: List[DocumentScanResult] = []
+
+class SaveToActivityRequest(BaseModel):
+    activity_type: str  # "expense" or "task"
+    title: str
+    description: Optional[str] = None
+    project_id: Optional[str] = None
+    # Expense-specific fields
+    vendor: Optional[str] = None
+    amount: Optional[float] = None
+    currency: str = "EGP"
+    category: Optional[str] = None
+    date: Optional[str] = None
+
+class SaveToActivityResponse(BaseModel):
+    success: bool
+    message: str
+    activity_id: Optional[str] = None
+    activity_type: Optional[str] = None

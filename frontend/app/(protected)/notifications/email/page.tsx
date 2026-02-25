@@ -57,7 +57,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         <button
             type="button"
             onClick={() => onChange(!checked)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${checked ? "bg-indigo-500" : "bg-white/10"}`}
+            className={`relative w-10 h-5 rounded-full transition-colors ${checked ? "bg-blue-500" : "bg-foreground/[0.05]"}`}
         >
             <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? "translate-x-5" : ""}`} />
         </button>
@@ -68,9 +68,9 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 function Card({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
     return (
-        <div className="rounded-2xl border border-white/10 bg-white/3 p-6 space-y-4">
-            <h2 className="text-base font-semibold text-slate-200 flex items-center gap-2">
-                <Icon size={16} className="text-indigo-400" /> {title}
+        <div className="rounded-2xl border border-foreground/10 bg-foreground/[0.01] p-6 space-y-4">
+            <h2 className="text-base font-semibold text-foreground/90 flex items-center gap-2">
+                <Icon size={16} className="text-blue-400" /> {title}
             </h2>
             {children}
         </div>
@@ -79,10 +79,10 @@ function Card({ title, icon: Icon, children }: { title: string; icon: any; child
 
 function PrefRow({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) {
     return (
-        <div className="flex items-center justify-between py-2.5 border-b border-white/5 last:border-0">
+        <div className="flex items-center justify-between py-2.5 border-b border-foreground/5 last:border-0">
             <div>
-                <p className="text-sm font-medium text-slate-300">{label}</p>
-                {desc && <p className="text-xs text-slate-600 mt-0.5">{desc}</p>}
+                <p className="text-sm font-medium text-foreground/80">{label}</p>
+                {desc && <p className="text-xs text-foreground/40 mt-0.5">{desc}</p>}
             </div>
             <Toggle checked={checked} onChange={onChange} />
         </div>
@@ -156,12 +156,12 @@ export default function EmailNotificationsPage() {
         } catch { showToast("Failed to send test"); }
     };
 
-    const selectCls = "px-3 py-2 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-sm focus:outline-none focus:border-indigo-500/50";
-    const inputCls = "px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-sm focus:outline-none focus:border-indigo-500/50";
+    const selectCls = "px-3 py-2 rounded-lg bg-foreground/[0.05] border border-foreground/10 text-foreground/90 text-sm focus:outline-none focus:border-blue-500/50";
+    const inputCls = "px-3 py-2 rounded-lg bg-foreground/[0.02] border border-foreground/10 text-foreground/90 text-sm focus:outline-none focus:border-blue-500/50";
 
     if (loading) return (
         <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-            <Loader2 size={28} className="animate-spin text-indigo-400" />
+            <Loader2 size={28} className="animate-spin text-blue-400" />
         </div>
     );
 
@@ -169,7 +169,7 @@ export default function EmailNotificationsPage() {
         <div className="min-h-screen p-6 space-y-6 bg-background text-foreground max-w-3xl">
             {/* Toast */}
             {toast && (
-                <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 text-white text-sm shadow-2xl animate-in slide-in-from-top-2">
+                <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white text-sm shadow-2xl animate-in slide-in-from-top-2">
                     <CheckCircle2 size={14} /> {toast}
                 </div>
             )}
@@ -177,17 +177,17 @@ export default function EmailNotificationsPage() {
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-                        <Mail size={22} className="text-indigo-400" /> Email Notifications
+                    <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                        <Mail size={22} className="text-blue-400" /> Email Notifications
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">Configure when and how you receive email notifications</p>
+                    <p className="text-sm text-foreground/50 mt-1">Configure when and how you receive email notifications</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={load} className="p-2 rounded-xl bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 transition-colors">
+                    <button onClick={load} className="p-2 rounded-xl bg-foreground/[0.02] border border-foreground/10 text-foreground/50 hover:text-foreground/80 transition-colors">
                         <RefreshCw size={14} />
                     </button>
                     <button onClick={sendTest}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-foreground/[0.02] border border-foreground/10 text-foreground/60 hover:text-foreground/90 text-sm transition-colors">
                         {testSent ? <CheckCircle2 size={14} className="text-green-400" /> : <Send size={14} />}
                         {testSent ? "Sent!" : "Send Test"}
                     </button>
@@ -208,7 +208,7 @@ export default function EmailNotificationsPage() {
                     <PrefRow label="Weekly Digest" desc="Weekly summary of your tasks" checked={prefs.weekly_digest} onChange={(v) => setPrefs({ ...prefs, weekly_digest: v })} />
                     <PrefRow label="Daily Summary" checked={prefs.daily_summary} onChange={(v) => setPrefs({ ...prefs, daily_summary: v })} />
                     <button onClick={savePrefs} disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Save Preferences
                     </button>
@@ -220,15 +220,15 @@ export default function EmailNotificationsPage() {
                 <Card title="Task Reminders" icon={Clock}>
                     <div className="flex items-center justify-between py-2 mb-3">
                         <div>
-                            <p className="text-sm font-medium text-slate-300">Enable Task Reminders</p>
-                            <p className="text-xs text-slate-600">Receive emails before tasks are due</p>
+                            <p className="text-sm font-medium text-foreground/80">Enable Task Reminders</p>
+                            <p className="text-xs text-foreground/40">Receive emails before tasks are due</p>
                         </div>
                         <Toggle checked={reminder.enabled} onChange={(v) => setReminder({ ...reminder, enabled: v })} />
                     </div>
                     {reminder.enabled && (
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-1">Remind me (days before due)</label>
+                                <label className="block text-sm text-foreground/60 mb-1">Remind me (days before due)</label>
                                 <div className="flex gap-2 flex-wrap">
                                     {[1, 2, 3, 5, 7, 14].map((d) => (
                                         <button key={d} type="button"
@@ -237,8 +237,8 @@ export default function EmailNotificationsPage() {
                                                 setReminder({ ...reminder, days_before_due: curr.includes(d) ? curr.filter((x) => x !== d) : [...curr, d].sort() });
                                             }}
                                             className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${reminder.days_before_due.includes(d)
-                                                ? "bg-indigo-600 text-white"
-                                                : "bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10"
+                                                ? "bg-blue-600 text-white"
+                                                : "bg-foreground/[0.02] border border-foreground/10 text-foreground/60 hover:bg-foreground/[0.05]"
                                                 }`}>
                                             {d}
                                         </button>
@@ -247,11 +247,11 @@ export default function EmailNotificationsPage() {
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-sm text-slate-400 mb-1">Time</label>
+                                    <label className="block text-sm text-foreground/60 mb-1">Time</label>
                                     <input type="time" value={reminder.time} onChange={(e) => setReminder({ ...reminder, time: e.target.value })} className={inputCls} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-slate-400 mb-1">Timezone</label>
+                                    <label className="block text-sm text-foreground/60 mb-1">Timezone</label>
                                     <select value={reminder.timezone} onChange={(e) => setReminder({ ...reminder, timezone: e.target.value })} className={selectCls}>
                                         {["UTC", "Asia/Kolkata", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore"].map((tz) => (
                                             <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
@@ -262,7 +262,7 @@ export default function EmailNotificationsPage() {
                         </div>
                     )}
                     <button onClick={saveReminder} disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Save Reminders
                     </button>
@@ -274,8 +274,8 @@ export default function EmailNotificationsPage() {
                 <Card title="Email Digest" icon={Mail}>
                     <div className="flex items-center justify-between py-2 mb-3">
                         <div>
-                            <p className="text-sm font-medium text-slate-300">Enable Digest Emails</p>
-                            <p className="text-xs text-slate-600">Periodic summary of your task activity</p>
+                            <p className="text-sm font-medium text-foreground/80">Enable Digest Emails</p>
+                            <p className="text-xs text-foreground/40">Periodic summary of your task activity</p>
                         </div>
                         <Toggle checked={digest.enabled} onChange={(v) => setDigest({ ...digest, enabled: v })} />
                     </div>
@@ -283,7 +283,7 @@ export default function EmailNotificationsPage() {
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-sm text-slate-400 mb-1">Frequency</label>
+                                    <label className="block text-sm text-foreground/60 mb-1">Frequency</label>
                                     <select value={digest.frequency} onChange={(e) => setDigest({ ...digest, frequency: e.target.value })} className={selectCls}>
                                         <option value="daily">Daily</option>
                                         <option value="weekly">Weekly</option>
@@ -291,12 +291,12 @@ export default function EmailNotificationsPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-slate-400 mb-1">Delivery Time</label>
+                                    <label className="block text-sm text-foreground/60 mb-1">Delivery Time</label>
                                     <input type="time" value={digest.time} onChange={(e) => setDigest({ ...digest, time: e.target.value })} className={inputCls} />
                                 </div>
                             </div>
                             <div className="space-y-2 pt-2 border-t border-white/8">
-                                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Include in digest</p>
+                                <p className="text-xs text-foreground/50 font-medium uppercase tracking-wide">Include in digest</p>
                                 <PrefRow label="Overdue Tasks" checked={digest.include_overdue} onChange={(v) => setDigest({ ...digest, include_overdue: v })} />
                                 <PrefRow label="Upcoming Tasks" checked={digest.include_upcoming} onChange={(v) => setDigest({ ...digest, include_upcoming: v })} />
                                 <PrefRow label="Completed Tasks" checked={digest.include_completed} onChange={(v) => setDigest({ ...digest, include_completed: v })} />
@@ -304,7 +304,7 @@ export default function EmailNotificationsPage() {
                         </div>
                     )}
                     <button onClick={saveDigest} disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Save Digest Settings
                     </button>

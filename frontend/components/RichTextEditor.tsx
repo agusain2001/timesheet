@@ -33,7 +33,7 @@ function TB({ title, onClick, active, children }: {
             title={title}
             onMouseDown={(e) => { e.preventDefault(); onClick(); }}
             className={`p-1.5 rounded text-xs font-medium transition-colors select-none ${active
-                    ? "bg-indigo-500/20 text-indigo-500 dark:text-indigo-400"
+                    ? "bg-blue-500/20 text-blue-500 dark:text-blue-400"
                     : "text-foreground/60 hover:text-foreground hover:bg-foreground/10"
                 }`}
         >
@@ -108,7 +108,7 @@ export default function RichTextEditor({
     const showPlaceholder = !value || value === "<br>" || value === "";
 
     return (
-        <div className={`rounded-xl border border-foreground/10 overflow-hidden bg-foreground/[0.02] dark:bg-white/[0.02] focus-within:border-indigo-500/50 transition-colors ${className}`}>
+        <div className={`rounded-xl border border-foreground/10 overflow-hidden bg-foreground/[0.02] dark:bg-white/[0.02] focus-within:border-blue-500/50 transition-colors ${className}`}>
             {/* Toolbar */}
             <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-foreground/8 bg-foreground/[0.03]">
                 <TB title="Bold (Ctrl+B)" onClick={() => exec("bold")} active={isActive("bold")}><BoldIcon /></TB>
@@ -139,7 +139,7 @@ export default function RichTextEditor({
                     suppressContentEditableWarning
                     onInput={handleInput}
                     onKeyDown={handleKeyDown}
-                    className="px-3 py-2.5 text-sm text-foreground outline-none leading-relaxed [&_pre]:bg-foreground/10 [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre]:font-mono [&_a]:text-indigo-500 [&_a]:underline [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4"
+                    className="px-3 py-2.5 text-sm text-foreground outline-none leading-relaxed [&_pre]:bg-foreground/10 [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre]:font-mono [&_a]:text-blue-500 [&_a]:underline [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4"
                     style={{ minHeight }}
                 />
             </div>

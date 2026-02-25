@@ -280,10 +280,139 @@ function MemberDetailsPanel({ member, onClose }: { member: ProjectMember; onClos
     );
 }
 
+
+// ─── Structure Tree ───────────────────────────────────────────────────────────
+function StructureTree({ projectId }: { projectId: string }) {
+    const [phases, setPhases] = useState<any[]>([]);
+    const [epics, setEpics] = useState<Record<string, any[]>>({});
+    const [milestones, setMilestones] = useState<Record<string, any[]>>({});
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    const [loading, setLoading] = useState(true);
+    const [newPhase, setNewPhase] = useState("");
+    const [addPhase, setAddPhase] = useState(false);
+
+    const token = () => getToken();
+    const hdr = { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" };
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/project-structure/projects/${projectId}/phases`, { headers: hdr });
+            if (res.ok) setPhases(await res.json());
+        } catch { }
+        setLoading(false);
+    };
+
+    const loadEpics = async (phaseId: string) => {
+        if (epics[phaseId]) return;
+        const res = await fetch(`/api/project-structure/phases/${phaseId}/epics`, { headers: hdr });
+        if (res.ok) { const data = await res.json(); setEpics(p => ({ ...p, [phaseId]: data })); }
+    };
+
+    const loadMilestones = async (epicId: string) => {
+        if (milestones[epicId]) return;
+        const res = await fetch(`/api/project-structure/epics/${epicId}/milestones`, { headers: hdr });
+        if (res.ok) { const data = await res.json(); setMilestones(p => ({ ...p, [epicId]: data })); }
+    };
+
+    useEffect(() => { load(); }, [projectId]);
+
+    const createPhase = async () => {
+        if (!newPhase.trim()) return;
+        await fetch(`/api/project-structure/projects/${projectId}/phases`, {
+            method: "POST", headers: hdr,
+            body: JSON.stringify({ name: newPhase, project_id: projectId }),
+        });
+        setNewPhase(""); setAddPhase(false); load();
+    };
+
+    const deletePhase = async (id: string) => {
+        await fetch(`/api/project-structure/phases/${id}`, { method: "DELETE", headers: hdr });
+        load();
+    };
+
+    if (loading) return <div className="py-8 text-center text-foreground/40 text-sm">Loading structure…</div>;
+
+    return (
+        <div className="space-y-2">
+            {phases.length === 0 && !addPhase && (
+                <p className="text-xs text-foreground/40 py-4 text-center">No phases yet. Add one below.</p>
+            )}
+            {phases.map(phase => {
+                const phaseOpen = expanded[phase.id];
+                const phEpics = epics[phase.id] ?? [];
+                return (
+                    <div key={phase.id} className="rounded-xl border border-foreground/10 bg-foreground/[0.02] overflow-hidden">
+                        {/* Phase row */}
+                        <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-foreground/5 group"
+                            onClick={() => {
+                                setExpanded(p => ({ ...p, [phase.id]: !p[phase.id] }));
+                                if (!phaseOpen) loadEpics(phase.id);
+                            }}>
+                            <span className="text-foreground/40 text-xs">{phaseOpen ? "▼" : "▶"}</span>
+                            <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+                            <span className="text-sm font-semibold text-foreground/80 flex-1">{phase.name}</span>
+                            <button onClick={e => { e.stopPropagation(); deletePhase(phase.id); }}
+                                className="opacity-0 group-hover:opacity-100 text-foreground/30 hover:text-red-400 transition text-xs">✕</button>
+                        </div>
+                        {/* Epics */}
+                        {phaseOpen && (
+                            <div className="pl-6 pb-2 space-y-1">
+                                {phEpics.map(epic => {
+                                    const epicOpen = expanded[epic.id];
+                                    const mils = milestones[epic.id] ?? [];
+                                    return (
+                                        <div key={epic.id}>
+                                            <div className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-foreground/5 rounded-lg group"
+                                                onClick={() => {
+                                                    setExpanded(p => ({ ...p, [epic.id]: !p[epic.id] }));
+                                                    if (!epicOpen) loadMilestones(epic.id);
+                                                }}>
+                                                <span className="text-foreground/30 text-xs">{epicOpen ? "▼" : "▶"}</span>
+                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                                <span className="text-xs text-foreground/70 flex-1">{epic.name}</span>
+                                            </div>
+                                            {/* Milestones */}
+                                            {epicOpen && mils.map(ms => (
+                                                <div key={ms.id} className="flex items-center gap-2 px-3 py-1.5 pl-8">
+                                                    <span className="w-1 h-1 rounded-full bg-amber-400" />
+                                                    <span className="text-[11px] text-foreground/50">{ms.name}</span>
+                                                    {ms.due_date && <span className="text-[10px] text-foreground/30 ml-auto">{ms.due_date.slice(0, 10)}</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+                                {phEpics.length === 0 && <p className="text-[11px] text-foreground/30 px-3 py-1">No epics</p>}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+            {/* Add Phase */}
+            {addPhase ? (
+                <div className="flex gap-2 mt-2">
+                    <input autoFocus value={newPhase} onChange={e => setNewPhase(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && createPhase()}
+                        placeholder="Phase name…"
+                        className="flex-1 px-3 py-1.5 text-xs bg-foreground/5 border border-foreground/10 rounded-lg outline-none focus:border-blue-500 text-foreground" />
+                    <button onClick={createPhase} className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Add</button>
+                    <button onClick={() => setAddPhase(false)} className="text-foreground/40 text-xs hover:text-foreground transition">Cancel</button>
+                </div>
+            ) : (
+                <button onClick={() => setAddPhase(true)} className="mt-1 text-xs text-blue-400 hover:text-blue-300 transition flex items-center gap-1">
+                    <span>+</span> Add Phase
+                </button>
+            )}
+        </div>
+    );
+}
+
 // ─── Project Details Panel ────────────────────────────────────────────────────
 function ProjectDetailsPanel({
     project, clients, onClose, onEdit, onViewTasks,
 }: { project: Project; clients: Client[]; onClose: () => void; onEdit: () => void; onViewTasks: () => void }) {
+    const [panelTab, setPanelTab] = useState<"details" | "structure">("details");
     const [showMembers, setShowMembers] = useState(false);
     const [members, setMembers] = useState<ProjectMember[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
@@ -345,69 +474,81 @@ function ProjectDetailsPanel({
                     </p>
                 </div>
 
+                {/* Tabs */}
+                <div className="flex gap-1 px-5 pb-3 border-b border-foreground/10">
+                    <button onClick={() => setPanelTab("details")} className={panelTab === "details" ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white font-medium" : "px-3 py-1 text-xs rounded-lg text-foreground/50 hover:text-foreground transition"}>Details</button>
+                    <button onClick={() => setPanelTab("structure")} className={panelTab === "structure" ? "px-3 py-1 text-xs rounded-lg bg-blue-600 text-white font-medium" : "px-3 py-1 text-xs rounded-lg text-foreground/50 hover:text-foreground transition"}>Structure</button>
+                </div>
+
                 <div className="px-5 py-4 space-y-5">
-                    {/* Project Overview */}
-                    <div>
-                        <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-2">Project Overview</p>
-                        {row("Client Name", clientName)}
-                        {row("Business Sector", "—")}
-                        {row("Start Date", fmtDate(project.start_date))}
-                        {row("Expected End Date", fmtDate(project.end_date))}
-                        {project.notes && (
-                            <div className="py-2">
-                                <p className="text-xs text-foreground/50 mb-1">Description</p>
-                                <p className="text-xs text-foreground/80 leading-relaxed">{project.notes}</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* My Involvement */}
-                    <div>
-                        <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-2">My Involvement</p>
-                        {row("Your Role", "Design Intern")}
-                        {row("Assigned Tasks", "4 Tasks")}
-                        {row("Overdue Tasks", "1 Tasks")}
-                        {row("Time Logged", "18h 30m")}
-                    </div>
-
-                    {/* Project Team */}
-                    <div>
-                        <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-2">Project Team</p>
-                        {row("My Manager", managerName)}
-                        {row("Total Members", String(members.length || "—"))}
-                        <button
-                            onClick={loadMembers}
-                            className="mt-2 text-xs text-blue-500 hover:text-blue-400 transition flex items-center gap-1"
-                        >
-                            {loadingMembers ? "Loading..." : showMembers ? "Hide Team Members ▲" : "View Team Members ▼"}
-                        </button>
-                        {showMembers && members.length > 0 && (
-                            <div className="mt-3 space-y-2">
-                                {members.map((m) => (
-                                    <div key={m.id} className="flex items-center justify-between py-2 border-b border-foreground/5 last:border-0">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: avatarBg(m.full_name) }}>
-                                                {getInitials(m.full_name)}
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-foreground/90 font-medium">{m.full_name}</p>
-                                                <p className="text-[10px] text-foreground/50">{m.position || m.role}</p>
-                                            </div>
-                                        </div>
-                                        <button onClick={() => setSelectedMember(m)} className="text-[10px] text-blue-500 hover:text-blue-400 transition">
-                                            View Member Details →
-                                        </button>
+                    {panelTab === "structure" ? (
+                        <StructureTree projectId={project.id} />
+                    ) : (
+                        <>
+                            {/* Project Overview */}
+                            <div>
+                                <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-2">Project Overview</p>
+                                {row("Client Name", clientName)}
+                                {row("Business Sector", "—")}
+                                {row("Start Date", fmtDate(project.start_date))}
+                                {row("Expected End Date", fmtDate(project.end_date))}
+                                {project.notes && (
+                                    <div className="py-2">
+                                        <p className="text-xs text-foreground/50 mb-1">Description</p>
+                                        <p className="text-xs text-foreground/80 leading-relaxed">{project.notes}</p>
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        )}
-                    </div>
 
-                    {/* Edit button */}
-                    <button onClick={onEdit} className="w-full py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition flex items-center justify-center gap-1.5">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                        Edit Project Details
-                    </button>
+                            {/* My Involvement */}
+                            <div>
+                                <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-2">My Involvement</p>
+                                {row("Your Role", "Design Intern")}
+                                {row("Assigned Tasks", "4 Tasks")}
+                                {row("Overdue Tasks", "1 Tasks")}
+                                {row("Time Logged", "18h 30m")}
+                            </div>
+
+                            {/* Project Team */}
+                            <div>
+                                <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-2">Project Team</p>
+                                {row("My Manager", managerName)}
+                                {row("Total Members", String(members.length || "—"))}
+                                <button
+                                    onClick={loadMembers}
+                                    className="mt-2 text-xs text-blue-500 hover:text-blue-400 transition flex items-center gap-1"
+                                >
+                                    {loadingMembers ? "Loading..." : showMembers ? "Hide Team Members ▲" : "View Team Members ▼"}
+                                </button>
+                                {showMembers && members.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                        {members.map((m) => (
+                                            <div key={m.id} className="flex items-center justify-between py-2 border-b border-foreground/5 last:border-0">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: avatarBg(m.full_name) }}>
+                                                        {getInitials(m.full_name)}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-foreground/90 font-medium">{m.full_name}</p>
+                                                        <p className="text-[10px] text-foreground/50">{m.position || m.role}</p>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => setSelectedMember(m)} className="text-[10px] text-blue-500 hover:text-blue-400 transition">
+                                                    View Member Details →
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Edit button */}
+                            <button onClick={onEdit} className="w-full py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition flex items-center justify-center gap-1.5">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                Edit Project Details
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

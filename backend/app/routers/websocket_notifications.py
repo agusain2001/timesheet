@@ -11,9 +11,11 @@ router = APIRouter()
 
 async def get_user_from_token(token: str, db: Session) -> User:
     """Validate token and get user for WebSocket connection."""
-    from app.utils import verify_token
+    from app.utils.security import decode_access_token
     try:
-        payload = verify_token(token)
+        payload = decode_access_token(token)
+        if not payload:
+            return None
         user_id = payload.get("sub")
         if not user_id:
             return None

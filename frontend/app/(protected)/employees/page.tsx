@@ -147,13 +147,13 @@ function RelatedProjectsModal({ user, onClose }: { user: User; onClose: () => vo
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full max-w-3xl bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#1e1e1e]">
+            <div className="w-full max-w-3xl bg-[#1e1e1e] border border-foreground/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-foreground/10 bg-[#1e1e1e]">
                     <div>
                         <h3 className="text-lg font-bold text-white">Related Projects</h3>
                         <p className="text-xs text-white/50">All projects associated with this employee are listed below for quick access and management.</p>
                     </div>
-                    <button onClick={onClose} className="rounded-full p-1 text-white/50 hover:text-white hover:bg-white/10 transition">
+                    <button onClick={onClose} className="rounded-full p-1 text-white/50 hover:text-white hover:bg-foreground/[0.05] transition">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
                     </button>
                 </div>
@@ -161,19 +161,19 @@ function RelatedProjectsModal({ user, onClose }: { user: User; onClose: () => vo
                 <div className="p-6 bg-[#1a1a1a]">
                     {loading ? (
                         <div className="space-y-3">
-                            {[1, 2, 3].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse" />)}
+                            {[1, 2, 3].map(i => <div key={i} className="h-12 bg-foreground/[0.02] rounded animate-pulse" />)}
                         </div>
                     ) : projects.length === 0 ? (
                         <div className="text-center py-12 flex flex-col items-center gap-3">
-                            <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-white/20">
+                            <div className="w-12 h-12 rounded-full bg-foreground/[0.02] flex items-center justify-center text-white/20">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>
                             </div>
                             <div className="text-white/40 text-sm">No related projects found.</div>
                         </div>
                     ) : (
-                        <div className="rounded-lg border border-white/10 overflow-hidden">
+                        <div className="rounded-lg border border-foreground/10 overflow-hidden">
                             <table className="w-full text-left text-sm text-white/80">
-                                <thead className="bg-white/5 text-xs text-white/40 uppercase font-semibold">
+                                <thead className="bg-foreground/[0.02] text-xs text-white/40 uppercase font-semibold">
                                     <tr>
                                         <th className="px-5 py-3 font-medium">Project Name</th>
                                         <th className="px-5 py-3 font-medium">Managed By</th>
@@ -184,7 +184,7 @@ function RelatedProjectsModal({ user, onClose }: { user: User; onClose: () => vo
                                 </thead>
                                 <tbody className="divide-y divide-white/5 bg-[#1e1e1e]">
                                     {projects.map((p) => (
-                                        <tr key={p.id} className="hover:bg-white/5 transition group">
+                                        <tr key={p.id} className="hover:bg-foreground/[0.02] transition group">
                                             <td className="px-5 py-3 font-medium text-white">{p.name}</td>
                                             <td className="px-5 py-3">{p.role === "Manager" ? user.full_name : "Other"}</td>
                                             <td className="px-5 py-3 text-white/60">{p.business_sector}</td>
@@ -192,7 +192,7 @@ function RelatedProjectsModal({ user, onClose }: { user: User; onClose: () => vo
                                                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border
                                                     ${p.status === 'active' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                                                         p.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                                            'bg-white/5 text-white/50 border-white/10'}`}>
+                                                            'bg-foreground/[0.02] text-white/50 border-foreground/10'}`}>
                                                     <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'active' ? 'bg-blue-400' :
                                                         p.status === 'completed' ? 'bg-emerald-400' :
                                                             'bg-white/40'}`}></span>
@@ -200,7 +200,7 @@ function RelatedProjectsModal({ user, onClose }: { user: User; onClose: () => vo
                                                 </span>
                                             </td>
                                             <td className="px-5 py-3 text-right">
-                                                <button className="text-[10px] px-2 py-1 rounded border border-white/10 hover:bg-white/10 hover:text-white text-white/40 transition opacity-0 group-hover:opacity-100">
+                                                <button className="text-[10px] px-2 py-1 rounded border border-foreground/10 hover:bg-foreground/[0.05] hover:text-white text-white/40 transition opacity-0 group-hover:opacity-100">
                                                     View Details
                                                 </button>
                                             </td>
@@ -222,9 +222,9 @@ function ExportModal({ count, onClose, onExport }: { count: number; onClose: () 
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-[400px] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl p-6 flex flex-col items-center text-center animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-[400px] bg-[#1a1a1a] border border-foreground/10 rounded-2xl shadow-2xl p-6 flex flex-col items-center text-center animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
                 <div className="absolute top-4 right-4">
-                    <button onClick={onClose} className="text-white/30 hover:text-white transition rounded-full p-1 hover:bg-white/10">
+                    <button onClick={onClose} className="text-white/30 hover:text-white transition rounded-full p-1 hover:bg-foreground/[0.05]">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
                     </button>
                 </div>
@@ -241,7 +241,7 @@ function ExportModal({ count, onClose, onExport }: { count: number; onClose: () 
                         <select
                             value={format}
                             onChange={(e) => setFormat(e.target.value as any)}
-                            className="w-full appearance-none bg-[#252525] border border-white/10 rounded-lg py-3 px-4 text-sm text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition cursor-pointer"
+                            className="w-full appearance-none bg-[#252525] border border-foreground/10 rounded-lg py-3 px-4 text-sm text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition cursor-pointer"
                         >
                             <option value="csv">CSV (.csv)</option>
                             <option value="excel">Excel (.xlsx)</option>
@@ -266,6 +266,131 @@ function ExportModal({ count, onClose, onExport }: { count: number; onClose: () 
     );
 }
 
+// ─── Invite Modal ──────────────────────────────────────────────────────────────────────
+function InviteModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
+    const [email, setEmail] = useState("");
+    const [role, setRole] = useState("member");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    const handleInvite = async () => {
+        if (!email.trim()) { setError("Email is required"); return; }
+        setSaving(true); setError("");
+        try {
+            const token = getToken();
+            const res = await fetch("/api/advanced/invite", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ email: email.trim(), role }),
+            });
+            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Failed to send invite"); }
+            onDone(`Invite sent to ${email}`);
+            onClose();
+        } catch (e: any) { setError(e?.message); }
+        finally { setSaving(false); }
+    };
+
+    const cls = "w-full px-3 py-2.5 text-sm bg-foreground/[0.04] border border-foreground/10 rounded-xl text-foreground placeholder-foreground/30 focus:outline-none focus:border-blue-500/50";
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-background border border-foreground/10 rounded-2xl shadow-2xl">
+                <div className="flex items-center justify-between p-5 border-b border-foreground/10">
+                    <h2 className="font-semibold text-foreground">Invite User</h2>
+                    <button onClick={onClose} className="text-foreground/40 hover:text-foreground">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <div className="p-5 space-y-4">
+                    {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+                    <div>
+                        <label className="block text-xs text-foreground/50 mb-1">Email Address *</label>
+                        <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleInvite()} placeholder="colleague@company.com" className={cls} />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-foreground/50 mb-1">Role</label>
+                        <select value={role} onChange={e => setRole(e.target.value)} className={cls}>
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                            <option value="manager">Manager</option>
+                            <option value="viewer">Viewer</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="flex justify-end gap-3 p-5 border-t border-foreground/10">
+                    <button onClick={onClose} className="px-4 py-2 text-sm text-foreground/50 hover:text-foreground">Cancel</button>
+                    <button onClick={handleInvite} disabled={saving}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
+                        {saving ? <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" opacity={.25} /><path d="M21 12a9 9 0 00-9-9" /></svg> : null}
+                        Send Invite
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Bulk Upload Modal ──────────────────────────────────────────────────────────────────────
+function BulkUploadModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
+    const [file, setFile] = useState<File | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState("");
+
+    const handleUpload = async () => {
+        if (!file) { setError("Please select a CSV file"); return; }
+        setUploading(true); setError("");
+        try {
+            const token = getToken();
+            const form = new FormData();
+            form.append("file", file);
+            const res = await fetch("/api/advanced/bulk-create-users", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body: form,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail || "Upload failed");
+            onDone(`Uploaded ${data.created ?? "?"} users successfully`);
+            onClose();
+        } catch (e: any) { setError(e?.message); }
+        finally { setUploading(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-background border border-foreground/10 rounded-2xl shadow-2xl">
+                <div className="flex items-center justify-between p-5 border-b border-foreground/10">
+                    <h2 className="font-semibold text-foreground">Bulk Upload Employees</h2>
+                    <button onClick={onClose} className="text-foreground/40 hover:text-foreground">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <div className="p-5 space-y-4">
+                    {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+                    <div className="rounded-xl border-2 border-dashed border-foreground/10 p-6 text-center">
+                        <svg className="w-8 h-8 text-foreground/30 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" /></svg>
+                        <p className="text-xs text-foreground/50 mb-3">Select a CSV file with columns: full_name, email, role, department</p>
+                        <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-foreground/5 border border-foreground/10 text-xs text-foreground/70 hover:bg-foreground/10 transition">
+                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                            {file ? file.name : "Choose CSV file"}
+                            <input type="file" accept=".csv" className="hidden" onChange={e => setFile(e.target.files?.[0] ?? null)} />
+                        </label>
+                    </div>
+                    <p className="text-[10px] text-foreground/30">Tip: Download a sample CSV template if needed. Max 500 rows per upload.</p>
+                </div>
+                <div className="flex justify-end gap-3 p-5 border-t border-foreground/10">
+                    <button onClick={onClose} className="px-4 py-2 text-sm text-foreground/50 hover:text-foreground">Cancel</button>
+                    <button onClick={handleUpload} disabled={uploading || !file}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
+                        {uploading ? <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" opacity={.25} /><path d="M21 12a9 9 0 00-9-9" /></svg> : null}
+                        Upload
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function EmployeesPage() {
     const [users, setUsers] = useState<User[]>([]);
@@ -278,6 +403,8 @@ export default function EmployeesPage() {
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [relatedProjectsUser, setRelatedProjectsUser] = useState<User | null>(null);
     const [exportOpen, setExportOpen] = useState(false);
+    const [showInvite, setShowInvite] = useState(false);
+    const [showBulkUpload, setShowBulkUpload] = useState(false);
     const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
     // Selection state
@@ -361,7 +488,7 @@ export default function EmployeesPage() {
             {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
 
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">View Employees</h1>
                     <div className="flex items-center gap-2 text-xs text-foreground/50 mt-1">
@@ -370,16 +497,27 @@ export default function EmployeesPage() {
                         <span>View Employees</span>
                     </div>
                 </div>
-                {/* Export Button */}
-                {selectedIds.size > 0 && (
-                    <button
-                        onClick={() => setExportOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 animate-in fade-in duration-200"
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                        Export ({selectedIds.size})
+                <div className="flex items-center gap-2">
+                    {selectedIds.size > 0 && (
+                        <button
+                            onClick={() => setExportOpen(true)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 transition"
+                        >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                            Export ({selectedIds.size})
+                        </button>
+                    )}
+                    <button onClick={() => setShowBulkUpload(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-foreground/70 text-xs font-medium hover:bg-foreground/10 transition">
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        Bulk Upload
                     </button>
-                )}
+                    <button onClick={() => setShowInvite(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition">
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></svg>
+                        Invite User
+                    </button>
+                </div>
             </div>
 
             {/* Controls */}
@@ -487,6 +625,14 @@ export default function EmployeesPage() {
             {/* Export Modal */}
             {exportOpen && (
                 <ExportModal count={selectedIds.size} onClose={() => setExportOpen(false)} onExport={handleExport} />
+            )}
+            {/* Invite Modal */}
+            {showInvite && (
+                <InviteModal onClose={() => setShowInvite(false)} onDone={(msg) => { setToast({ message: msg, type: "success" }); }} />
+            )}
+            {/* Bulk Upload Modal */}
+            {showBulkUpload && (
+                <BulkUploadModal onClose={() => setShowBulkUpload(false)} onDone={(msg) => { setToast({ message: msg, type: "success" }); }} />
             )}
         </div>
     );

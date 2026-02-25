@@ -61,6 +61,12 @@ from app.models.saved_view import SavedView, ViewShare
 # Email Settings models
 from app.models.email_settings import EmailPreference, EmailLog, TaskReminder
 
+# Custom Fields models
+from app.models.custom_field import CustomFieldDefinition, CustomFieldValue, FieldType
+
+# Chat History
+from app.models.chat_history import ChatHistory
+
 
 __all__ = [
     # Core
@@ -118,5 +124,11 @@ __all__ = [
     
     # Email Settings
     "EmailPreference", "EmailLog", "TaskReminder",
+
+    # Custom Fields
+    "CustomFieldDefinition", "CustomFieldValue", "FieldType",
+
+    # Chat History
+    "ChatHistory",
 ]
 

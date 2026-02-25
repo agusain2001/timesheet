@@ -39,7 +39,7 @@ export default function OAuthCallbackPage() {
                             </svg>
                         </div>
                         <h2 className="text-xl font-semibold text-white mb-2">Signing you in…</h2>
-                        <p className="text-slate-400 text-sm">Completing authentication, please wait.</p>
+                        <p className="text-foreground/60 text-sm">Completing authentication, please wait.</p>
                         <div className="mt-6 flex justify-center gap-1.5">
                             {[0, 1, 2].map((i) => (
                                 <span
@@ -59,7 +59,7 @@ export default function OAuthCallbackPage() {
                             </svg>
                         </div>
                         <h2 className="text-xl font-semibold text-white mb-2">Authentication failed</h2>
-                        <p className="text-slate-400 text-sm mb-6">{errorMsg}</p>
+                        <p className="text-foreground/60 text-sm mb-6">{errorMsg}</p>
                         <button
                             onClick={() => router.replace("/login")}
                             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl transition-colors text-sm">

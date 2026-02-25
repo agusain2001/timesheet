@@ -52,7 +52,7 @@ export function Sidebar() {
             className={clsx(
               baseClasses,
               isActive && "text-blue-400",
-              isOpen && "border-b rounded-none border-white/10 pt-2 pb-4",
+              isOpen && "border-b rounded-none border-foreground/10 pt-2 pb-4",
               hoveredItem === item.name && "scale-110",
             )}
           >
@@ -82,7 +82,7 @@ export function Sidebar() {
           <div
             className={clsx(
               "flex flex-col items-center gap-4 transition-all duration-500 ease-in-out overflow-hidden w-full",
-              isOpen ? "max-h-96 opacity-100 mt-3" : "max-h-0 opacity-0",
+              isOpen ? "max-h-[800px] opacity-100 mt-3 pb-2" : "max-h-0 opacity-0",
             )}
           >
             {item.children!.map((child) => {
@@ -123,7 +123,7 @@ export function Sidebar() {
   return (
     <aside
       className={clsx(
-        "font-poppins w-20 h-full overflow-y-auto no-scrollbar text-gray-foreground border border-white/10 rounded-md flex flex-col px-2 py-6",
+        "font-poppins w-20 h-full overflow-y-auto no-scrollbar text-gray-foreground border border-foreground/10 rounded-md flex flex-col px-2 py-6",
         isDark ? "bg-[#191919]/90" : "bg-gray-200/70",
       )}
     >

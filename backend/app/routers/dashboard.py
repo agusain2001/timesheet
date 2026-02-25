@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc, and_, or_
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import Task, Timesheet, TimeEntry, User, Department, TaskStatus, Project, TimeLog
+from app.models import Task, Timesheet, TimeEntry, User, Department, TaskStatus, Project, TimeLog, ProjectManager
 from app.utils import get_current_active_user
 
 router = APIRouter()
@@ -75,169 +75,200 @@ def get_personal_dashboard(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get comprehensive personal dashboard data."""
-    today = datetime.utcnow().date()
-    now = datetime.utcnow()
-    week_start = today - timedelta(days=today.weekday())
-    
-    # My Tasks count (ALL tasks assigned to me)
-    my_tasks_count = db.query(Task).filter(
-        Task.assignee_id == current_user.id
-    ).count()
-    
-    # Tasks due today
-    today_start = datetime.combine(today, datetime.min.time())
-    today_end = datetime.combine(today, datetime.max.time())
-    today_tasks_count = db.query(Task).filter(
-        Task.assignee_id == current_user.id,
-        Task.due_date >= today_start,
-        Task.due_date <= today_end,
-        Task.status != TaskStatus.COMPLETED.value
-    ).count()
-    
-    # Due tasks (all non-completed, non-overdue tasks with a due date in the future)
-    due_tasks_count = db.query(Task).filter(
-        Task.assignee_id == current_user.id,
-        Task.status != TaskStatus.COMPLETED.value,
-        Task.status != TaskStatus.OVERDUE.value,
-        Task.status != TaskStatus.CANCELLED.value
-    ).count()
-    
-    # Overdue tasks (only tasks with status "overdue" — matches the Overdue page filter)
-    overdue_tasks_count = db.query(Task).filter(
-        Task.assignee_id == current_user.id,
-        Task.status == TaskStatus.OVERDUE.value
-    ).count()
-    
-    # All completed tasks (total, not just today)
-    completed_tasks_count = db.query(Task).filter(
-        Task.assignee_id == current_user.id,
-        Task.status == TaskStatus.COMPLETED.value
-    ).count()
-    
-    # Completed today (for backward compatibility)
-    completed_today_count = db.query(Task).filter(
-        Task.assignee_id == current_user.id,
-        Task.status == TaskStatus.COMPLETED.value,
-        func.date(Task.completed_at) == today
-    ).count()
-    
-    # Upcoming deadlines (next 5 tasks due within 7 days)
-    upcoming_tasks = db.query(Task).options(
-        joinedload(Task.project)
-    ).filter(
-        Task.assignee_id == current_user.id,
-        Task.status != TaskStatus.COMPLETED.value,
-        Task.due_date != None,
-        Task.due_date >= now,
-        Task.due_date <= now + timedelta(days=7)
-    ).order_by(Task.due_date.asc()).limit(5).all()
-    
-    upcoming_deadlines = [
-        UpcomingDeadline(
-            task_id=str(t.id),
-            task_name=t.name,
-            due_date=t.due_date.isoformat() if t.due_date else "",
-            priority=t.priority or "medium",
-            project_name=t.project.name if t.project else None
+    try:
+        today = datetime.utcnow().date()
+        now = datetime.utcnow()
+        week_start = today - timedelta(days=today.weekday())
+        
+        # My Tasks count (ALL tasks assigned to me)
+        my_tasks_count = db.query(Task).filter(
+            Task.assignee_id == current_user.id
+        ).count()
+        
+        # Tasks due today
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = datetime.combine(today, datetime.max.time())
+        today_tasks_count = db.query(Task).filter(
+            Task.assignee_id == current_user.id,
+            Task.due_date >= today_start,
+            Task.due_date <= today_end,
+            Task.status != TaskStatus.COMPLETED.value
+        ).count()
+        
+        # Due tasks (all non-completed, non-overdue tasks with a due date in the future)
+        due_tasks_count = db.query(Task).filter(
+            Task.assignee_id == current_user.id,
+            Task.status != TaskStatus.COMPLETED.value,
+            Task.status != TaskStatus.OVERDUE.value,
+            Task.status != TaskStatus.CANCELLED.value
+        ).count()
+        
+        # Overdue tasks (only tasks with status "overdue")
+        overdue_tasks_count = db.query(Task).filter(
+            Task.assignee_id == current_user.id,
+            Task.status == TaskStatus.OVERDUE.value
+        ).count()
+        
+        # All completed tasks (total, not just today)
+        completed_tasks_count = db.query(Task).filter(
+            Task.assignee_id == current_user.id,
+            Task.status == TaskStatus.COMPLETED.value
+        ).count()
+        
+        # Completed today (for backward compatibility)
+        completed_today_count = db.query(Task).filter(
+            Task.assignee_id == current_user.id,
+            Task.status == TaskStatus.COMPLETED.value,
+            func.date(Task.completed_at) == today
+        ).count()
+        
+        # Upcoming deadlines (next 5 tasks due within 7 days)
+        try:
+            from sqlalchemy.orm import joinedload as _jl
+            upcoming_tasks = db.query(Task).options(
+                _jl(Task.project)
+            ).filter(
+                Task.assignee_id == current_user.id,
+                Task.status != TaskStatus.COMPLETED.value,
+                Task.due_date != None,
+                Task.due_date >= now,
+                Task.due_date <= now + timedelta(days=7)
+            ).order_by(Task.due_date.asc()).limit(5).all()
+            
+            upcoming_deadlines = [
+                UpcomingDeadline(
+                    task_id=str(t.id),
+                    task_name=t.name,
+                    due_date=t.due_date.isoformat() if t.due_date else "",
+                    priority=t.priority or "medium",
+                    project_name=t.project.name if t.project else None
+                )
+                for t in upcoming_tasks
+            ]
+        except Exception:
+            upcoming_deadlines = []
+        
+        # Hours logged today - from TimeLog table
+        try:
+            hours_logged_today = db.query(func.sum(TimeLog.hours)).filter(
+                TimeLog.user_id == current_user.id,
+                func.date(TimeLog.date) == today
+            ).scalar() or 0.0
+            
+            # Also check TimeEntry for backward compatibility
+            timeentry_today = db.query(func.sum(TimeEntry.hours)).join(Timesheet).filter(
+                Timesheet.user_id == current_user.id,
+                TimeEntry.day == today
+            ).scalar() or 0.0
+            
+            hours_logged_today = float(hours_logged_today) + float(timeentry_today)
+        except Exception:
+            hours_logged_today = 0.0
+        
+        # Hours logged this week
+        try:
+            hours_logged_this_week = db.query(func.sum(TimeLog.hours)).filter(
+                TimeLog.user_id == current_user.id,
+                func.date(TimeLog.date) >= week_start,
+                func.date(TimeLog.date) <= today
+            ).scalar() or 0.0
+            
+            timeentry_week = db.query(func.sum(TimeEntry.hours)).join(Timesheet).filter(
+                Timesheet.user_id == current_user.id,
+                TimeEntry.day >= week_start,
+                TimeEntry.day <= today
+            ).scalar() or 0.0
+            
+            hours_logged_this_week = float(hours_logged_this_week) + float(timeentry_week)
+        except Exception:
+            hours_logged_this_week = 0.0
+        
+        # Tasks by status
+        try:
+            status_counts = db.query(
+                Task.status, func.count(Task.id)
+            ).filter(
+                Task.assignee_id == current_user.id
+            ).group_by(Task.status).all()
+            
+            tasks_by_status = {
+                "todo": 0,
+                "in_progress": 0,
+                "review": 0,
+                "completed": 0,
+                "blocked": 0
+            }
+            for status, count in status_counts:
+                if status:
+                    status_key = status.lower().replace(" ", "_")
+                    if status_key in tasks_by_status:
+                        tasks_by_status[status_key] = count
+        except Exception:
+            tasks_by_status = {"todo": 0, "in_progress": 0, "review": 0, "completed": 0, "blocked": 0}
+        
+        # Recent activity (last 10 activities)
+        try:
+            recent_completed = db.query(Task).filter(
+                Task.assignee_id == current_user.id,
+                Task.completed_at != None
+            ).order_by(Task.completed_at.desc()).limit(5).all()
+            
+            recent_created = db.query(Task).filter(
+                Task.assignee_id == current_user.id
+            ).order_by(Task.created_at.desc()).limit(5).all()
+            
+            activities = []
+            for task in recent_completed:
+                activities.append(RecentActivity(
+                    id=str(task.id),
+                    type="task_completed",
+                    message=f"Completed '{task.name}'",
+                    timestamp=task.completed_at.isoformat() if task.completed_at else now.isoformat()
+                ))
+            
+            for task in recent_created:
+                activities.append(RecentActivity(
+                    id=f"created_{task.id}",
+                    type="task_created",
+                    message=f"Created '{task.name}'",
+                    timestamp=task.created_at.isoformat() if task.created_at else now.isoformat()
+                ))
+            
+            activities.sort(key=lambda x: x.timestamp, reverse=True)
+            recent_activity = activities[:5]
+        except Exception:
+            recent_activity = []
+        
+        return PersonalDashboardResponse(
+            my_tasks_count=my_tasks_count,
+            today_tasks_count=today_tasks_count,
+            due_tasks_count=due_tasks_count,
+            overdue_tasks_count=overdue_tasks_count,
+            completed_today_count=completed_today_count,
+            completed_tasks_count=completed_tasks_count,
+            upcoming_deadlines=upcoming_deadlines,
+            hours_logged_today=round(hours_logged_today, 1),
+            hours_logged_this_week=round(hours_logged_this_week, 1),
+            tasks_by_status=tasks_by_status,
+            recent_activity=recent_activity
         )
-        for t in upcoming_tasks
-    ]
-    
-    # Hours logged today - from TimeLog table
-    hours_logged_today = db.query(func.sum(TimeLog.hours)).filter(
-        TimeLog.user_id == current_user.id,
-        func.date(TimeLog.date) == today
-    ).scalar() or 0.0
-    
-    # Also check TimeEntry for backward compatibility
-    timeentry_today = db.query(func.sum(TimeEntry.hours)).join(Timesheet).filter(
-        Timesheet.user_id == current_user.id,
-        TimeEntry.day == today
-    ).scalar() or 0.0
-    
-    hours_logged_today = float(hours_logged_today) + float(timeentry_today)
-    
-    # Hours logged this week
-    hours_logged_this_week = db.query(func.sum(TimeLog.hours)).filter(
-        TimeLog.user_id == current_user.id,
-        func.date(TimeLog.date) >= week_start,
-        func.date(TimeLog.date) <= today
-    ).scalar() or 0.0
-    
-    timeentry_week = db.query(func.sum(TimeEntry.hours)).join(Timesheet).filter(
-        Timesheet.user_id == current_user.id,
-        TimeEntry.day >= week_start,
-        TimeEntry.day <= today
-    ).scalar() or 0.0
-    
-    hours_logged_this_week = float(hours_logged_this_week) + float(timeentry_week)
-    
-    # Tasks by status
-    status_counts = db.query(
-        Task.status, func.count(Task.id)
-    ).filter(
-        Task.assignee_id == current_user.id
-    ).group_by(Task.status).all()
-    
-    tasks_by_status = {
-        "todo": 0,
-        "in_progress": 0,
-        "review": 0,
-        "completed": 0,
-        "blocked": 0
-    }
-    for status, count in status_counts:
-        if status:
-            status_key = status.lower().replace(" ", "_")
-            if status_key in tasks_by_status:
-                tasks_by_status[status_key] = count
-    
-    # Recent activity (last 10 activities)
-    recent_completed = db.query(Task).filter(
-        Task.assignee_id == current_user.id,
-        Task.completed_at != None
-    ).order_by(Task.completed_at.desc()).limit(5).all()
-    
-    recent_created = db.query(Task).filter(
-        Task.assignee_id == current_user.id
-    ).order_by(Task.created_at.desc()).limit(5).all()
-    
-    activities = []
-    for task in recent_completed:
-        activities.append(RecentActivity(
-            id=str(task.id),
-            type="task_completed",
-            message=f"Completed '{task.name}'",
-            timestamp=task.completed_at.isoformat() if task.completed_at else now.isoformat()
-        ))
-    
-    for task in recent_created:
-        activities.append(RecentActivity(
-            id=f"created_{task.id}",
-            type="task_created",
-            message=f"Created '{task.name}'",
-            timestamp=task.created_at.isoformat() if task.created_at else now.isoformat()
-        ))
-    
-    # Sort by timestamp and take latest 5
-    activities.sort(key=lambda x: x.timestamp, reverse=True)
-    recent_activity = activities[:5]
-    
-    return PersonalDashboardResponse(
-        my_tasks_count=my_tasks_count,
-        today_tasks_count=today_tasks_count,
-        due_tasks_count=due_tasks_count,
-        overdue_tasks_count=overdue_tasks_count,
-        completed_today_count=completed_today_count,
-        completed_tasks_count=completed_tasks_count,
-        upcoming_deadlines=upcoming_deadlines,
-        hours_logged_today=round(hours_logged_today, 1),
-        hours_logged_this_week=round(hours_logged_this_week, 1),
-        tasks_by_status=tasks_by_status,
-        recent_activity=recent_activity
-    )
-
-
+    except Exception as e:
+        # Return a safe default response if anything goes wrong
+        import logging
+        logging.error(f"Personal dashboard error: {e}", exc_info=True)
+        return PersonalDashboardResponse(
+            my_tasks_count=0,
+            today_tasks_count=0,
+            due_tasks_count=0,
+            overdue_tasks_count=0,
+            completed_today_count=0,
+            completed_tasks_count=0,
+            upcoming_deadlines=[],
+            hours_logged_today=0.0,
+            hours_logged_this_week=0.0,
+            tasks_by_status={"todo": 0, "in_progress": 0, "review": 0, "completed": 0, "blocked": 0},
+            recent_activity=[]
+        )
 @router.get("/today", response_model=TodayStatsResponse)
 def get_today_stats(
     db: Session = Depends(get_db),
@@ -473,4 +504,114 @@ def get_dashboard_stats(
         "total_assigned": 0,
         "avg_workload": 0,
         "departments": 0
+    }
+
+
+# =============== Executive Drill-down ===============
+
+
+@router.get("/executive/project/{project_id}/summary")
+def get_executive_project_summary(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get project summary with task breakdown, team members, and activity for executive drill-down."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    now = datetime.utcnow()
+
+    # Task counts by status
+    status_counts = db.query(
+        Task.status, func.count(Task.id)
+    ).filter(
+        Task.project_id == project_id
+    ).group_by(Task.status).all()
+
+    tasks_by_status = {}
+    total_tasks = 0
+    completed_tasks = 0
+    for status, count in status_counts:
+        tasks_by_status[status or "todo"] = count
+        total_tasks += count
+        if status in ["done", "completed"]:
+            completed_tasks += count
+
+    progress = round(completed_tasks / total_tasks * 100, 1) if total_tasks > 0 else 0
+
+    # Overdue tasks
+    overdue_count = db.query(Task).filter(
+        Task.project_id == project_id,
+        Task.status.notin_(["done", "completed", "cancelled"]),
+        Task.due_date < now
+    ).count()
+
+    # Team members (managers + task assignees)
+    manager_records = db.query(ProjectManager).filter(
+        ProjectManager.project_id == project_id
+    ).all()
+
+    manager_user_ids = [str(pm.user_id) for pm in manager_records]
+
+    assignee_ids = db.query(Task.assignee_id).filter(
+        Task.project_id == project_id,
+        Task.assignee_id != None
+    ).distinct().all()
+    assignee_ids = [str(a[0]) for a in assignee_ids]
+
+    all_member_ids = list(set(manager_user_ids + assignee_ids))
+    members = db.query(User).filter(User.id.in_(all_member_ids)).all() if all_member_ids else []
+
+    team_members = []
+    for m in members:
+        is_mgr = str(m.id) in manager_user_ids
+        task_count = db.query(Task).filter(
+            Task.project_id == project_id,
+            Task.assignee_id == m.id
+        ).count()
+        team_members.append({
+            "id": str(m.id),
+            "full_name": m.full_name,
+            "email": m.email,
+            "role": "Manager" if is_mgr else "Member",
+            "avatar_url": m.avatar_url,
+            "task_count": task_count,
+        })
+
+    # Recent tasks (latest 10 updated)
+    recent_tasks = db.query(Task).filter(
+        Task.project_id == project_id
+    ).order_by(Task.updated_at.desc()).limit(10).all()
+
+    recent_list = [{
+        "id": str(t.id),
+        "name": t.name,
+        "status": t.status,
+        "priority": t.priority,
+        "due_date": t.due_date.isoformat() if t.due_date else None,
+        "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+    } for t in recent_tasks]
+
+    return {
+        "project": {
+            "id": str(project.id),
+            "name": project.name,
+            "code": project.code,
+            "description": project.description,
+            "status": project.status,
+            "priority": project.priority,
+            "start_date": project.start_date.isoformat() if project.start_date else None,
+            "end_date": project.end_date.isoformat() if project.end_date else None,
+            "budget": project.budget,
+            "actual_cost": project.actual_cost,
+            "progress": progress,
+        },
+        "tasks_by_status": tasks_by_status,
+        "total_tasks": total_tasks,
+        "completed_tasks": completed_tasks,
+        "overdue_tasks": overdue_count,
+        "team_members": team_members,
+        "recent_tasks": recent_list,
     }

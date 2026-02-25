@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { apiGet, apiPost } from "@/services/api";
+import RichTextEditor from "@/components/RichTextEditor";
 
 // ============ Types ============
 
@@ -18,6 +19,7 @@ interface TaskFormData {
     estimated_hours: string;
     status: string;
     assignee_id: string;
+    assignee_ids: string[];
 }
 
 interface AddTaskModalProps {
@@ -308,7 +310,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
     const overlayRef = useRef<HTMLDivElement>(null);
     const [form, setForm] = useState<TaskFormData>({
         name: "", project_id: "", task_type: "", description: "",
-        priority: "", due_date: "", estimated_hours: "", status: "", assignee_id: "",
+        priority: "", due_date: "", estimated_hours: "", status: "", assignee_id: "", assignee_ids: [],
     });
     const [projects, setProjects] = useState<ProjectOption[]>([]);
     const [users, setUsers] = useState<UserOption[]>([]);
@@ -317,6 +319,8 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
     const [error, setError] = useState<string | null>(null);
     const [attachments, setAttachments] = useState<File[]>([]);
     const [applyingTemplate, setApplyingTemplate] = useState(false);
+    const [customFields, setCustomFields] = useState<{ id: string; name: string; field_type: string; options: string[] | null; is_required: boolean }[]>([]);
+    const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (!isOpen) return;
@@ -324,6 +328,13 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
         apiGet<UserOption[]>("/api/users").then(setUsers).catch(() => { });
         apiGet<TaskTemplate[]>("/api/task-templates?limit=20").then(setTemplates).catch(() => { });
     }, [isOpen]);
+
+    // Load custom fields when project changes
+    useEffect(() => {
+        if (!form.project_id) { setCustomFields([]); return; }
+        apiGet<any[]>(`/api/tasks/projects/${form.project_id}/custom-fields`)
+            .then(setCustomFields).catch(() => setCustomFields([]));
+    }, [form.project_id]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -374,13 +385,25 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
             if (form.priority) payload.priority = form.priority;
             if (form.due_date) payload.due_date = new Date(form.due_date).toISOString();
             if (form.estimated_hours) payload.estimated_hours = parseFloat(form.estimated_hours);
-            if (form.assignee_id) payload.assignee_id = form.assignee_id;
+            // Primary assignee (first of multi or single)
+            const primary = form.assignee_ids.length > 0 ? form.assignee_ids[0] : form.assignee_id;
+            if (primary) payload.assignee_id = primary;
+            if (form.assignee_ids.length > 0) payload.assignee_ids = form.assignee_ids;
             if (asDraft) payload.status = "draft";
             else if (form.status) payload.status = form.status;
 
-            await apiPost("/api/tasks/", payload);
-            setForm({ name: "", project_id: "", task_type: "", description: "", priority: "", due_date: "", estimated_hours: "", status: "", assignee_id: "" });
+            const created = await apiPost<{ id: string }>("/api/tasks/", payload);
+
+            // Save custom field values if any
+            if (created?.id && Object.values(customValues).some(v => v !== "")) {
+                const vals: Record<string, string> = {};
+                Object.entries(customValues).forEach(([k, v]) => { if (v !== "") vals[k] = v; });
+                await apiPost(`/api/tasks/${created.id}/custom-field-values`, { values: vals }).catch(() => { });
+            }
+
+            setForm({ name: "", project_id: "", task_type: "", description: "", priority: "", due_date: "", estimated_hours: "", status: "", assignee_id: "", assignee_ids: [] });
             setAttachments([]);
+            setCustomValues({});
             onTaskCreated?.();
             onClose();
         } catch (err) {
@@ -460,12 +483,11 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
                         />
                         <div>
                             <label className="block text-xs font-medium text-foreground/60 mb-1.5">Description <span className="text-foreground/30">(Optional)</span></label>
-                            <textarea
+                            <RichTextEditor
                                 value={form.description}
-                                onChange={(e) => updateField("description", e.target.value)}
+                                onChange={(html) => updateField("description", html)}
                                 placeholder="Add task details, requirements, or notes..."
-                                rows={3}
-                                className="w-full px-3 py-2.5 text-sm bg-foreground/[0.04] border border-foreground/10 rounded-lg text-foreground placeholder-foreground/25 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition resize-none"
+                                minHeight="100px"
                             />
                         </div>
                     </Section>
@@ -497,15 +519,86 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
                                 options={STATUSES}
                                 variant="status"
                             />
-                            <CustomDropdown
-                                label="Assignee"
-                                placeholder="Select Assignee"
-                                value={form.assignee_id}
-                                onChange={(v) => updateField("assignee_id", v)}
-                                options={users.map((u) => ({ value: u.id, label: u.full_name }))}
-                            />
+                            {/* Multi-assignee selector */}
+                            <div>
+                                <label className="block text-xs font-medium text-foreground/60 mb-1.5">Assignees</label>
+                                <div className="border border-foreground/10 rounded-lg bg-foreground/[0.04] max-h-36 overflow-y-auto divide-y divide-foreground/5">
+                                    {users.length === 0 && <p className="text-xs text-foreground/30 px-3 py-2">Loading…</p>}
+                                    {users.map(u => {
+                                        const checked = form.assignee_ids.includes(u.id);
+                                        return (
+                                            <label key={u.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-foreground/5 transition">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => {
+                                                        setForm(prev => ({
+                                                            ...prev,
+                                                            assignee_ids: checked
+                                                                ? prev.assignee_ids.filter(id => id !== u.id)
+                                                                : [...prev.assignee_ids, u.id],
+                                                            assignee_id: !checked && prev.assignee_ids.length === 0 ? u.id : prev.assignee_id,
+                                                        }));
+                                                    }}
+                                                    className="w-3.5 h-3.5 rounded accent-blue-500"
+                                                />
+                                                <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[9px] font-bold text-blue-400 flex-shrink-0">
+                                                    {u.full_name.charAt(0)}
+                                                </div>
+                                                <span className="text-sm text-foreground/80 truncate">{u.full_name}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                {form.assignee_ids.length > 0 && (
+                                    <p className="text-[10px] text-foreground/40 mt-1">{form.assignee_ids.length} assignee{form.assignee_ids.length > 1 ? "s" : ""} selected</p>
+                                )}
+                            </div>
                         </div>
                     </Section>
+
+                    {/* ---- Custom Fields (if project has any) ---- */}
+                    {customFields.length > 0 && (
+                        <Section title="Custom Fields">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {customFields.map(field => (
+                                    <div key={field.id}>
+                                        <label className="block text-xs font-medium text-foreground/60 mb-1.5">
+                                            {field.name}{field.is_required && <span className="text-red-400 ml-0.5">*</span>}
+                                        </label>
+                                        {field.field_type === "select" && field.options ? (
+                                            <select
+                                                value={customValues[field.id] ?? ""}
+                                                onChange={e => setCustomValues(p => ({ ...p, [field.id]: e.target.value }))}
+                                                className="w-full px-3 py-2.5 text-sm bg-foreground/[0.04] border border-foreground/10 rounded-lg text-foreground outline-none focus:ring-1 focus:ring-blue-500/50"
+                                            >
+                                                <option value="">Select…</option>
+                                                {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        ) : field.field_type === "checkbox" ? (
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={customValues[field.id] === "true"}
+                                                    onChange={e => setCustomValues(p => ({ ...p, [field.id]: e.target.checked ? "true" : "false" }))}
+                                                    className="w-4 h-4 rounded accent-blue-500"
+                                                />
+                                                <span className="text-sm text-foreground/70">{field.name}</span>
+                                            </label>
+                                        ) : (
+                                            <input
+                                                type={field.field_type === "number" ? "number" : field.field_type === "date" ? "date" : "text"}
+                                                value={customValues[field.id] ?? ""}
+                                                onChange={e => setCustomValues(p => ({ ...p, [field.id]: e.target.value }))}
+                                                placeholder={`Enter ${field.name.toLowerCase()}…`}
+                                                className="w-full px-3 py-2.5 text-sm bg-foreground/[0.04] border border-foreground/10 rounded-lg text-foreground placeholder-foreground/25 outline-none focus:ring-1 focus:ring-blue-500/50"
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </Section>
+                    )}
 
                     {/* ---- Attachments ---- */}
                     <Section title="Attachments">

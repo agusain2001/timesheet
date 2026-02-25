@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Plus } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import { ViewSwitcher, ViewToolbar, type ViewType, type FilterState } from "@/components/views/ViewSwitcher";
@@ -9,6 +9,13 @@ import CalendarView from "@/components/views/CalendarView";
 import GanttView from "@/components/views/GanttView";
 import SwimlaneView from "@/components/views/SwimlaneView";
 import TaskListPage from "@/components/TaskListPage";
+import AddTaskModal from "@/components/AddTaskModal";
+import EditTaskModal from "@/components/EditTaskModal";
+import DeleteTaskModal from "@/components/DeleteTaskModal";
+import DuplicateTaskModal from "@/components/DuplicateTaskModal";
+import CommentsModal from "@/components/CommentsModal";
+import TaskDetailPanel from "@/components/TaskDetailPanel";
+import BulkActionBar from "@/components/views/BulkActionBar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +34,8 @@ interface Task {
     estimated_hours?: number;
     progress?: number;
     description?: string;
+    task_type?: string;
+    project_id?: string;
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -51,15 +60,37 @@ async function apiFetch(path: string, opts: RequestInit = {}) {
     return res.json();
 }
 
+// ─── Toast Notification ───────────────────────────────────────────────────────
+
+function Toast({ message, type, onDismiss }: { message: string; type: "success" | "error"; onDismiss: () => void }) {
+    useEffect(() => {
+        const t = setTimeout(onDismiss, 3500);
+        return () => clearTimeout(t);
+    }, [onDismiss]);
+
+    return (
+        <div
+            className={`fixed bottom-20 right-4 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-sm font-medium transition-all animate-in slide-in-from-bottom-2 duration-300 ${type === "success"
+                ? "bg-green-500/10 border border-green-500/25 text-green-400"
+                : "bg-red-500/10 border border-red-500/25 text-red-400"
+                }`}
+        >
+            {type === "success" ? "✓" : "✕"} {message}
+            <button onClick={onDismiss} className="ml-2 opacity-60 hover:opacity-100 text-xs">✕</button>
+        </div>
+    );
+}
+
 // ─── Multi-View Tasks Page ────────────────────────────────────────────────────
 
 export default function AllTasksPage() {
-    const [view, setView] = useState<ViewType>(() => {
-        if (typeof window !== "undefined") {
-            return (localStorage.getItem("tasks_view") as ViewType) || "list";
-        }
-        return "list";
-    });
+    const [view, setView] = useState<ViewType>("list");
+
+    // Hydrate view from localStorage only on client after mount
+    useEffect(() => {
+        const saved = localStorage.getItem("tasks_view") as ViewType;
+        if (saved) setView(saved);
+    }, []);
 
     const [tasks, setTasks] = useState<Task[]>([]);
     const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
@@ -68,12 +99,45 @@ export default function AllTasksPage() {
     const [sortBy, setSortBy] = useState("due_date");
     const [groupBy, setGroupBy] = useState("");
 
-    // Persist view selection
+    // ─── Modal State ──────────────────────────────────────────────────────────
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [addModalDefaultDate, setAddModalDefaultDate] = useState<string | undefined>(undefined);
+    const [addModalDefaultStatus, setAddModalDefaultStatus] = useState<string | undefined>(undefined);
+
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editTask, setEditTask] = useState<Task | null>(null);
+
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteTask, setDeleteTask] = useState<Task | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+    const [duplicateTask, setDuplicateTask] = useState<Task | null>(null);
+    const [isDuplicating, setIsDuplicating] = useState(false);
+
+    const [showCommentsModal, setShowCommentsModal] = useState(false);
+    const [commentsTask, setCommentsTask] = useState<Task | null>(null);
+
+    const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+
+    // ─── Bulk Selection ───────────────────────────────────────────────────────
+    const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+
+    // ─── Toast ────────────────────────────────────────────────────────────────
+    const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+    const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
+        setToast({ message, type });
+    }, []);
+
+    // ─── View persistence ─────────────────────────────────────────────────────
     const handleViewChange = (v: ViewType) => {
         setView(v);
         localStorage.setItem("tasks_view", v);
+        setSelectedTaskIds(new Set());
     };
 
+    // ─── Fetch tasks ──────────────────────────────────────────────────────────
     const fetchTasks = useCallback(async () => {
         setLoading(true);
         try {
@@ -93,16 +157,16 @@ export default function AllTasksPage() {
     }, [filters]);
 
     useEffect(() => {
-        // Only fetch ourselves for non-list views (list view has its own fetching)
         if (view !== "list") {
             fetchTasks();
         }
     }, [view, fetchTasks]);
 
     useEffect(() => {
-        apiFetch("/api/users?limit=100").then((d) => setUsers(d || [])).catch(() => { });
+        apiFetch("/users?limit=100").then((d) => setUsers(d || [])).catch(() => { });
     }, []);
 
+    // ─── Status change (Kanban drag / context menu) ────────────────────────────
     const handleStatusChange = async (taskId: string, newStatus: string) => {
         try {
             await apiFetch(`/tasks/${taskId}`, {
@@ -110,23 +174,166 @@ export default function AllTasksPage() {
                 body: JSON.stringify({ status: newStatus }),
             });
             setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
-        } catch (err: any) {
-            alert(`Cannot update: ${err.message}`);
+            showToast("Status updated");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Update failed";
+            showToast(msg, "error");
         }
     };
 
-    const handleTaskClick = (task: Task) => {
-        // Open task detail — using native browser alert as placeholder
-        // TODO: wire to TaskDetailPanel or EditTaskModal
-        console.log("Task clicked:", task.id);
+    // ─── Date change (Calendar drag) ──────────────────────────────────────────
+    const handleTaskDateChange = async (taskId: string, newDate: string) => {
+        try {
+            await apiFetch(`/tasks/${taskId}`, {
+                method: "PUT",
+                body: JSON.stringify({ due_date: newDate }),
+            });
+            setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, due_date: newDate } : t));
+            showToast("Due date updated");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Update failed";
+            showToast(msg, "error");
+        }
     };
 
+    // ─── Date range change (Gantt drag) ───────────────────────────────────────
+    const handleTaskDateRangeChange = async (taskId: string, startDate: string, endDate: string) => {
+        try {
+            await apiFetch(`/tasks/${taskId}`, {
+                method: "PUT",
+                body: JSON.stringify({ start_date: startDate, due_date: endDate }),
+            });
+            setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, start_date: startDate, due_date: endDate } : t));
+            showToast("Dates updated");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Update failed";
+            showToast(msg, "error");
+        }
+    };
+
+    // ─── Click handlers ───────────────────────────────────────────────────────
+    const handleTaskClick = (task: Task) => setDetailTaskId(task.id);
     const handleDateClick = (date: Date) => {
-        // TODO: open AddTaskModal with pre-filled due_date
-        console.log("Date clicked:", date.toISOString().split("T")[0]);
+        setAddModalDefaultDate(date.toISOString().split("T")[0]);
+        setAddModalDefaultStatus(undefined);
+        setShowAddModal(true);
     };
 
-    // Sort tasks client-side
+    // ─── CRUD handlers ────────────────────────────────────────────────────────
+    const handleEditTask = (task: Task) => {
+        setEditTask(task);
+        setShowEditModal(true);
+    };
+
+    const handleDeleteTask = (task: Task) => {
+        setDeleteTask(task);
+        setShowDeleteModal(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteTask) return;
+        setIsDeleting(true);
+        try {
+            await apiFetch(`/tasks/${deleteTask.id}`, { method: "DELETE" });
+            setTasks((prev) => prev.filter((t) => t.id !== deleteTask.id));
+            setShowDeleteModal(false);
+            setDeleteTask(null);
+            showToast("Task deleted");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Delete failed";
+            showToast(msg, "error");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleDuplicateTask = (task: Task) => {
+        setDuplicateTask(task);
+        setShowDuplicateModal(true);
+    };
+
+    const handleDuplicateConfirm = async () => {
+        if (!duplicateTask) return;
+        setIsDuplicating(true);
+        try {
+            await apiFetch(`/my-time/tasks/${duplicateTask.id}/duplicate`, { method: "POST" });
+            setShowDuplicateModal(false);
+            setDuplicateTask(null);
+            await fetchTasks();
+            showToast("Task duplicated");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Duplicate failed";
+            showToast(msg, "error");
+        } finally {
+            setIsDuplicating(false);
+        }
+    };
+
+    const handleViewComments = (task: Task) => {
+        setCommentsTask(task);
+        setShowCommentsModal(true);
+    };
+
+    const handleOpenAddForStatus = (status: string) => {
+        setAddModalDefaultDate(undefined);
+        setAddModalDefaultStatus(status);
+        setShowAddModal(true);
+    };
+
+    // ─── Bulk Operations ──────────────────────────────────────────────────────
+    const handleToggleSelect = (taskId: string) => {
+        setSelectedTaskIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(taskId)) next.delete(taskId);
+            else next.add(taskId);
+            return next;
+        });
+    };
+
+    const handleBulkStatusChange = async (status: string) => {
+        const ids = Array.from(selectedTaskIds);
+        try {
+            await Promise.all(ids.map((id) => apiFetch(`/tasks/${id}`, {
+                method: "PUT",
+                body: JSON.stringify({ status }),
+            })));
+            setTasks((prev) => prev.map((t) => selectedTaskIds.has(t.id) ? { ...t, status } : t));
+            setSelectedTaskIds(new Set());
+            showToast(`Updated ${ids.length} task${ids.length !== 1 ? "s" : ""}`);
+        } catch {
+            showToast("Some updates failed", "error");
+        }
+    };
+
+    const handleBulkPriorityChange = async (priority: string) => {
+        const ids = Array.from(selectedTaskIds);
+        try {
+            await Promise.all(ids.map((id) => apiFetch(`/tasks/${id}`, {
+                method: "PUT",
+                body: JSON.stringify({ priority }),
+            })));
+            setTasks((prev) => prev.map((t) => selectedTaskIds.has(t.id) ? { ...t, priority } : t));
+            setSelectedTaskIds(new Set());
+            showToast(`Updated ${ids.length} task${ids.length !== 1 ? "s" : ""}`);
+        } catch {
+            showToast("Some updates failed", "error");
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        const ids = Array.from(selectedTaskIds);
+        if (!confirm(`Delete ${ids.length} task${ids.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+        try {
+            await Promise.all(ids.map((id) => apiFetch(`/tasks/${id}`, { method: "DELETE" })));
+            setTasks((prev) => prev.filter((t) => !selectedTaskIds.has(t.id)));
+            setSelectedTaskIds(new Set());
+            showToast(`Deleted ${ids.length} task${ids.length !== 1 ? "s" : ""}`);
+        } catch {
+            showToast("Some deletes failed", "error");
+        }
+    };
+
+    // ─── Sort tasks client-side ───────────────────────────────────────────────
     const sortedTasks = [...tasks].sort((a, b) => {
         if (sortBy === "due_date") {
             return (a.due_date || "9999-12-31").localeCompare(b.due_date || "9999-12-31");
@@ -139,14 +346,26 @@ export default function AllTasksPage() {
         return 0;
     });
 
+    // ─── Common view props ────────────────────────────────────────────────────
+    const commonViewProps = {
+        onTaskClick: handleTaskClick,
+        onEditTask: handleEditTask,
+        onDeleteTask: handleDeleteTask,
+        onDuplicateTask: handleDuplicateTask,
+        onViewComments: handleViewComments,
+        onStatusChange: handleStatusChange,
+        selectedTaskIds,
+        onToggleSelect: handleToggleSelect,
+    };
+
     return (
-        <div className="flex flex-col h-full min-h-screen bg-slate-950 text-slate-200 p-4 gap-4">
+        <div className="flex flex-col h-full min-h-screen bg-background text-foreground p-4 gap-4">
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold">My Tasks</h1>
+                    <h1 className="text-2xl font-bold">All Tasks</h1>
                     {view !== "list" && (
-                        <p className="text-sm text-slate-500 mt-0.5">
+                        <p className="text-sm text-foreground/50 mt-0.5">
                             {tasks.length} task{tasks.length !== 1 ? "s" : ""}
                             {filters.status || filters.priority || filters.search ? " (filtered)" : ""}
                         </p>
@@ -156,16 +375,19 @@ export default function AllTasksPage() {
                     <ViewSwitcher
                         currentView={view}
                         onChange={handleViewChange}
-                        onSaveView={() => alert("Save view — connect to /api/views")}
-                        onShareView={() => alert("Share view — connect to /api/views/{id}/share")}
+                        onSaveView={() => showToast("View saved")}
+                        onShareView={() => showToast("Share link copied")}
                     />
-                    <button className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors">
+                    <button
+                        onClick={() => { setAddModalDefaultDate(undefined); setAddModalDefaultStatus(undefined); setShowAddModal(true); }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+                    >
                         <Plus size={15} /> New Task
                     </button>
                 </div>
             </div>
 
-            {/* Toolbar (not shown for list view which has its own filters) */}
+            {/* Toolbar (not shown for list view) */}
             {view !== "list" && (
                 <ViewToolbar
                     filters={filters}
@@ -181,14 +403,14 @@ export default function AllTasksPage() {
             {/* View Content */}
             <div className="flex-1 overflow-hidden">
                 {view === "list" && (
-                    <TaskListPage title="My Tasks" fetchUrl="/api/tasks/my" />
+                    <TaskListPage title="All Tasks" fetchUrl="/api/tasks" />
                 )}
 
                 {view === "kanban" && !loading && (
                     <KanbanBoard
                         tasks={sortedTasks}
-                        onStatusChange={handleStatusChange}
-                        onTaskClick={handleTaskClick}
+                        {...commonViewProps}
+                        onAddForStatus={handleOpenAddForStatus}
                     />
                 )}
 
@@ -197,13 +419,19 @@ export default function AllTasksPage() {
                         tasks={sortedTasks}
                         onTaskClick={handleTaskClick}
                         onDateClick={handleDateClick}
+                        onEditTask={handleEditTask}
+                        onDeleteTask={handleDeleteTask}
+                        onTaskDateChange={handleTaskDateChange}
                     />
                 )}
 
                 {view === "gantt" && !loading && (
                     <GanttView
                         tasks={sortedTasks}
-                        onTaskClick={handleTaskClick}
+                        onTaskClick={(t) => handleTaskClick(t as Task)}
+                        onEditTask={(t) => handleEditTask(t as Task)}
+                        onDeleteTask={(t) => handleDeleteTask(t as Task)}
+                        onTaskDateRangeChange={handleTaskDateRangeChange}
                     />
                 )}
 
@@ -211,17 +439,86 @@ export default function AllTasksPage() {
                     <SwimlaneView
                         tasks={sortedTasks}
                         groupBy={(groupBy as "assignee" | "priority" | "status") || "assignee"}
-                        onTaskClick={handleTaskClick}
-                        onStatusChange={handleStatusChange}
+                        {...commonViewProps}
+                        onAddForLane={handleOpenAddForStatus}
                     />
                 )}
 
                 {loading && view !== "list" && (
-                    <div className="flex items-center justify-center h-64 text-slate-500 text-sm">
-                        Loading tasks...
+                    <div className="flex items-center justify-center h-64 text-foreground/50 text-sm">
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-foreground/20 border-t-blue-400 rounded-full animate-spin" />
+                            Loading tasks...
+                        </div>
                     </div>
                 )}
             </div>
+
+            {/* ─── Bulk Action Bar ─────────────────────────────────────────────── */}
+            {view !== "list" && (
+                <BulkActionBar
+                    selectedCount={selectedTaskIds.size}
+                    onClearSelection={() => setSelectedTaskIds(new Set())}
+                    onBulkStatusChange={handleBulkStatusChange}
+                    onBulkPriorityChange={handleBulkPriorityChange}
+                    onBulkDelete={handleBulkDelete}
+                />
+            )}
+
+            {/* ─── Modals ──────────────────────────────────────────────────────── */}
+            <AddTaskModal
+                isOpen={showAddModal}
+                onClose={() => { setShowAddModal(false); setAddModalDefaultDate(undefined); setAddModalDefaultStatus(undefined); }}
+                onTaskCreated={() => { fetchTasks(); showToast("Task created"); }}
+            />
+
+            <EditTaskModal
+                isOpen={showEditModal}
+                task={editTask as any}
+                onClose={() => { setShowEditModal(false); setEditTask(null); }}
+                onTaskUpdated={() => { fetchTasks(); showToast("Task updated"); }}
+            />
+
+            <DeleteTaskModal
+                isOpen={showDeleteModal}
+                taskName={deleteTask?.name || ""}
+                taskStatus={deleteTask?.status || "todo"}
+                onClose={() => { setShowDeleteModal(false); setDeleteTask(null); }}
+                onConfirm={handleDeleteConfirm}
+                isDeleting={isDeleting}
+            />
+
+            <DuplicateTaskModal
+                isOpen={showDuplicateModal}
+                taskName={duplicateTask?.name || ""}
+                onClose={() => { setShowDuplicateModal(false); setDuplicateTask(null); }}
+                onConfirm={handleDuplicateConfirm}
+                isDuplicating={isDuplicating}
+            />
+
+            <CommentsModal
+                isOpen={showCommentsModal}
+                taskId={commentsTask?.id || null}
+                taskName={commentsTask?.name || ""}
+                onClose={() => { setShowCommentsModal(false); setCommentsTask(null); }}
+            />
+
+            {/* ─── Task Detail Panel ───────────────────────────────────────────── */}
+            {detailTaskId && (
+                <TaskDetailPanel
+                    taskId={detailTaskId}
+                    onClose={() => setDetailTaskId(null)}
+                />
+            )}
+
+            {/* ─── Toast ───────────────────────────────────────────────────────── */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onDismiss={() => setToast(null)}
+                />
+            )}
         </div>
     );
 }

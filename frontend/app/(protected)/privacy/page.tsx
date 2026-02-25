@@ -17,9 +17,9 @@ function Card({ title, icon: Icon, children, className = "" }: {
     title: string; icon: any; children: React.ReactNode; className?: string;
 }) {
     return (
-        <div className={`rounded-2xl border border-foreground/10 bg-foreground/[0.02] dark:bg-white/3 p-6 space-y-4 ${className}`}>
+        <div className={`rounded-2xl border border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.01] p-6 space-y-4 ${className}`}>
             <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-                <Icon size={16} className="text-indigo-500 dark:text-indigo-400" /> {title}
+                <Icon size={16} className="text-blue-500 dark:text-blue-400" /> {title}
             </h2>
             {children}
         </div>
@@ -31,7 +31,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
         <div className="flex items-center justify-between py-3 border-b border-foreground/5 last:border-0">
             <span className="text-sm text-foreground/80 font-medium">{label}</span>
             <button onClick={() => onChange(!checked)}
-                className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none ${checked ? "bg-indigo-500" : "bg-foreground/20"}`}>
+                className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none ${checked ? "bg-blue-500" : "bg-foreground/20"}`}>
                 <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${checked ? "translate-x-5" : ""}`} />
             </button>
         </div>
@@ -109,7 +109,7 @@ export default function PrivacyPage() {
 
     if (loading) return (
         <div className="min-h-screen bg-background flex items-center justify-center">
-            <Loader2 size={28} className="animate-spin text-indigo-400" />
+            <Loader2 size={28} className="animate-spin text-blue-400" />
         </div>
     );
 
@@ -127,7 +127,7 @@ export default function PrivacyPage() {
         <div className="min-h-screen p-6 space-y-6 bg-background text-foreground max-w-3xl">
             {/* Toast */}
             {toast && (
-                <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 text-white text-sm shadow-2xl">
+                <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white text-sm shadow-2xl">
                     <CheckCircle2 size={14} /> {toast}
                 </div>
             )}
@@ -135,7 +135,7 @@ export default function PrivacyPage() {
             {/* Header */}
             <div>
                 <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                    <Shield size={22} className="text-indigo-500 dark:text-indigo-400" /> Privacy & Data
+                    <Shield size={22} className="text-blue-500 dark:text-blue-400" /> Privacy & Data
                 </h1>
                 <p className="text-sm text-foreground/50 mt-1">Manage your personal data, consent preferences, and privacy rights under GDPR</p>
             </div>
@@ -154,7 +154,7 @@ export default function PrivacyPage() {
                         onChange={(v) => saveConsent("analytics_tracking", v)}
                         label="Analytics & Usage Tracking"
                     />
-                    {savingConsent && <p className="text-xs text-indigo-500 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Saving…</p>}
+                    {savingConsent && <p className="text-xs text-blue-500 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Saving…</p>}
                 </Card>
             )}
 
@@ -162,7 +162,7 @@ export default function PrivacyPage() {
             <Card title="Data Portability (GDPR Art. 20)" icon={FileText}>
                 <p className="text-sm text-foreground/60">Download a complete export of all your personal data including tasks, timesheets, comments, and settings.</p>
                 <button onClick={handleExport} disabled={exporting}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
                     {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                     {exporting ? "Exporting…" : "Export My Data (JSON)"}
                 </button>
@@ -177,7 +177,7 @@ export default function PrivacyPage() {
             <Card title="Data Access Log" icon={Activity}>
                 <p className="text-sm text-foreground/60">Track who has accessed your personal data.</p>
                 <button onClick={() => setShowLog(!showLog)}
-                    className="flex items-center gap-1.5 text-sm text-indigo-500 dark:text-indigo-400 hover:underline">
+                    className="flex items-center gap-1.5 text-sm text-blue-500 dark:text-blue-400 hover:underline">
                     {showLog ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     {showLog ? "Hide" : "Show"} access log
                 </button>

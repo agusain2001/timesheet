@@ -26,7 +26,6 @@ export function Navbar() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [modal, setModal] = useState<"task" | "client" | "project" | "expense" | "support" | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<HTMLDivElement>(null);
@@ -75,27 +74,100 @@ export function Navbar() {
     } catch { }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    if (q) router.push(`/search?q=${encodeURIComponent(q)}`);
-  };
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowUserMenu(false);
-      }
-      if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
-        setShowQuickAdd(false);
-      }
-      if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) {
-        setShowNotifications(false);
-      }
+      // existing refs...
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowUserMenu(false);
+      if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) setShowQuickAdd(false);
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) setShowNotifications(false);
+      // search ref
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowSearchDropdown(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const runSearch = useCallback(async (q: string) => {
+    if (!q.trim()) {
+      setSearchResults([]);
+      setSuggestions([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const token = getToken();
+      // Use the frontend API route which acts as proxy
+      const [res, sugRes] = await Promise.all([
+        fetch(`${API}/api/search?q=${encodeURIComponent(q)}&limit=10`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API}/api/search/suggestions?q=${encodeURIComponent(q)}&limit=5`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data.results || []);
+      } else {
+        setSearchResults([]);
+      }
+
+      if (sugRes.ok) {
+        const sugData = await sugRes.json();
+        setSuggestions(sugData.suggestions || []);
+      } else {
+        setSuggestions([]);
+      }
+    } catch {
+      setSearchResults([]);
+      setSuggestions([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [API]);
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (searchQuery.trim()) {
+      searchTimerRef.current = setTimeout(() => runSearch(searchQuery), 350);
+      setShowSearchDropdown(true);
+    } else {
+      setSearchResults([]);
+      setSuggestions([]);
+      setShowSearchDropdown(false);
+    }
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [searchQuery, runSearch]);
+
+  const handleSearchResultClick = (result: any) => {
+    setShowSearchDropdown(false);
+    setSearchQuery("");
+
+    if (result.url) { router.push(result.url); }
+    else if (result.type === "task") { router.push(`/tasks?id=${result.id}`); }
+    else if (result.type === "project") { router.push(`/projects?id=${result.id}`); }
+    else if (result.type === "user") { router.push(`/employees?id=${result.id}`); }
+  };
+
+  const TYPE_BADGE_MAP: Record<string, string> = {
+    task: "bg-blue-500/20 text-blue-400",
+    project: "bg-blue-500/20 text-blue-400",
+    user: "bg-purple-500/20 text-purple-400",
+    comment: "bg-slate-500/20 text-foreground/60",
+    client: "bg-green-500/20 text-green-400",
+    team: "bg-amber-500/20 text-amber-400",
+  };
 
   if (!mounted) return null;
 
@@ -111,26 +183,93 @@ export function Navbar() {
     <header className="flex items-center justify-between px-8 py-2 transition-colors duration-200">
       <Image src="/logo.png" alt="logo" height={34} width={140} />
 
-      <form onSubmit={handleSearch} className="relative w-96">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none" />
-        <Image
-          className="absolute right-3 top-2.5 h-4 w-4"
-          src="/ai-icon.png"
-          height={20}
-          width={20}
-          alt="ai logo"
-        />
-        <input
-          className={clsx(
-            "w-full rounded-full pl-10 pr-4 py-2 text-sm",
-            isDark ? "bg-[#2A2A2A]/90" : "bg-gray-200/60",
-          )}
-          placeholder="Search…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleSearch(e as any); }}
-        />
-      </form>
+      <div ref={searchRef} className="relative w-96">
+        <form onSubmit={(e) => e.preventDefault()} className="relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-foreground/40 pointer-events-none" />
+          <Image
+            className="absolute right-3 top-2.5 h-4 w-4"
+            src="/ai-icon.png"
+            height={20}
+            width={20}
+            alt="ai logo"
+          />
+          <input
+            className={clsx(
+              "w-full rounded-full pl-10 pr-4 py-2 text-sm text-foreground placeholder-foreground/40 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500/50",
+              isDark ? "bg-[#2A2A2A]/90" : "bg-gray-200/60",
+            )}
+            placeholder="Search…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => { if (searchQuery.trim()) setShowSearchDropdown(true); }}
+          />
+        </form>
+
+        {/* Global Search Dropdown */}
+        {showSearchDropdown && (
+          <div className="absolute top-12 left-0 w-full bg-background border border-foreground/10 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col max-h-[400px]">
+            {isSearching ? (
+              <div className="p-4 text-center text-sm text-foreground/50">
+                Searching...
+              </div>
+            ) : searchResults.length > 0 || suggestions.length > 0 ? (
+              <div className="overflow-y-auto overscroll-contain px-2 py-2 space-y-1">
+                {/* Suggestions Section */}
+                {suggestions.length > 0 && (
+                  <div className="mb-2">
+                    {suggestions.map((sug, idx) => (
+                      <button
+                        key={`sug-${idx}`}
+                        onClick={() => {
+                          setSearchQuery(sug.text);
+                          runSearch(sug.text);
+                        }}
+                        className="w-full text-left flex items-center gap-3 p-2 rounded-lg hover:bg-foreground/[0.05] transition-colors group"
+                      >
+                        <Search className="h-4 w-4 text-foreground/40 shrink-0" />
+                        <span className="text-sm font-medium text-foreground group-hover:text-blue-400 transition-colors truncate">
+                          {sug.text}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {suggestions.length > 0 && searchResults.length > 0 && (
+                  <div className="h-px bg-foreground/10 mx-2 my-2" />
+                )}
+
+                {/* Rich Results Section */}
+                {searchResults.map((result) => (
+                  <button
+                    key={result.id}
+                    onClick={() => handleSearchResultClick(result)}
+                    className="w-full text-left flex items-start gap-3 p-3 rounded-lg hover:bg-foreground/[0.05] transition-colors group"
+                  >
+                    <span className={`shrink-0 mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${TYPE_BADGE_MAP[result.type] || "bg-foreground/10 text-foreground/50"}`}>
+                      {result.type}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground group-hover:text-blue-400 transition-colors truncate">
+                        {result.title}
+                      </p>
+                      {result.subtitle ? (
+                        <p className="text-xs text-foreground/50 mt-0.5 line-clamp-1">{result.subtitle}</p>
+                      ) : result.description ? (
+                        <p className="text-xs text-foreground/50 mt-0.5 line-clamp-1">{result.description}</p>
+                      ) : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 text-center text-sm text-foreground/50">
+                Search not found
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-6">
         <ThemeToggle />
@@ -180,7 +319,7 @@ export function Navbar() {
           >
             <Bell className="w-5 h-5 cursor-pointer" />
             {unreadCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-indigo-500 text-white text-[9px] font-bold flex items-center justify-center pointer-events-none">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center pointer-events-none">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
@@ -209,7 +348,7 @@ export function Navbar() {
                       key={notif.id}
                       className={clsx(
                         "p-4 border-b border-foreground/5 transition hover:bg-foreground/[0.02] cursor-pointer",
-                        !notif.is_read && "bg-indigo-500/5 dark:bg-indigo-500/10"
+                        !notif.is_read && "bg-blue-500/5 dark:bg-blue-500/10"
                       )}
                       onClick={() => {
                         if (notif.link) {
@@ -241,7 +380,7 @@ export function Navbar() {
                     setShowNotifications(false);
                     router.push("/notifications");
                   }}
-                  className="w-full py-2 text-xs font-medium text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+                  className="w-full py-2 text-xs font-medium text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition"
                 >
                   View All Notifications
                 </button>
