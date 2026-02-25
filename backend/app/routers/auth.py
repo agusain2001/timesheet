@@ -3,10 +3,13 @@ from typing import Optional
 import urllib.parse
 import httpx
 import uuid
+import re
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,11 +18,12 @@ from app.schemas import (
     UserCreate, UserResponse, Token, LoginRequest,
     RegisterRequest, OAuthCallbackResponse
 )
-from app.utils import verify_password, get_password_hash, create_access_token
+from app.utils import verify_password, get_password_hash, create_access_token, get_current_active_user
 from app.config import get_settings
 
 router = APIRouter()
 settings = get_settings()
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _create_token_for_user(user: User) -> str:
@@ -35,6 +39,28 @@ def _create_token_for_user(user: User) -> str:
 # Email / Password Auth
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _validate_password_strength(password: str) -> None:
+    """Validate password meets minimum security requirements."""
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+    if not re.search(r'[A-Z]', password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+    if not re.search(r'[a-z]', password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
+    if not re.search(r'[0-9]', password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one digit")
+
+
+def _check_mfa_required(user: User, db) -> bool:
+    """Check if user has MFA enabled."""
+    try:
+        from app.models.templates import MFASettings
+        mfa = db.query(MFASettings).filter(MFASettings.user_id == user.id).first()
+        return mfa is not None and mfa.is_enabled == "true"
+    except Exception:
+        return False
+
+
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new user and return an access token immediately."""
@@ -43,6 +69,9 @@ def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Passwords do not match",
         )
+
+    # Validate password strength
+    _validate_password_strength(user_data.password)
 
     existing = db.query(User).filter(User.email == user_data.email).first()
     if existing:
@@ -78,6 +107,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
 
+    # Check MFA
+    if _check_mfa_required(user, db):
+        return {"access_token": "", "token_type": "bearer", "mfa_required": True, "user_id": str(user.id)}
+
     return {"access_token": _create_token_for_user(user), "token_type": "bearer"}
 
 
@@ -92,6 +125,10 @@ def login_json(login_data: LoginRequest, db: Session = Depends(get_db)):
         )
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
+
+    # Check MFA
+    if _check_mfa_required(user, db):
+        return {"access_token": "", "token_type": "bearer", "mfa_required": True, "user_id": str(user.id)}
 
     return {"access_token": _create_token_for_user(user), "token_type": "bearer"}
 
@@ -192,7 +229,7 @@ async def google_oauth_callback(
     access_token = _create_token_for_user(user)
     redirect_url = (
         f"{settings.oauth_redirect_base_url}/login/oauth-callback"
-        f"?token={access_token}&is_new={str(is_new).lower()}"
+        f"#token={access_token}&is_new={str(is_new).lower()}"
     )
     return RedirectResponse(url=redirect_url)
 
@@ -290,6 +327,33 @@ async def microsoft_oauth_callback(
     access_token = _create_token_for_user(user)
     redirect_url = (
         f"{settings.oauth_redirect_base_url}/login/oauth-callback"
-        f"?token={access_token}&is_new={str(is_new).lower()}"
+        f"#token={access_token}&is_new={str(is_new).lower()}"
     )
     return RedirectResponse(url=redirect_url)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Token Refresh
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Refresh access token. Requires a valid current token."""
+    new_token = _create_token_for_user(current_user)
+    return {"access_token": new_token, "token_type": "bearer"}
+
+
+@router.get("/me")
+def get_me(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get current authenticated user info."""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+    }

@@ -4,7 +4,11 @@ Uses Fernet symmetric encryption with a key from ENCRYPTION_KEY env variable.
 """
 import os
 import base64
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+_encryption_warned = False
 
 try:
     from cryptography.fernet import Fernet
@@ -19,6 +23,14 @@ def _get_fernet() -> Optional["Fernet"]:
         return None
     key = os.environ.get("ENCRYPTION_KEY")
     if not key:
+        global _encryption_warned
+        if not _encryption_warned:
+            logger.warning(
+                "[Encryption] ENCRYPTION_KEY not set. "
+                "Sensitive fields will be stored in PLAINTEXT. "
+                "Set ENCRYPTION_KEY in .env for production."
+            )
+            _encryption_warned = True
         return None
     # Ensure key is valid Fernet key (32 url-safe base64 bytes)
     try:

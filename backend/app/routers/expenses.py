@@ -15,6 +15,7 @@ from app.schemas import (
     ExpenseAuditLogResponse
 )
 from app.utils import get_current_active_user
+from app.utils.role_guards import is_manager, is_admin
 from app.services.file_upload import save_receipt
 from app.services.notification_service import NotificationService
 
@@ -55,7 +56,7 @@ def get_all_expenses(
     query = db.query(Expense)
     
     # Non-admins see their own or pending for approval
-    if current_user.role not in ["admin", "manager"]:
+    if not is_manager(current_user):
         query = query.filter(Expense.user_id == current_user.id)
     elif user_id:
         query = query.filter(Expense.user_id == user_id)
@@ -97,7 +98,7 @@ def get_pending_expenses(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get pending expenses for approval (managers only)."""
-    if current_user.role not in ["admin", "manager"]:
+    if not is_manager(current_user):
         raise HTTPException(status_code=403, detail="Manager access required")
     
     expenses = db.query(Expense).filter(
@@ -170,7 +171,7 @@ def get_expense(
         raise HTTPException(status_code=404, detail="Expense not found")
     
     # Check access
-    if current_user.role not in ["admin", "manager"] and expense.user_id != current_user.id:
+    if not is_manager(current_user) and expense.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     expense.user = db.query(User).filter(User.id == expense.user_id).first()

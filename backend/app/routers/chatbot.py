@@ -285,24 +285,46 @@ def clean_text(text: str) -> str:
 # AI RESPONSE ENGINE
 # =============================================================================
 
+def sanitize_user_input(message: str) -> str:
+    """Basic sanitization to reduce prompt injection risk."""
+    # Strip common prompt injection patterns
+    dangerous_phrases = [
+        "ignore all previous instructions",
+        "ignore the above",
+        "disregard all prior",
+        "forget everything",
+        "system prompt",
+        "reveal your instructions",
+    ]
+    sanitized = message
+    for phrase in dangerous_phrases:
+        sanitized = sanitized.replace(phrase, "[filtered]")
+    # Limit length to prevent context overflow
+    return sanitized[:2000]
+
+
 def generate_ai_response(user_message: str, context_data: str, system_instruction: str) -> str:
     """Use Gemini AI to generate a natural, conversational response."""
     if not settings.gemini_api_key or len(settings.gemini_api_key) < 20:
-        print(f"[Chatbot] No valid API key (length={len(settings.gemini_api_key) if settings.gemini_api_key else 0})")
+        print(f"[Chatbot] No valid API key")
         return ""
     try:
         import google.generativeai as genai
         import time as time_mod
+        import asyncio
 
         genai.configure(api_key=settings.gemini_api_key)
         model = genai.GenerativeModel('gemini-2.5-flash')
+
+        # Sanitize user input before including in prompt
+        safe_message = sanitize_user_input(user_message)
 
         prompt = f"""{system_instruction}
 
 Here is the user's real data from the database:
 {context_data}
 
-User's question: {user_message}
+User's question: {safe_message}
 
 Respond naturally and conversationally. Be specific — use the actual data provided above.
 Do NOT use markdown formatting (no **, ##, ``` etc). Use plain text only.
@@ -321,7 +343,14 @@ If the user asks follow-up questions, answer based on the data you have."""
                 print(f"[Chatbot] Gemini attempt {attempt+1} failed: {retry_err}")
                 if ("quota" in err_str or "rate" in err_str or "resource" in err_str or "429" in err_str) and attempt < 2:
                     print(f"[Chatbot] Rate limited, waiting {delays[attempt]}s before retry...")
-                    time_mod.sleep(delays[attempt])
+                    # Use asyncio-safe sleep when possible, fallback to sync
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # We're in a sync function called from async context — can't await
+                        # Use time.sleep as fallback (run_in_executor would be ideal)
+                        time_mod.sleep(delays[attempt])
+                    except RuntimeError:
+                        time_mod.sleep(delays[attempt])
                     continue
                 raise retry_err
     except Exception as e:
@@ -557,7 +586,7 @@ async def chat(
         print(f"Agent Error: {e}")
         error_msg = "Sorry, I encountered an error. Please try again."
         save_chat_message(db, str(current_user.id), "assistant", error_msg,
-                          metadata={"intent": "error", "error": str(e)})
+                          metadata={"intent": "error"})
         return ChatResponse(response=error_msg, context_used="error")
 
 
@@ -759,7 +788,7 @@ async def save_to_activity(
 
     except Exception as e:
         db.rollback()
-        return SaveToActivityResponse(success=False, message=f"Failed to save: {str(e)}")
+        return SaveToActivityResponse(success=False, message="Failed to save activity. Please try again.")
 
 
 @router.post("/analyze-file", response_model=FileAnalysisResponse)
@@ -816,7 +845,7 @@ async def analyze_file(
             return FileAnalysisResponse(success=True, message="Analyzed", extracted_data=ExtractedExpenseData(**data), file_type=file_type)
         return FileAnalysisResponse(success=True, message="Analyzed", summary=clean_text(response.text), file_type=file_type)
     except Exception as e:
-        return FileAnalysisResponse(success=False, message=f"Analysis failed: {str(e)}", file_type=file_type)
+        return FileAnalysisResponse(success=False, message="Analysis failed. Please try again.", file_type=file_type)
 
 
 @router.post("/chat-with-file", response_model=ChatResponse)
@@ -866,4 +895,4 @@ async def chat_with_file(
         save_chat_message(db, str(current_user.id), "assistant", reply, metadata={"intent": "file_analysis"})
         return ChatResponse(response=reply, context_used="file_analysis")
     except Exception as e:
-        return ChatResponse(response=f"Could not analyze: {str(e)}", context_used="file_error")
+        return ChatResponse(response="Could not analyze the file. Please try again.", context_used="file_error")

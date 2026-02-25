@@ -11,6 +11,12 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 google-generativeai==0.3.2
 alembic==1.13.1
+httpx==0.27.0
+
+# Security
+slowapi==0.1.9
+pyotp==2.9.0
+cryptography>=42.0.0
 
 # Expense Reports
 reportlab==4.0.9
@@ -21,4 +27,3 @@ Pillow==10.2.0
 PyMuPDF>=1.24.0
 langchain-google-genai>=2.0.0
 langgraph>=0.2.0
-

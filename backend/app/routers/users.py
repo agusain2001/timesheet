@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models import User, Project, ProjectManager
 from app.schemas import UserResponse, UserUpdate, UserCreate, UserProfileResponse, UserProfileUpdate
 from app.utils import get_current_active_user, get_password_hash
+from app.utils.role_guards import is_admin, is_manager
 
 router = APIRouter()
 
@@ -21,7 +22,7 @@ def create_user(
     current_user: User = Depends(get_current_active_user)
 ):
     """Create a new user (admin only)."""
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Check if email exists
@@ -187,7 +188,6 @@ def update_user_profile(
     return profile_response
 
 
-@router.get("/", response_model=List[UserResponse])
 @router.get("/", response_model=List[UserResponse])
 def get_all_users(
     skip: int = 0,
@@ -567,7 +567,7 @@ def update_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Only admin or the user themselves can update
-    if current_user.role != "admin" and current_user.id != user_id:
+    if not is_admin(current_user) and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     update_data = user_data.model_dump(exclude_unset=True)
@@ -585,13 +585,23 @@ def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a user (admin only)."""
-    if current_user.role != "admin":
+    """Delete a user (admin only). Cannot delete self or last admin."""
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Prevent self-deletion
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
     
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent deleting the last admin
+    if is_admin(user):
+        admin_count = db.query(User).filter(User.role.in_(["admin", "system_admin", "org_admin"])).count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete the last admin user")
     
     db.delete(user)
     db.commit()

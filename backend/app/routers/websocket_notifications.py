@@ -1,9 +1,11 @@
 """WebSocket router for real-time notifications."""
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.services.websocket_manager import manager, NotificationType
+from app.utils.security import get_current_active_user
+from app.utils.role_guards import is_admin
 import json
 
 router = APIRouter()
@@ -95,14 +97,24 @@ async def websocket_notifications(
 
 
 @router.get("/online-users")
-async def get_online_users():
-    """Get list of currently online user IDs."""
+async def get_online_users(
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get list of currently online user IDs (admin only)."""
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
     return {"online_users": manager.get_online_users()}
 
 
 @router.post("/send-test-notification")
-async def send_test_notification(user_id: str, message: str):
-    """Send a test notification (for debugging)."""
+async def send_test_notification(
+    user_id: str,
+    message: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Send a test notification (admin only, for debugging)."""
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
     from app.services.websocket_manager import send_notification
     await send_notification(
         user_id=user_id,

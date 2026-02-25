@@ -1,0 +1,128 @@
+version: "3.9"
+
+# ════════════════════════════════════════════════════════════════
+# LightIDEA — Full Stack Docker Compose
+# ════════════════════════════════════════════════════════════════
+#
+# Services:
+#   db       — PostgreSQL 16
+#   backend  — FastAPI (Python 3.11)
+#   frontend — Next.js 15 (standalone)
+#   nginx    — Reverse proxy (port 80/443)
+#
+# Usage:
+#   Development:   docker compose up
+#   Production:    docker compose -f docker-compose.yml up -d
+# ════════════════════════════════════════════════════════════════
+
+services:
+
+  # ─── PostgreSQL Database ──────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: lightidea_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lightidea}
+      POSTGRES_USER: ${POSTGRES_USER:-lightidea}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?DB password required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432" # Remove in production; internal-only
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lightidea} -d ${POSTGRES_DB:-lightidea}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - lightidea_net
+
+  # ─── FastAPI Backend ──────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: lightidea_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override DATABASE_URL to use containerised PostgreSQL
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lightidea}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-lightidea}
+      # CORS must include the frontend origin
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://frontend:3000}
+    volumes:
+      # Persist uploaded files (receipts, attachments) outside the container
+      - uploads_data:/app/uploads
+    ports:
+      - "8000:8000" # Remove in production; nginx proxies internally
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - lightidea_net
+
+  # ─── Next.js Frontend ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        # The API URL must be the public-facing URL — resolves at BUILD time for Next.js
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: lightidea_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000" # Remove in production; nginx proxies internally
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - lightidea_net
+
+  # ─── Nginx Reverse Proxy ──────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: lightidea_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro # Mount SSL certs here
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - lightidea_net
+
+# ════════════════════════════════════════════════════════════════
+# Named Volumes
+# ════════════════════════════════════════════════════════════════
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+# ════════════════════════════════════════════════════════════════
+# Networks
+# ════════════════════════════════════════════════════════════════
+networks:
+  lightidea_net:
+    driver: bridge

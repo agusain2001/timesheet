@@ -6,6 +6,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 from fastapi import UploadFile, HTTPException
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Configure upload directory
@@ -87,7 +90,8 @@ async def save_receipt(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+        logger.error(f"Failed to save receipt file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save file")
     
     # Return relative path
     return str(file_path.relative_to(UPLOAD_DIR.parent))

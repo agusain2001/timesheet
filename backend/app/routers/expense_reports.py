@@ -14,8 +14,11 @@ from app.schemas import (
     ExpenseReportSummary, ExpenseAuditLogResponse, TaxReportItem
 )
 from app.utils import get_current_active_user
+from app.utils.role_guards import is_manager
 from app.services.report_generator import generate_expense_excel, generate_expense_pdf, generate_tax_report_excel
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -28,7 +31,7 @@ def build_report_data(
     query = db.query(Expense)
     
     # Role-based filtering
-    if current_user.role not in ["admin", "manager"]:
+    if not is_manager(current_user):
         query = query.filter(Expense.user_id == current_user.id)
     elif filters.user_id:
         query = query.filter(Expense.user_id == filters.user_id)
@@ -154,8 +157,9 @@ def export_expenses_excel(
     
     try:
         excel_bytes = generate_expense_excel(items, summary, "Expense Report")
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Excel export failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate Excel report")
     
     filename = f"expense_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     
@@ -189,8 +193,9 @@ def export_expenses_pdf(
     
     try:
         pdf_bytes = generate_expense_pdf(items, summary, "Expense Report")
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"PDF export failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate PDF report")
     
     filename = f"expense_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     
@@ -214,7 +219,7 @@ def get_tax_report(
         func.extract('year', ExpenseItem.date) == year
     )
     
-    if current_user.role not in ["admin", "manager"]:
+    if not is_manager(current_user):
         query = query.filter(Expense.user_id == current_user.id)
     
     items = query.all()
@@ -253,7 +258,7 @@ def export_tax_report_excel(
         func.extract('year', ExpenseItem.date) == year
     )
     
-    if current_user.role not in ["admin", "manager"]:
+    if not is_manager(current_user):
         query = query.filter(Expense.user_id == current_user.id)
     
     items = query.all()
@@ -273,8 +278,9 @@ def export_tax_report_excel(
     
     try:
         excel_bytes = generate_tax_report_excel(tax_items, year)
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Tax report export failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate tax report")
     
     filename = f"tax_report_{year}.xlsx"
     
@@ -297,7 +303,7 @@ def get_audit_logs(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get expense audit logs."""
-    if current_user.role not in ["admin", "manager"]:
+    if not is_manager(current_user):
         raise HTTPException(status_code=403, detail="Admin/Manager access required")
     
     query = db.query(ExpenseAuditLog)
