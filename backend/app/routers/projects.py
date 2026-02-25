@@ -1,14 +1,21 @@
-from typing import List
+from typing import List, Optional
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Project, ProjectManager, User
+from app.models import Project, ProjectManager, User, Task
 from app.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse,
     ProjectManagerResponse
 )
-from app.utils import get_current_active_user
+from app.utils import (
+    get_current_active_user,
+    is_manager,
+    is_admin,
+    can_modify_project,
+    ForbiddenError,
+    NotFoundError,
+)
 
 router = APIRouter()
 
@@ -42,7 +49,7 @@ def build_project_response(project: Project, db: Session) -> dict:
     }
 
 
-@router.get("/", response_model=List[ProjectResponse])
+@router.get("", response_model=List[ProjectResponse])
 def get_all_projects(
     skip: int = 0,
     limit: int = 100,
@@ -69,13 +76,15 @@ def get_all_projects(
     return [build_project_response(p, db) for p in projects]
 
 
-@router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(
     project_data: ProjectCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Create a new project."""
+    """Create a new project. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise ForbiddenError("create projects")
     db_project = Project(
         name=project_data.name,
         client_id=project_data.client_id,
@@ -130,10 +139,12 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update a project."""
+    """Update a project. Managers or assigned project managers can update."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFoundError("Project", project_id)
+    if not can_modify_project(project, current_user):
+        raise ForbiddenError("modify this project")
     
     # Update basic fields
     if project_data.name is not None:
@@ -186,11 +197,65 @@ def delete_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a project."""
+    """Delete a project. Requires admin or org_admin role."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise NotFoundError("Project", project_id)
+    if not is_admin(current_user):
+        raise ForbiddenError("delete projects")
+    db.delete(project)
+    db.commit()
+    return None
+
+
+
+@router.get("/{project_id}/members")
+def get_project_members(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all members associated with a project (managers + task assignees)."""
+    from app.models import Task
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    db.delete(project)
-    db.commit()
-    return None
+    member_ids = set()
+    members = []
+    
+    # Add project managers
+    for pm in project.project_managers:
+        if pm.user_id not in member_ids:
+            member_ids.add(pm.user_id)
+            user = db.query(User).filter(User.id == pm.user_id).first()
+            if user:
+                members.append({
+                    "id": user.id,
+                    "full_name": user.full_name,
+                    "email": user.email,
+                    "position": user.position,
+                    "role": pm.role,
+                    "avatar_url": user.avatar_url,
+                    "employee_code": getattr(user, "employee_code", None),
+                })
+    
+    # Add task assignees
+    tasks = db.query(Task).filter(Task.project_id == project_id).all()
+    for task in tasks:
+        if task.assignee_id and task.assignee_id not in member_ids:
+            member_ids.add(task.assignee_id)
+            user = db.query(User).filter(User.id == task.assignee_id).first()
+            if user:
+                members.append({
+                    "id": user.id,
+                    "full_name": user.full_name,
+                    "email": user.email,
+                    "position": user.position,
+                    "role": "member",
+                    "avatar_url": user.avatar_url,
+                    "employee_code": getattr(user, "employee_code", None),
+                })
+    
+    return members
+

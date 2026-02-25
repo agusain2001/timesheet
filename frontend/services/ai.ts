@@ -93,7 +93,7 @@ export interface AIConversation {
     }>;
 }
 
-const BASE_URL = "/ai";
+const BASE_URL = "/api/ai";
 
 // =============== Priority Optimization ===============
 

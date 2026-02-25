@@ -139,7 +139,7 @@ export interface TimeLogsParams {
     [key: string]: string | number | boolean | undefined;
 }
 
-const BASE_URL = "/time-tracking";
+const BASE_URL = "/api/time-tracking";
 
 // =============== Time Logs CRUD ===============
 

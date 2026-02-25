@@ -17,7 +17,7 @@ export function GenericTableHeader<T>({
 }: Props<T>) {
   return (
     <div
-      className={`${gridColsClass} px-6 py-3 text-sm border-t border-b border-foreground/10 dark:border-white/10`}
+      className={`${gridColsClass} px-6 py-3 text-sm border-t border-b border-foreground/10 dark:border-foreground/10`}
     >
       {columns.map((column, index) => {
         const colSpanClass = column.colSpan ? `col-span-${column.colSpan}` : "";

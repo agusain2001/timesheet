@@ -38,7 +38,7 @@ from app.models.expense_audit_log import ExpenseAuditLog
 from app.models.approval_rule import ApprovalRule
 
 # Support
-from app.models.support import SupportRequest, SupportStatus
+from app.models.support import SupportRequest, SupportStatus, SupportPriority
 
 # Notification models
 from app.models.notification import Notification, NotificationPreference, NotificationRule
@@ -60,6 +60,12 @@ from app.models.saved_view import SavedView, ViewShare
 
 # Email Settings models
 from app.models.email_settings import EmailPreference, EmailLog, TaskReminder
+
+# Custom Fields models
+from app.models.custom_field import CustomFieldDefinition, CustomFieldValue, FieldType
+
+# Chat History
+from app.models.chat_history import ChatHistory
 
 
 __all__ = [
@@ -98,7 +104,7 @@ __all__ = [
     "ApprovalRule",
     
     # Support
-    "SupportRequest", "SupportStatus",
+    "SupportRequest", "SupportStatus", "SupportPriority",
     
     # Notifications
     "Notification", "NotificationPreference", "NotificationRule",
@@ -118,5 +124,11 @@ __all__ = [
     
     # Email Settings
     "EmailPreference", "EmailLog", "TaskReminder",
+
+    # Custom Fields
+    "CustomFieldDefinition", "CustomFieldValue", "FieldType",
+
+    # Chat History
+    "ChatHistory",
 ]
 

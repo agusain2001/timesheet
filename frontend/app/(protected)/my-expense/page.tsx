@@ -1,414 +1,405 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
+import { getToken } from "@/lib/auth";
 import {
-    Plus, Search, Filter, Download, ChevronDown, Receipt,
-    Clock, CheckCircle, XCircle, DollarSign, AlertCircle,
-    MoreHorizontal, Eye, Edit, Trash2, Send, FileText
-} from 'lucide-react';
-import {
-    getMyExpenses, getExpenseDashboardStats,
-    deleteExpense, submitExpense,
-    type Expense, type ExpenseStatus, type ExpenseDashboardStats,
-    getStatusColor, getStatusLabel, formatCurrency
-} from '@/services/expenses';
+    getMyExpenses,
+    deleteExpense,
+    submitExpense,
+    type Expense,
+    type ExpenseStatus,
+    type ExpensesParams,
+} from "@/services/expenses";
 
-// Status tabs configuration
-const STATUS_TABS = [
-    { key: 'all', label: 'All Expenses', icon: FileText },
-    { key: 'draft', label: 'Drafts', icon: Edit },
-    { key: 'submitted', label: 'Submitted', icon: Send },
-    { key: 'pending', label: 'Pending', icon: Clock },
-    { key: 'approved', label: 'Approved', icon: CheckCircle },
-    { key: 'rejected', label: 'Rejected', icon: XCircle },
-    { key: 'paid', label: 'Paid', icon: DollarSign },
-] as const;
+import NewExpenseModal from "@/components/NewExpenseModal";
 
-export default function ExpensesPage() {
-    const [expenses, setExpenses] = useState<Expense[]>([]);
-    const [stats, setStats] = useState<ExpenseDashboardStats | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<string>('all');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
-    const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+// ============ Config ============
 
-    // Load expenses
-    const loadExpenses = useCallback(async () => {
-        try {
-            setLoading(true);
-            const params = activeTab !== 'all' ? { status: activeTab as ExpenseStatus } : {};
-            const [expensesData, statsData] = await Promise.all([
-                getMyExpenses(params),
-                getExpenseDashboardStats()
-            ]);
-            setExpenses(expensesData);
-            setStats(statsData);
-        } catch (error) {
-            console.error('Failed to load expenses:', error);
-        } finally {
-            setLoading(false);
-        }
-    }, [activeTab]);
+const STATUS_FILTERS: { key: ExpenseStatus | "all"; label: string; color: string }[] = [
+    { key: "all", label: "All", color: "#3b82f6" },
+    { key: "draft", label: "Draft", color: "#6b7280" },
+    { key: "pending", label: "Pending", color: "#eab308" },
+    { key: "approved", label: "Approved", color: "#22c55e" },
+    { key: "rejected", label: "Rejected", color: "#ef4444" },
+    { key: "returned", label: "Returned For Edit", color: "#f97316" },
+];
 
-    useEffect(() => {
-        loadExpenses();
-    }, [loadExpenses]);
+const CATEGORY_MAP: Record<string, string> = {
+    accommodation: "Accommodation",
+    travel: "Travel",
+    meal: "Meals",
+    transport: "Transport",
+    supplies: "Office Supplies",
+    communication: "Communication",
+    entertainment: "Entertainment",
+    software: "Software",
+    equipment: "Equipment",
+    other: "Other",
+};
 
-    // Filter expenses by search
-    const filteredExpenses = expenses.filter(expense =>
-        expense.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        expense.vendor?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        expense.description?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+// ============ Helpers ============
 
-    // Handle expense deletion
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this expense?')) return;
-        try {
-            await deleteExpense(id);
-            setExpenses(prev => prev.filter(e => e.id !== id));
-            setActionMenuId(null);
-        } catch (error) {
-            console.error('Failed to delete expense:', error);
-            alert('Failed to delete expense');
-        }
-    };
+function formatDate(dateStr: string): string {
+    try {
+        return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch { return dateStr; }
+}
 
-    // Handle expense submission
-    const handleSubmit = async (id: string) => {
-        try {
-            const updated = await submitExpense(id);
-            setExpenses(prev => prev.map(e => e.id === id ? updated : e));
-            setActionMenuId(null);
-        } catch (error) {
-            console.error('Failed to submit expense:', error);
-            alert('Failed to submit expense');
-        }
-    };
+function getCategoryLabel(expense: Expense): string {
+    if (expense.items && expense.items.length > 0) {
+        return CATEGORY_MAP[expense.items[0].expense_type] || expense.items[0].expense_type || "—";
+    }
+    return "—";
+}
 
-    // Toggle expense selection
-    const toggleSelection = (id: string) => {
-        setSelectedExpenses(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) {
-                next.delete(id);
-            } else {
-                next.add(id);
-            }
-            return next;
-        });
-    };
+// ============ Sub-components ============
 
-    // Select all visible expenses
-    const selectAll = () => {
-        if (selectedExpenses.size === filteredExpenses.length) {
-            setSelectedExpenses(new Set());
-        } else {
-            setSelectedExpenses(new Set(filteredExpenses.map(e => e.id)));
-        }
-    };
-
+function StatusPill({ status }: { status: string }) {
+    const cfg = STATUS_FILTERS.find((s) => s.key === status);
+    const color = cfg?.color || "#6b7280";
+    const label = cfg?.label || status.charAt(0).toUpperCase() + status.slice(1);
     return (
-        <div className="expenses-page space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold">Expenses</h1>
-                    <p className="text-foreground/60 text-sm mt-1">
-                        Manage your expense claims and reimbursements
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <Link
-                        href="/my-expense/analytics"
-                        className="px-4 py-2 bg-foreground/5 hover:bg-foreground/10 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                        <Receipt className="w-4 h-4" />
-                        Analytics
-                    </Link>
-                    <Link
-                        href="/my-expense/create"
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 text-white"
-                    >
-                        <Plus className="w-4 h-4" />
-                        New Expense
-                    </Link>
-                </div>
-            </div>
+        <span
+            className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap"
+            style={{ background: `${color}20`, color }}
+        >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+            {label}
+        </span>
+    );
+}
 
-            {/* Stats Cards */}
-            {stats && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard
-                        title="Total Expenses"
-                        value={formatCurrency(stats.total_expenses)}
-                        icon={DollarSign}
-                        color="blue"
-                    />
-                    <StatCard
-                        title="My Expenses"
-                        value={stats.my_expenses_count.toString()}
-                        icon={FileText}
-                        color="purple"
-                    />
-                    <StatCard
-                        title="Pending Approval"
-                        value={stats.my_pending_count.toString()}
-                        icon={Clock}
-                        color="yellow"
-                    />
-                    <StatCard
-                        title="Approved This Month"
-                        value={stats.approved_this_month.toString()}
-                        icon={CheckCircle}
-                        color="green"
-                    />
-                </div>
-            )}
+function Skeleton({ className }: { className?: string }) {
+    return <div className={`animate-pulse bg-foreground/10 rounded ${className || ""}`} />;
+}
 
-            {/* Filters & Search */}
-            <div className="bg-foreground/5 rounded-xl p-4 space-y-4">
-                {/* Status Tabs */}
-                <div className="flex flex-wrap gap-2">
-                    {STATUS_TABS.map(tab => {
-                        const Icon = tab.icon;
-                        const isActive = activeTab === tab.key;
-                        return (
-                            <button
-                                key={tab.key}
-                                onClick={() => setActiveTab(tab.key)}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${isActive
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-foreground/5 hover:bg-foreground/10 text-foreground/70'
-                                    }`}
-                            >
-                                <Icon className="w-4 h-4" />
-                                {tab.label}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Search & Actions */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
-                        <input
-                            type="text"
-                            placeholder="Search expenses..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-background border border-foreground/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button className="px-3 py-2 bg-foreground/5 hover:bg-foreground/10 rounded-lg text-sm flex items-center gap-2">
-                            <Filter className="w-4 h-4" />
-                            Filters
-                        </button>
-                        <button className="px-3 py-2 bg-foreground/5 hover:bg-foreground/10 rounded-lg text-sm flex items-center gap-2">
-                            <Download className="w-4 h-4" />
-                            Export
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Expenses Table */}
-            <div className="bg-foreground/5 rounded-xl overflow-hidden">
-                <table className="w-full">
-                    <thead>
-                        <tr className="border-b border-foreground/10">
-                            <th className="px-4 py-3 text-left">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedExpenses.size === filteredExpenses.length && filteredExpenses.length > 0}
-                                    onChange={selectAll}
-                                    className="rounded border-foreground/20"
-                                />
-                            </th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-foreground/60">Title</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-foreground/60 hidden md:table-cell">Vendor</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium text-foreground/60">Amount</th>
-                            <th className="px-4 py-3 text-center text-sm font-medium text-foreground/60">Status</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-foreground/60 hidden lg:table-cell">Date</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium text-foreground/60">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr>
-                                <td colSpan={7} className="px-4 py-12 text-center text-foreground/50">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                        Loading expenses...
-                                    </div>
-                                </td>
-                            </tr>
-                        ) : filteredExpenses.length === 0 ? (
-                            <tr>
-                                <td colSpan={7} className="px-4 py-12 text-center text-foreground/50">
-                                    <Receipt className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                                    <p>No expenses found</p>
-                                    <Link
-                                        href="/my-expense/create"
-                                        className="text-blue-400 hover:text-blue-300 text-sm mt-2 inline-block"
-                                    >
-                                        Create your first expense
-                                    </Link>
-                                </td>
-                            </tr>
-                        ) : (
-                            filteredExpenses.map(expense => (
-                                <tr
-                                    key={expense.id}
-                                    className="border-b border-foreground/5 hover:bg-foreground/5 transition-colors"
-                                >
-                                    <td className="px-4 py-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedExpenses.has(expense.id)}
-                                            onChange={() => toggleSelection(expense.id)}
-                                            className="rounded border-foreground/20"
-                                        />
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <Link
-                                            href={`/my-expense/${expense.id}`}
-                                            className="font-medium hover:text-blue-400 transition-colors"
-                                        >
-                                            {expense.title}
-                                        </Link>
-                                        {expense.description && (
-                                            <p className="text-xs text-foreground/50 mt-0.5 truncate max-w-[200px]">
-                                                {expense.description}
-                                            </p>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-foreground/70 hidden md:table-cell">
-                                        {expense.vendor || '-'}
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-mono">
-                                        {formatCurrency(expense.total_amount, expense.currency)}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
-                                            {getStatusLabel(expense.status)}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-foreground/60 text-sm hidden lg:table-cell">
-                                        {new Date(expense.created_at).toLocaleDateString()}
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <div className="relative inline-block">
-                                            <button
-                                                onClick={() => setActionMenuId(actionMenuId === expense.id ? null : expense.id)}
-                                                className="p-1.5 hover:bg-foreground/10 rounded-lg transition-colors"
-                                            >
-                                                <MoreHorizontal className="w-4 h-4" />
-                                            </button>
-                                            {actionMenuId === expense.id && (
-                                                <div className="absolute right-0 top-full mt-1 w-40 bg-background border border-foreground/10 rounded-lg shadow-lg z-10 py-1">
-                                                    <Link
-                                                        href={`/my-expense/${expense.id}`}
-                                                        className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-foreground/5"
-                                                    >
-                                                        <Eye className="w-4 h-4" />
-                                                        View
-                                                    </Link>
-                                                    {expense.status === 'draft' && (
-                                                        <>
-                                                            <Link
-                                                                href={`/my-expense/${expense.id}/edit`}
-                                                                className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-foreground/5"
-                                                            >
-                                                                <Edit className="w-4 h-4" />
-                                                                Edit
-                                                            </Link>
-                                                            <button
-                                                                onClick={() => handleSubmit(expense.id)}
-                                                                className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-foreground/5 w-full text-left text-blue-400"
-                                                            >
-                                                                <Send className="w-4 h-4" />
-                                                                Submit
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDelete(expense.id)}
-                                                                className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-foreground/5 w-full text-left text-red-400"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                                Delete
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Bulk Actions */}
-            {selectedExpenses.size > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl px-4 py-3 flex items-center gap-4">
-                    <span className="text-sm text-foreground/70">
-                        {selectedExpenses.size} selected
-                    </span>
-                    <button
-                        onClick={() => setSelectedExpenses(new Set())}
-                        className="text-sm text-foreground/60 hover:text-foreground"
-                    >
-                        Clear
-                    </button>
-                    <div className="w-px h-6 bg-foreground/20" />
-                    <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm">
-                        Submit All
-                    </button>
-                    <button className="px-3 py-1.5 bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded-lg text-sm">
-                        Delete All
-                    </button>
-                </div>
-            )}
+function PageSkeleton() {
+    return (
+        <div className="space-y-6 max-w-[1400px] mx-auto">
+            <div className="flex justify-between items-center"><Skeleton className="h-8 w-40" /><Skeleton className="h-10 w-36 rounded-lg" /></div>
+            <div className="flex gap-3">{[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-8 w-24 rounded-full" />)}</div>
+            <Skeleton className="h-64 rounded-xl" />
         </div>
     );
 }
 
-// Stat Card Component
-function StatCard({
-    title,
-    value,
-    icon: Icon,
-    color
+function EmptyState({ onAdd }: { onAdd: () => void }) {
+    return (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+            <h3 className="text-lg font-semibold text-foreground/80 mb-2">No expense requests to Track and manage your expense view</h3>
+            <p className="text-sm text-foreground/40 max-w-md mb-1">Manage and track your expenses with ease, submit requests for approval, and keep all</p>
+            <p className="text-sm text-foreground/40 max-w-md mb-6">expense records organized in one place.</p>
+            <button onClick={onAdd} className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg border border-foreground/15 text-foreground hover:bg-foreground/5 transition">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                New Expense
+            </button>
+        </div>
+    );
+}
+
+// ============ Expense Row ============
+
+function ExpenseRow({
+    expense, isMenuOpen, onMenuToggle, onCloseMenu, onDelete, onSubmit, onEdit, onViewReceipt,
 }: {
-    title: string;
-    value: string;
-    icon: React.ComponentType<{ className?: string }>;
-    color: 'blue' | 'purple' | 'yellow' | 'green'
+    expense: Expense;
+    isMenuOpen: boolean;
+    onMenuToggle: () => void;
+    onCloseMenu: () => void;
+    onDelete: () => void;
+    onSubmit: () => void;
+    onEdit: () => void;
+    onViewReceipt: () => void;
 }) {
-    const colorClasses = {
-        blue: 'bg-blue-500/20 text-blue-400',
-        purple: 'bg-purple-500/20 text-purple-400',
-        yellow: 'bg-yellow-500/20 text-yellow-400',
-        green: 'bg-green-500/20 text-green-400',
-    };
+    const btnRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+
+    useEffect(() => {
+        if (isMenuOpen && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setMenuPos({ top: rect.bottom + 4, left: rect.right - 200 });
+        }
+    }, [isMenuOpen]);
+
+    useEffect(() => {
+        if (!isMenuOpen) return;
+        function handler(e: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node) && btnRef.current && !btnRef.current.contains(e.target as Node)) onCloseMenu();
+        }
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [isMenuOpen, onCloseMenu]);
+
+    const itemCount = expense.items?.length || 0;
+    const isDraft = expense.status === "draft";
+    const canSubmit = expense.status === "draft" || expense.status === "returned";
 
     return (
-        <div className="bg-foreground/5 rounded-xl p-4">
-            <div className="flex items-start justify-between">
-                <div>
-                    <p className="text-sm text-foreground/60">{title}</p>
-                    <p className="text-2xl font-bold mt-1">{value}</p>
-                </div>
-                <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
-                    <Icon className="w-5 h-5" />
+        <tr className="border-t border-foreground/5 hover:bg-foreground/[0.02] transition">
+            <td className="py-3 pl-4 w-10">
+                <input type="checkbox" className="rounded border-foreground/20 bg-transparent" />
+            </td>
+            <td className="py-3 pr-3">
+                <span className="text-sm text-foreground/90">{expense.title}</span>
+            </td>
+            <td className="py-3 pr-3">
+                <span className="text-sm text-foreground/60">{getCategoryLabel(expense)}</span>
+            </td>
+            <td className="py-3 pr-3 text-sm text-foreground/60">
+                {formatDate(expense.created_at)}
+            </td>
+            <td className="py-3 pr-3 text-sm text-foreground/60 text-center">
+                {itemCount}
+            </td>
+            <td className="py-3 pr-3 text-sm text-foreground/80">
+                {`${(expense.total_amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} ${expense.currency || "EGP"}`}
+            </td>
+            <td className="py-3 pr-3 text-sm text-foreground/60">
+                {expense.project_name || "—"}
+            </td>
+            <td className="py-3 pr-3">
+                <StatusPill status={expense.status} />
+            </td>
+            <td className="py-3 pr-4 w-10">
+                <button ref={btnRef} onClick={onMenuToggle} className="p-1 rounded hover:bg-foreground/10 text-foreground/40 hover:text-foreground transition">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01" />
+                    </svg>
+                </button>
+                {isMenuOpen && createPortal(
+                    <div ref={menuRef} className="fixed w-[200px] rounded-lg border border-foreground/10 bg-background shadow-2xl z-[9999] py-1 overflow-hidden" style={{ top: menuPos.top, left: menuPos.left }}>
+                        <ActionBtn icon="🧾" label="View Receipt" onClick={() => { onCloseMenu(); onViewReceipt(); }} />
+                        <ActionBtn icon="✏️" label="Edit Expense" onClick={() => { onCloseMenu(); onEdit(); }} />
+                        {canSubmit && (
+                            <ActionBtn icon="📤" label="Submit for Approval" onClick={() => { onCloseMenu(); onSubmit(); }} />
+                        )}
+                        <div className="border-t border-foreground/5 my-1" />
+                        {isDraft && (
+                            <button onClick={() => { onCloseMenu(); onDelete(); }} className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-500/10 transition flex items-center gap-2">
+                                <span>🗑</span> Delete
+                            </button>
+                        )}
+                    </div>,
+                    document.body
+                )}
+            </td>
+        </tr>
+    );
+}
+
+function ActionBtn({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+    return (
+        <button onClick={onClick} className="w-full text-left px-3 py-2 text-xs text-foreground/80 hover:bg-foreground/5 transition flex items-center gap-2">
+            <span>{icon}</span> {label}
+        </button>
+    );
+}
+
+// ============ Delete Confirmation ============
+
+function DeleteExpenseModal({ isOpen, title, onClose, onConfirm, isDeleting }: {
+    isOpen: boolean; title: string; onClose: () => void; onConfirm: () => void; isDeleting: boolean;
+}) {
+    if (!isOpen) return null;
+    return createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onClick={onClose}>
+            <div className="bg-background border border-foreground/10 rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Delete Expense</h3>
+                <p className="text-sm text-foreground/60 mb-6">Are you sure you want to delete <strong>&quot;{title}&quot;</strong>? This action cannot be undone.</p>
+                <div className="flex justify-end gap-3">
+                    <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-foreground/15 text-foreground hover:bg-foreground/5 transition">Cancel</button>
+                    <button onClick={onConfirm} disabled={isDeleting} className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-500 transition disabled:opacity-50">
+                        {isDeleting ? "Deleting..." : "Delete"}
+                    </button>
                 </div>
             </div>
+        </div>,
+        document.body
+    );
+}
+
+// ============ Main Page ============
+
+export default function MyExpensePage() {
+    const router = useRouter();
+    const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [activeStatus, setActiveStatus] = useState<string>("all");
+    const [showNewExpense, setShowNewExpense] = useState(false);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [showSearch, setShowSearch] = useState(false);
+
+    // Delete modal state
+    const [deleteExpenseData, setDeleteExpenseData] = useState<Expense | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Edit modal state
+    const [editExpenseData, setEditExpenseData] = useState<Expense | null>(null);
+
+    const fetchData = useCallback(async () => {
+        const token = getToken();
+        if (!token) { router.push("/login?redirect=/my-expense"); return; }
+        try {
+            const params: ExpensesParams = {};
+            if (activeStatus !== "all") params.status = activeStatus as ExpenseStatus;
+            const expensesData = await getMyExpenses(params);
+            setExpenses(expensesData);
+            setLoading(false);
+        } catch (err: unknown) {
+            console.error("My Expense fetch error:", err);
+            const e = err as { status?: number; message?: string };
+            if (e?.status === 401 || e?.message?.includes("Not authenticated")) { router.push("/login?redirect=/my-expense"); return; }
+            setError("Failed to load expenses");
+            setLoading(false);
+        }
+    }, [router, activeStatus]);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteExpenseData) return;
+        setIsDeleting(true);
+        try { await deleteExpense(deleteExpenseData.id); setDeleteExpenseData(null); fetchData(); } catch (err) { console.error("Delete error:", err); } finally { setIsDeleting(false); }
+    };
+
+    const handleSubmitForApproval = async (expense: Expense) => {
+        try { await submitExpense(expense.id); fetchData(); } catch (err) { console.error("Submit error:", err); }
+    };
+
+    // Filter by search query
+    const filteredExpenses = expenses.filter((e) => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return e.title.toLowerCase().includes(q) || (e.description || "").toLowerCase().includes(q);
+    });
+
+    if (loading) return <PageSkeleton />;
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <p className="text-foreground/60 text-sm">{error}</p>
+                    <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition">Retry</button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-5 max-w-[1400px] mx-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-foreground">My Expenses</h1>
+                <button onClick={() => setShowNewExpense(true)} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-foreground/15 text-foreground hover:bg-foreground/5 transition">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    New Expense
+                </button>
+            </div>
+
+            {/* Status Filter Pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+                {STATUS_FILTERS.map((sf) => (
+                    <button
+                        key={sf.key}
+                        onClick={() => setActiveStatus(sf.key)}
+                        className={`px-3.5 py-1.5 text-xs font-medium rounded-full border transition ${activeStatus === sf.key
+                            ? "border-blue-500/50 bg-blue-500/15 text-blue-500"
+                            : "border-foreground/15 bg-foreground/5 text-foreground/60 hover:bg-foreground/10"
+                            }`}
+                    >
+                        {sf.label}
+                    </button>
+                ))}
+
+                {/* Date Filter */}
+                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20 transition">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Date
+                </button>
+
+                {/* Search */}
+                <div className="ml-auto flex items-center gap-2">
+                    {showSearch && (
+                        <input autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Escape") { setShowSearch(false); setSearchQuery(""); } }}
+                            placeholder="Search expenses..."
+                            className="px-3 py-1.5 text-xs rounded-lg bg-foreground/5 border border-foreground/10 text-foreground placeholder-foreground/30 outline-none focus:border-blue-500/50 w-48 transition"
+                        />
+                    )}
+                    <button onClick={() => setShowSearch(!showSearch)} className="inline-flex items-center gap-1.5 text-xs text-foreground/50 hover:text-foreground transition">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        Search
+                    </button>
+                </div>
+            </div>
+
+            {/* Table */}
+            {filteredExpenses.length === 0 ? (
+                <EmptyState onAdd={() => setShowNewExpense(true)} />
+            ) : (
+                <div className="rounded-xl border border-foreground/10 overflow-hidden">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="text-xs uppercase tracking-wider text-foreground/40 border-b border-foreground/5">
+                                <th className="py-3 pl-4 w-10 font-medium"><input type="checkbox" className="rounded border-foreground/20 bg-transparent" /></th>
+                                <th className="py-3 pr-3 font-medium">Title</th>
+                                <th className="py-3 pr-3 font-medium">Category</th>
+                                <th className="py-3 pr-3 font-medium">Date</th>
+                                <th className="py-3 pr-3 font-medium text-center">Items</th>
+                                <th className="py-3 pr-3 font-medium">Total (EGP)</th>
+                                <th className="py-3 pr-3 font-medium">Project</th>
+                                <th className="py-3 pr-3 font-medium">Status</th>
+                                <th className="py-3 pr-4 w-10 font-medium"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredExpenses.map((expense) => (
+                                <ExpenseRow
+                                    key={expense.id}
+                                    expense={expense}
+                                    isMenuOpen={openMenuId === expense.id}
+                                    onMenuToggle={() => setOpenMenuId(openMenuId === expense.id ? null : expense.id)}
+                                    onCloseMenu={() => setOpenMenuId(null)}
+                                    onDelete={() => setDeleteExpenseData(expense)}
+                                    onSubmit={() => handleSubmitForApproval(expense)}
+                                    onEdit={() => setEditExpenseData(expense)}
+                                    onViewReceipt={() => {
+                                        // View receipt - check if any item has a receipt path
+                                        const receiptItem = expense.items?.find((i) => i.receipt_path || i.attachment_url);
+                                        if (receiptItem) {
+                                            const url = receiptItem.receipt_path || receiptItem.attachment_url;
+                                            if (url) window.open(`/api/uploads/${url}`, "_blank");
+                                        }
+                                    }}
+                                />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {/* Modals */}
+            <NewExpenseModal
+                isOpen={showNewExpense || !!editExpenseData}
+                onClose={() => { setShowNewExpense(false); setEditExpenseData(null); }}
+                onExpenseCreated={fetchData}
+                projects={[]}
+                editExpense={editExpenseData}
+            />
+            <DeleteExpenseModal
+                isOpen={!!deleteExpenseData}
+                title={deleteExpenseData?.title || ""}
+                onClose={() => setDeleteExpenseData(null)}
+                onConfirm={handleDeleteConfirm}
+                isDeleting={isDeleting}
+            />
         </div>
     );
 }

@@ -1,458 +1,732 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
-    getTaskAgingReport,
-    getTeamVelocityReport,
-    getWorkloadDistributionReport,
-    getTimeTrackingReport,
-    ReportResult,
-    ReportFilters,
-    ReportType,
-    ExportFormat,
-    downloadReport,
+    BarChart2, TrendingUp, Users, Activity, Download, RefreshCw, Loader2,
+    Flame, CheckCircle2, AlertTriangle, Clock, FolderKanban, Target,
+    ChevronRight, TrendingDown, ArrowUpRight,
+} from "lucide-react";
+import { getToken } from "@/lib/auth";
+import { getTeams } from "@/services/teams";
+import { getProjects } from "@/services/projects";
+import {
+    getTaskAgingReport, getTaskCompletionReport, getTeamVelocityReport,
+    getWorkloadDistributionReport, downloadReport,
+    type ReportResult, type ReportFilters, type ExportFormat,
 } from "@/services/reports";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useRouter } from "next/navigation";
 
-// =============== Icons ===============
+const API = process.env.NEXT_PUBLIC_API_URL || "";
 
-const ChartBarIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-    </svg>
-);
-
-const ChartPieIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-    </svg>
-);
-
-const TrendingUpIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-    </svg>
-);
-
-const ClockIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-);
-
-const UsersIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-    </svg>
-);
-
-const DownloadIcon = () => (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-    </svg>
-);
-
-const CalendarIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-);
-
-// =============== Components ===============
-
-interface ReportCardProps {
-    title: string;
-    description: string;
-    icon: React.ReactNode;
-    color: string;
-    onClick: () => void;
-    isSelected: boolean;
-}
-
-function ReportCard({ title, description, icon, color, onClick, isSelected }: ReportCardProps) {
-    return (
-        <button
-            onClick={onClick}
-            className={`text-left p-4 rounded-xl border transition-all duration-200 ${isSelected
-                ? `border-${color}-500/50 bg-${color}-500/10 ring-2 ring-${color}-500/30`
-                : "border-foreground/10 bg-background hover:border-foreground/20 hover:bg-foreground/5"
-                }`}
-        >
-            <div className={`w-10 h-10 rounded-lg bg-${color}-500/20 text-${color}-400 flex items-center justify-center mb-3`}>
-                {icon}
-            </div>
-            <h3 className="font-semibold text-foreground mb-1">{title}</h3>
-            <p className="text-sm text-foreground/60">{description}</p>
-        </button>
-    );
-}
-
-interface MetricCardProps {
-    label: string;
-    value: string | number;
-    change?: { value: number; isPositive: boolean };
-    color?: string;
-}
-
-function MetricCard({ label, value, change, color = "blue" }: MetricCardProps) {
-    return (
-        <div className="p-4 rounded-xl border border-foreground/10 bg-background">
-            <p className="text-sm text-foreground/60 mb-1">{label}</p>
-            <p className={`text-2xl font-bold text-foreground`}>{value}</p>
-            {change && (
-                <p className={`text-xs mt-1 ${change.isPositive ? "text-emerald-400" : "text-red-400"}`}>
-                    {change.isPositive ? "↑" : "↓"} {Math.abs(change.value)}% from last period
-                </p>
-            )}
-        </div>
-    );
-}
-
-interface BarChartProps {
-    data: Array<{ label: string; value: number; color?: string }>;
-    maxValue?: number;
-}
-
-function SimpleBarChart({ data, maxValue }: BarChartProps) {
-    const max = maxValue || Math.max(...data.map(d => d.value));
-
-    return (
-        <div className="space-y-3">
-            {data.map((item, idx) => (
-                <div key={idx}>
-                    <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-foreground/70">{item.label}</span>
-                        <span className="font-medium text-foreground">{item.value}</span>
-                    </div>
-                    <div className="h-2 bg-foreground/10 rounded-full overflow-hidden">
-                        <div
-                            className={`h-full transition-all duration-500 ${item.color || "bg-blue-500"}`}
-                            style={{ width: `${(item.value / max) * 100}%` }}
-                        />
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-interface ReportViewerProps {
-    report: ReportResult | null;
-    loading: boolean;
-    onExport: (format: ExportFormat) => void;
-}
-
-function ReportViewer({ report, loading, onExport }: ReportViewerProps) {
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-            </div>
-        );
-    }
-
-    if (!report) {
-        return (
-            <div className="flex flex-col items-center justify-center h-64 text-foreground/50">
-                <ChartBarIcon />
-                <p className="mt-2">Select a report type to view</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-lg font-semibold text-foreground capitalize">
-                        {report.report_type.replace(/_/g, " ")} Report
-                    </h3>
-                    <p className="text-sm text-foreground/50">
-                        Generated {new Date(report.generated_at).toLocaleString()}
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => onExport("pdf")}
-                        className="flex items-center gap-2 px-3 py-2 bg-foreground/10 hover:bg-foreground/20 rounded-lg text-sm transition-colors"
-                    >
-                        <DownloadIcon />
-                        PDF
-                    </button>
-                    <button
-                        onClick={() => onExport("excel")}
-                        className="flex items-center gap-2 px-3 py-2 bg-foreground/10 hover:bg-foreground/20 rounded-lg text-sm transition-colors"
-                    >
-                        <DownloadIcon />
-                        Excel
-                    </button>
-                </div>
-            </div>
-
-            {/* Summary Metrics */}
-            {report.summary && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {Object.entries(report.summary).slice(0, 4).map(([key, value]) => (
-                        <MetricCard
-                            key={key}
-                            label={key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                            value={value}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {/* Charts */}
-            {report.charts && report.charts.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {report.charts.map((chart, idx) => (
-                        <div key={idx} className="p-4 rounded-xl border border-foreground/10 bg-background">
-                            <h4 className="font-medium text-foreground mb-4">{chart.title}</h4>
-                            <SimpleBarChart
-                                data={chart.data.map((d: Record<string, unknown>) => ({
-                                    label: String(d.label || d.name || Object.values(d)[0]),
-                                    value: Number(d.value || d.count || Object.values(d)[1]),
-                                }))}
-                            />
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Data Table */}
-            {report.data && report.data.length > 0 && (
-                <div className="rounded-xl border border-foreground/10 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-foreground/5">
-                                <tr>
-                                    {Object.keys(report.data[0]).slice(0, 6).map((key) => (
-                                        <th key={key} className="px-4 py-3 text-left text-sm font-medium text-foreground/70">
-                                            {key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-foreground/10">
-                                {report.data.slice(0, 10).map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-foreground/5 transition-colors">
-                                        {Object.values(row).slice(0, 6).map((value, cellIdx) => (
-                                            <td key={cellIdx} className="px-4 py-3 text-sm text-foreground">
-                                                {String(value)}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    {report.data.length > 10 && (
-                        <div className="px-4 py-3 bg-foreground/5 text-center">
-                            <button className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
-                                View all {report.data.length} rows
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// =============== Main Component ===============
-
-// Subset of ReportType that we display in the UI
-type ReportTypeKey = Extract<ReportType, "task_aging" | "team_velocity" | "workload_distribution" | "time_tracking">;
-
-export default function ReportsPage() {
-    const [selectedReport, setSelectedReport] = useState<ReportTypeKey | null>(null);
-    const [reportData, setReportData] = useState<ReportResult | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [filters, setFilters] = useState<ReportFilters>({
-        date_from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-        date_to: new Date().toISOString().split("T")[0],
+async function apiFetch(path: string) {
+    const res = await fetch(`${API}/api${path}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
     });
+    if (!res.ok) throw new Error("fetch failed");
+    return res.json();
+}
 
-    const reportTypes: Array<{ key: ReportTypeKey; title: string; description: string; icon: React.ReactNode; color: string }> = [
-        {
-            key: "task_aging",
-            title: "Task Aging",
-            description: "View tasks by age and identify bottlenecks",
-            icon: <ClockIcon />,
-            color: "blue",
-        },
-        {
-            key: "team_velocity",
-            title: "Team Velocity",
-            description: "Track team performance over time",
-            icon: <TrendingUpIcon />,
-            color: "emerald",
-        },
-        {
-            key: "workload_distribution",
-            title: "Workload Distribution",
-            description: "Analyze work distribution across team members",
-            icon: <UsersIcon />,
-            color: "purple",
-        },
-        {
-            key: "time_tracking",
-            title: "Time Tracking",
-            description: "Detailed time tracking and utilization report",
-            icon: <ChartPieIcon />,
-            color: "amber",
-        },
-    ];
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-    const loadReport = async (reportType: ReportTypeKey) => {
+type ReportId = "dashboard" | "task_aging" | "completion_trends" | "team_velocity" | "workload" | "burn_chart" | "project_variance";
+
+interface AnalyticsSummary {
+    total_tasks: number;
+    completed_tasks: number;
+    overdue_tasks: number;
+    active_projects: number;
+    total_hours_logged: number;
+    avg_task_age_days: number;
+    completion_rate: number;
+    tasks_by_status: Record<string, number>;
+    tasks_by_priority: Record<string, number>;
+    completion_trend: { date: string; created: number; completed: number }[];
+    project_summary: { id: string; name: string; status: string; progress: number; task_count: number; overdue_count: number }[];
+    top_overdue_tasks: { id: string; name: string; priority: string; overdue_days: number; project_name: string | null; assignee_name: string | null }[];
+}
+
+const REPORT_MENU: { id: ReportId; label: string; Icon: any }[] = [
+    { id: "dashboard", label: "Analytics Dashboard", Icon: BarChart2 },
+    { id: "task_aging", label: "Task Aging", Icon: Activity },
+    { id: "completion_trends", label: "Completion Trends", Icon: TrendingUp },
+    { id: "team_velocity", label: "Team Velocity", Icon: Users },
+    { id: "workload", label: "Workload Distribution", Icon: BarChart2 },
+    { id: "project_variance", label: "Project Variance", Icon: TrendingUp },
+    { id: "burn_chart", label: "Burn Chart", Icon: Flame },
+];
+
+// ─── Priority Badge ─────────────────────────────────────────────────────────────
+
+function PriorityBadge({ priority }: { priority: string }) {
+    const styles: Record<string, string> = {
+        critical: "bg-red-500/20 text-red-400 border border-red-500/30",
+        high: "bg-orange-500/20 text-orange-400 border border-orange-500/30",
+        urgent: "bg-red-500/20 text-red-400 border border-red-500/30",
+        medium: "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
+        low: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
+    };
+    return (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${styles[priority] ?? "bg-foreground/10 text-foreground/50"}`}>
+            {priority}
+        </span>
+    );
+}
+
+// ─── Status Badge ───────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
+    const styles: Record<string, string> = {
+        active: "bg-blue-500/20 text-blue-400",
+        completed: "bg-emerald-500/20 text-emerald-400",
+        on_hold: "bg-yellow-500/20 text-yellow-400",
+        draft: "bg-foreground/10 text-foreground/50",
+        archived: "bg-foreground/5 text-foreground/40",
+    };
+    return (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${styles[status] ?? "bg-foreground/10 text-foreground/50"}`}>
+            {status?.replace(/_/g, " ")}
+        </span>
+    );
+}
+
+// ─── KPI Card ──────────────────────────────────────────────────────────────────
+
+function KpiCard({ label, value, sub, Icon, color }: { label: string; value: string | number; sub?: string; Icon: any; color: string }) {
+    return (
+        <div className={`relative p-4 rounded-2xl border border-white/8 bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-all duration-200 overflow-hidden group`}>
+            <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${color} blur-2xl`} style={{ transform: "scale(0.5)" }} />
+            <div className="relative flex items-start justify-between mb-3">
+                <div className={`p-2 rounded-xl ${color} bg-opacity-20`}>
+                    <Icon size={16} className={color.includes("blue") ? "text-blue-400" : color.includes("emerald") ? "text-emerald-400" : color.includes("red") ? "text-red-400" : color.includes("violet") ? "text-violet-400" : color.includes("amber") ? "text-amber-400" : "text-slate-400"} />
+                </div>
+                {sub && <span className="text-[10px] text-foreground/40">{sub}</span>}
+            </div>
+            <p className="text-2xl font-bold text-foreground/90 mb-0.5 tabular-nums">{value}</p>
+            <p className="text-xs text-foreground/50">{label}</p>
+        </div>
+    );
+}
+
+// ─── Mini Line Chart ────────────────────────────────────────────────────────────
+
+function TrendLine({ data, valueKey, color = "#6366f1" }: { data: any[]; valueKey: string; color?: string }) {
+    if (!data || data.length === 0) return <p className="text-foreground/40 text-xs text-center py-6">No data</p>;
+    const W = 500, H = 140, PAD = { top: 8, right: 12, bottom: 28, left: 32 };
+    const vals = data.map(d => Number(d[valueKey]) || 0);
+    const maxY = Math.max(...vals, 1);
+    const sx = (i: number) => PAD.left + i * ((W - PAD.left - PAD.right) / Math.max(data.length - 1, 1));
+    const sy = (v: number) => PAD.top + (1 - v / maxY) * (H - PAD.top - PAD.bottom);
+    const pathD = vals.map((v, i) => `${i === 0 ? "M" : "L"} ${sx(i)} ${sy(v)}`).join(" ");
+    const area = `${pathD} L ${sx(data.length - 1)} ${H - PAD.bottom} L ${sx(0)} ${H - PAD.bottom} Z`;
+
+    const sampleLabels = data.filter((_, i) => i === 0 || i === Math.floor(data.length / 2) || i === data.length - 1);
+
+    return (
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible" style={{ maxHeight: H }}>
+            {[0, 0.5, 1].map(t => (
+                <line key={t} x1={PAD.left} x2={W - PAD.right}
+                    y1={sy(maxY * t)} y2={sy(maxY * t)} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+            ))}
+            <defs>
+                <linearGradient id={`grad-${valueKey}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+                    <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+            </defs>
+            <path d={area} fill={`url(#grad-${valueKey})`} />
+            <path d={pathD} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            {sampleLabels.map((row, i) => {
+                const idx = data.indexOf(row);
+                return (
+                    <text key={idx} x={sx(idx)} y={H - 6} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.3)">
+                        {String(row.date).slice(5)}
+                    </text>
+                );
+            })}
+            {/* Dots at data points */}
+            {vals.map((v, i) => (
+                <circle key={i} cx={sx(i)} cy={sy(v)} r={data.length <= 15 ? 2.5 : 0} fill={color} />
+            ))}
+        </svg>
+    );
+}
+
+// ─── Dual Line Chart ─────────────────────────────────────────────────────────────
+
+function DualTrendChart({ data }: { data: { date: string; created: number; completed: number }[] }) {
+    if (!data || data.length === 0) return <p className="text-foreground/40 text-xs text-center py-6">No data</p>;
+    const W = 500, H = 140, PAD = { top: 8, right: 12, bottom: 28, left: 32 };
+    const allVals = data.flatMap(d => [d.created, d.completed]);
+    const maxY = Math.max(...allVals, 1);
+    const sx = (i: number) => PAD.left + i * ((W - PAD.left - PAD.right) / Math.max(data.length - 1, 1));
+    const sy = (v: number) => PAD.top + (1 - v / maxY) * (H - PAD.top - PAD.bottom);
+    const makePath = (key: "created" | "completed") =>
+        data.map((d, i) => `${i === 0 ? "M" : "L"} ${sx(i)} ${sy(d[key])}`).join(" ");
+
+    const sampleIdxs = [0, Math.floor(data.length / 2), data.length - 1];
+
+    return (
+        <div>
+            <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible" style={{ maxHeight: H }}>
+                {[0, 0.5, 1].map(t => (
+                    <line key={t} x1={PAD.left} x2={W - PAD.right}
+                        y1={sy(maxY * t)} y2={sy(maxY * t)} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+                ))}
+                <path d={makePath("created")} fill="none" stroke="#6366f1" strokeWidth={2} strokeLinecap="round" />
+                <path d={makePath("completed")} fill="none" stroke="#22c55e" strokeWidth={2} strokeLinecap="round" />
+                {sampleIdxs.map(i => (
+                    <text key={i} x={sx(i)} y={H - 6} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.3)">
+                        {String(data[i]?.date).slice(5)}
+                    </text>
+                ))}
+            </svg>
+            <div className="flex items-center gap-4 mt-2 text-[10px] text-foreground/50">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-violet-500 block rounded" />Created</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-emerald-500 block rounded" />Completed</span>
+            </div>
+        </div>
+    );
+}
+
+// ─── SVG Bar Chart ──────────────────────────────────────────────────────────────
+
+function BarChart({ data, labelKey, valueKey, colors: barColors }: {
+    data: Record<string, unknown>[]; labelKey: string; valueKey: string; colors?: string[];
+}) {
+    if (!data || data.length === 0) return <p className="text-foreground/40 text-sm text-center py-8">No data</p>;
+    const W = 500, H = 180, PAD = { top: 10, right: 10, bottom: 32, left: 36 };
+    const vals = data.map(d => Number(d[valueKey]) || 0);
+    const maxY = Math.max(...vals, 1);
+    const barW = ((W - PAD.left - PAD.right) / data.length) - 6;
+    const defaultColors = ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#06b6d4", "#8b5cf6", "#f97316", "#14b8a6"];
+
+    const sx = (i: number) => PAD.left + i * ((W - PAD.left - PAD.right) / data.length) + 3;
+    const sy = (v: number) => PAD.top + (1 - v / maxY) * (H - PAD.top - PAD.bottom);
+
+    return (
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible" style={{ maxHeight: H }}>
+            {[0, 0.5, 1].map(t => (
+                <line key={t} x1={PAD.left} x2={W - PAD.right}
+                    y1={sy(maxY * t)} y2={sy(maxY * t)} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+            ))}
+            {data.map((row, i) => {
+                const v = vals[i];
+                const barH = (v / maxY) * (H - PAD.top - PAD.bottom);
+                const col = (barColors ?? defaultColors)[i % (barColors ?? defaultColors).length];
+                return (
+                    <g key={i}>
+                        <rect x={sx(i)} y={sy(v)} width={barW} height={Math.max(barH, 2)} rx={4} fill={col} opacity={0.85} />
+                        <text x={sx(i) + barW / 2} y={H - 10} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.35)">
+                            {String(row[labelKey]).slice(0, 10).replace(/_/g, " ")}
+                        </text>
+                        {barH > 20 && (
+                            <text x={sx(i) + barW / 2} y={sy(v) - 4} textAnchor="middle" fontSize={9} fill={col}>
+                                {v}
+                            </text>
+                        )}
+                    </g>
+                );
+            })}
+        </svg>
+    );
+}
+
+// ─── Data Table ─────────────────────────────────────────────────────────────────
+
+function DataTable({ data, onRowClick }: { data: Record<string, unknown>[]; onRowClick?: (row: Record<string, unknown>) => void }) {
+    if (!data || data.length === 0) return <p className="text-foreground/40 text-sm text-center py-4">No rows</p>;
+    const keys = Object.keys(data[0] || {}).slice(0, 8);
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+                <thead>
+                    <tr>
+                        {keys.map(k => (
+                            <th key={k} className="text-left px-3 py-2 text-xs text-foreground/50 border-b border-foreground/10 font-medium capitalize">
+                                {k.replace(/_/g, " ")}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.slice(0, 50).map((row, i) => (
+                        <tr key={i}
+                            className={`border-b border-foreground/5 hover:bg-foreground/[0.02] transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
+                            onClick={() => onRowClick?.(row)}>
+                            {keys.map(k => (
+                                <td key={k} className="px-3 py-2 text-foreground/60 text-xs truncate max-w-[150px]">
+                                    {String(row[k] ?? "—")}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+// ─── Burn Chart Panel ────────────────────────────────────────────────────────────
+
+function BurnChartPanel({ projectId }: { projectId: string }) {
+    const [type, setType] = useState<"down" | "up">("down");
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    const load = useCallback(async () => {
+        if (!projectId) return;
         setLoading(true);
-        setSelectedReport(reportType);
-
         try {
-            let data: ReportResult;
+            const endpoint = type === "down" ? "burn-down" : "burn-up";
+            const r = await apiFetch(`/reports/${endpoint}?project_id=${projectId}`);
+            setData(r.data || []);
+        } catch { setData([]); }
+        finally { setLoading(false); }
+    }, [projectId, type]);
 
-            switch (reportType) {
-                case "task_aging":
-                    data = await getTaskAgingReport(filters);
-                    break;
-                case "team_velocity":
-                    data = await getTeamVelocityReport("team-1", filters);
-                    break;
-                case "workload_distribution":
-                    data = await getWorkloadDistributionReport(filters);
-                    break;
-                case "time_tracking":
-                    data = await getTimeTrackingReport(filters);
-                    break;
-                default:
-                    throw new Error("Unknown report type");
-            }
+    useEffect(() => { load(); }, [load]);
 
-            setReportData(data);
-        } catch (error) {
-            console.error("Failed to load report:", error);
-            // Set mock data for demo
-            setReportData({
-                report_type: reportType,
-                generated_at: new Date().toISOString(),
-                filters_applied: filters,
-                summary: {
-                    total_items: 156,
-                    completed_on_time: 124,
-                    overdue: 18,
-                    in_progress: 14,
-                },
-                data: [
-                    { name: "Backend API", tasks: 45, completed: 38, avg_age_days: 5.2 },
-                    { name: "Frontend", tasks: 52, completed: 42, avg_age_days: 4.8 },
-                    { name: "Mobile App", tasks: 28, completed: 20, avg_age_days: 7.1 },
-                    { name: "DevOps", tasks: 18, completed: 15, avg_age_days: 3.5 },
-                    { name: "QA", tasks: 13, completed: 9, avg_age_days: 6.3 },
-                ],
-                charts: [
-                    {
-                        chart_type: "bar",
-                        title: "Tasks by Status",
-                        data: [
-                            { label: "Completed", value: 124, color: "bg-emerald-500" },
-                            { label: "In Progress", value: 14, color: "bg-blue-500" },
-                            { label: "Overdue", value: 18, color: "bg-red-500" },
-                        ],
-                    },
-                    {
-                        chart_type: "bar",
-                        title: "Tasks by Priority",
-                        data: [
-                            { label: "Critical", value: 8, color: "bg-red-500" },
-                            { label: "High", value: 32, color: "bg-orange-500" },
-                            { label: "Medium", value: 78, color: "bg-blue-500" },
-                            { label: "Low", value: 38, color: "bg-gray-500" },
-                        ],
-                    },
-                ],
-            });
+    if (!projectId) return (
+        <div className="flex items-center justify-center h-48 text-foreground/50 text-sm">
+            Select a project to view the burn chart.
+        </div>
+    );
+    if (loading) return <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-blue-400" /></div>;
+    if (data.length === 0) return <div className="text-center py-16 text-foreground/40 text-sm">No data found for this project.</div>;
+
+    const W = 540, H = 180, PAD = 30;
+    const dates = data.map(d => d.date);
+    const idealVals = data.map(d => d.ideal_remaining ?? d.total_scope ?? 0);
+    const actualVals = data.map(d => d.actual_remaining ?? d.completed ?? 0);
+    const allVals = [...idealVals, ...actualVals];
+    const maxV = Math.max(...allVals, 1);
+    const scaleX = (i: number) => PAD + (i / Math.max(dates.length - 1, 1)) * (W - PAD * 2);
+    const scaleY = (v: number) => PAD + (1 - v / maxV) * (H - PAD * 2);
+    const toPath = (vals: number[]) => vals.map((v, i) => `${i === 0 ? "M" : "L"}${scaleX(i).toFixed(1)},${scaleY(v).toFixed(1)}`).join(" ");
+
+    return (
+        <div className="space-y-4">
+            <div className="flex gap-2">
+                {(["down", "up"] as const).map(t => (
+                    <button key={t} onClick={() => setType(t)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${type === t ? "bg-blue-600 text-white" : "text-foreground/50 hover:text-foreground/80 bg-foreground/[0.02]"}`}>
+                        Burn-{t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                ))}
+            </div>
+            <div className="rounded-xl bg-foreground/[0.01] border border-white/8 p-4">
+                <svg width={W} height={H} className="w-full" viewBox={`0 0 ${W} ${H}`}>
+                    {[0, 0.25, 0.5, 0.75, 1].map(p => (
+                        <line key={p} x1={PAD} y1={scaleY(maxV * p)} x2={W - PAD} y2={scaleY(maxV * p)}
+                            stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+                    ))}
+                    <path d={toPath(idealVals)} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.6} />
+                    <path d={toPath(actualVals)} fill="none" stroke="#22c55e" strokeWidth={2} />
+                    <path d={`${toPath(actualVals)} L${scaleX(dates.length - 1)},${H - PAD} L${scaleX(0)},${H - PAD} Z`}
+                        fill="url(#actualGrad)" opacity={0.15} />
+                    <defs>
+                        <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#22c55e" />
+                            <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+                        </linearGradient>
+                    </defs>
+                    {[0, Math.floor(dates.length / 2), dates.length - 1].map(i => (
+                        <text key={i} x={scaleX(i)} y={H - 4} textAnchor="middle"
+                            fontSize={9} fill="rgba(255,255,255,0.3)">{dates[i]?.slice(5)}</text>
+                    ))}
+                </svg>
+                <div className="flex items-center gap-4 mt-3 text-[10px] text-foreground/50">
+                    <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 bg-blue-500 block opacity-60" style={{ borderTop: '1.5px dashed' }} />Ideal</span>
+                    <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 bg-green-500 block" />Actual</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Analytics Dashboard Panel ──────────────────────────────────────────────────
+
+function AnalyticsDashboard() {
+    const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const router = useRouter();
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const data = await apiFetch("/reports/analytics-summary");
+            setSummary(data);
+        } catch (e: any) {
+            setError(e?.message || "Failed to load analytics");
         } finally {
             setLoading(false);
         }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    if (loading) return (
+        <div className="flex items-center justify-center h-64">
+            <div className="text-center space-y-3">
+                <Loader2 size={28} className="animate-spin text-blue-400 mx-auto" />
+                <p className="text-foreground/50 text-sm">Loading analytics...</p>
+            </div>
+        </div>
+    );
+
+    if (error) return (
+        <div className="flex flex-col items-center justify-center h-48 gap-3">
+            <AlertTriangle size={32} className="text-red-400" />
+            <p className="text-red-400 text-sm">{error}</p>
+            <button onClick={load} className="text-xs text-blue-400 hover:text-blue-300">Retry</button>
+        </div>
+    );
+
+    if (!summary) return null;
+
+    const statusColors: Record<string, string> = {
+        todo: "#6366f1", in_progress: "#3b82f6", review: "#8b5cf6",
+        completed: "#22c55e", done: "#10b981", blocked: "#ef4444",
+        cancelled: "#6b7280", waiting: "#f59e0b", backlog: "#94a3b8",
+        draft: "#475569", open: "#60a5fa", overdue: "#f97316",
     };
 
-    const handleExport = async (format: ExportFormat) => {
-        if (!selectedReport) return;
-
-        try {
-            await downloadReport(selectedReport, format, filters);
-        } catch (error) {
-            console.error("Failed to export report:", error);
-            alert("Export functionality not available in demo mode");
-        }
-    };
+    const statusData = Object.entries(summary.tasks_by_status).map(([k, v]) => ({ label: k, value: v }));
+    const priorityData = Object.entries(summary.tasks_by_priority).map(([k, v]) => ({ label: k, value: v }));
+    const priorityColors = ["#ef4444", "#f97316", "#f59e0b", "#22c55e", "#6b7280"];
 
     return (
-        <DashboardLayout>
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">Reports</h1>
-                        <p className="text-foreground/60 mt-1">Generate and analyze detailed reports</p>
+        <div className="space-y-6">
+            {/* KPI Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+                <KpiCard label="Total Tasks" value={summary.total_tasks} Icon={Activity} color="bg-violet-500/10" />
+                <KpiCard label="Completed" value={summary.completed_tasks} sub={`${summary.completion_rate}%`} Icon={CheckCircle2} color="bg-emerald-500/10" />
+                <KpiCard label="Overdue" value={summary.overdue_tasks} Icon={AlertTriangle} color="bg-red-500/10" />
+                <KpiCard label="Active Projects" value={summary.active_projects} Icon={FolderKanban} color="bg-blue-500/10" />
+                <KpiCard label="Hours Logged" value={`${summary.total_hours_logged}h`} sub="last 30 days" Icon={Clock} color="bg-amber-500/10" />
+                <KpiCard label="Avg Task Age" value={`${summary.avg_task_age_days}d`} Icon={TrendingDown} color="bg-slate-500/10" />
+            </div>
+
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Completion Trend */}
+                <div className="p-5 rounded-2xl border border-foreground/10 bg-foreground/[0.02]">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 className="text-sm font-semibold text-foreground/80">Completion Trend</h3>
+                            <p className="text-xs text-foreground/40 mt-0.5">Tasks created vs completed — last 30 days</p>
+                        </div>
+                        <TrendingUp size={14} className="text-foreground/30" />
                     </div>
+                    <DualTrendChart data={summary.completion_trend} />
                 </div>
 
-                {/* Filters */}
-                <div className="flex items-center gap-4 p-4 rounded-xl border border-foreground/10 bg-background">
-                    <div className="flex items-center gap-2">
-                        <CalendarIcon />
-                        <span className="text-sm text-foreground/60">Date Range:</span>
+                {/* Tasks by Status */}
+                <div className="p-5 rounded-2xl border border-foreground/10 bg-foreground/[0.02]">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 className="text-sm font-semibold text-foreground/80">Tasks by Status</h3>
+                            <p className="text-xs text-foreground/40 mt-0.5">Distribution across all task statuses</p>
+                        </div>
+                        <BarChart2 size={14} className="text-foreground/30" />
                     </div>
-                    <input
-                        type="date"
-                        value={filters.date_from}
-                        onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
-                        className="px-3 py-2 bg-foreground/5 border border-foreground/10 rounded-lg text-sm text-foreground"
-                    />
-                    <span className="text-foreground/40">to</span>
-                    <input
-                        type="date"
-                        value={filters.date_to}
-                        onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
-                        className="px-3 py-2 bg-foreground/5 border border-foreground/10 rounded-lg text-sm text-foreground"
-                    />
-                    {selectedReport && (
-                        <button
-                            onClick={() => loadReport(selectedReport)}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Apply Filters
-                        </button>
-                    )}
-                </div>
-
-                {/* Report Types */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {reportTypes.map((report) => (
-                        <ReportCard
-                            key={report.key}
-                            title={report.title}
-                            description={report.description}
-                            icon={report.icon}
-                            color={report.color}
-                            isSelected={selectedReport === report.key}
-                            onClick={() => loadReport(report.key)}
-                        />
-                    ))}
-                </div>
-
-                {/* Report Viewer */}
-                <div className="rounded-xl border border-foreground/10 bg-background p-6">
-                    <ReportViewer
-                        report={reportData}
-                        loading={loading}
-                        onExport={handleExport}
+                    <BarChart
+                        data={statusData}
+                        labelKey="label"
+                        valueKey="value"
+                        colors={statusData.map(d => statusColors[d.label] ?? "#6366f1")}
                     />
                 </div>
             </div>
-        </DashboardLayout>
+
+            {/* Priority Breakdown + Project Summary */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                {/* Priority = 2 cols */}
+                <div className="lg:col-span-2 p-5 rounded-2xl border border-foreground/10 bg-foreground/[0.02]">
+                    <h3 className="text-sm font-semibold text-foreground/80 mb-4">Tasks by Priority</h3>
+                    <BarChart
+                        data={priorityData}
+                        labelKey="label"
+                        valueKey="value"
+                        colors={priorityColors}
+                    />
+                </div>
+
+                {/* Projects = 3 cols */}
+                <div className="lg:col-span-3 p-5 rounded-2xl border border-foreground/10 bg-foreground/[0.02] flex flex-col">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-foreground/80">Project Summary</h3>
+                        <button onClick={() => router.push("/projects")} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                            View all <ChevronRight size={10} />
+                        </button>
+                    </div>
+                    {summary.project_summary.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center text-foreground/40 text-sm">No projects found</div>
+                    ) : (
+                        <div className="space-y-2.5 overflow-y-auto max-h-64 pr-1">
+                            {summary.project_summary.map(p => (
+                                <div key={p.id}
+                                    onClick={() => router.push("/projects")}
+                                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-foreground/[0.03] transition-colors cursor-pointer group">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <p className="text-xs font-medium text-foreground/80 truncate">{p.name}</p>
+                                            <StatusBadge status={p.status} />
+                                        </div>
+                                        <div className="w-full bg-foreground/10 rounded-full h-1">
+                                            <div className="bg-blue-500 h-1 rounded-full transition-all" style={{ width: `${Math.min(p.progress, 100)}%` }} />
+                                        </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-xs text-foreground/60 tabular-nums">{p.task_count} tasks</p>
+                                        {p.overdue_count > 0 && (
+                                            <p className="text-[10px] text-red-400">{p.overdue_count} overdue</p>
+                                        )}
+                                    </div>
+                                    <ArrowUpRight size={12} className="text-foreground/20 group-hover:text-foreground/50 transition-colors shrink-0" />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Top Overdue Tasks */}
+            {summary.top_overdue_tasks.length > 0 && (
+                <div className="p-5 rounded-2xl border border-red-500/20 bg-red-500/[0.02]">
+                    <div className="flex items-center gap-2 mb-4">
+                        <AlertTriangle size={14} className="text-red-400" />
+                        <h3 className="text-sm font-semibold text-foreground/80">Top Overdue Tasks</h3>
+                        <span className="ml-auto text-xs text-foreground/40">Most overdue first</span>
+                    </div>
+                    <div className="space-y-2">
+                        {summary.top_overdue_tasks.map(t => (
+                            <div key={t.id}
+                                onClick={() => router.push("/tasks/all")}
+                                className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-foreground/[0.03] transition-colors cursor-pointer group">
+                                <PriorityBadge priority={t.priority} />
+                                <p className="text-xs text-foreground/75 flex-1 truncate">{t.name}</p>
+                                {t.project_name && (
+                                    <span className="text-[10px] text-foreground/40 shrink-0">{t.project_name}</span>
+                                )}
+                                <span className="text-[10px] text-red-400 shrink-0 font-medium tabular-nums">
+                                    {t.overdue_days}d overdue
+                                </span>
+                                {t.assignee_name && (
+                                    <span className="text-[10px] text-foreground/40 shrink-0">{t.assignee_name}</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Refresh */}
+            <div className="flex justify-end">
+                <button onClick={load} className="flex items-center gap-1.5 text-xs text-foreground/40 hover:text-foreground/70 transition-colors">
+                    <RefreshCw size={12} />Refresh
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ─── Reports Page ───────────────────────────────────────────────────────────────
+
+export default function ReportsPage() {
+    const [activeReport, setActiveReport] = useState<ReportId>("dashboard");
+    const [result, setResult] = useState<ReportResult | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [exporting, setExporting] = useState<ExportFormat | null>(null);
+
+    // Filters
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
+    const [teamId, setTeamId] = useState("");
+    const [burnProjectId, setBurnProjectId] = useState("");
+    const [varianceProjectId, setVarianceProjectId] = useState("");
+    const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
+    const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+    const router = useRouter();
+
+    useEffect(() => {
+        getTeams({ limit: 50 }).then(t => setTeams(t)).catch(() => { });
+        getProjects({ limit: 50 }).then((r: any) => setProjects(r?.items ?? r ?? [])).catch(() => { });
+    }, []);
+
+    const buildFilters = (): ReportFilters => ({
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        team_ids: teamId ? [teamId] : undefined,
+    });
+
+    const fetchReport = useCallback(async (id: ReportId = activeReport) => {
+        if (id === "dashboard") return;
+        setLoading(true);
+        setError("");
+        setResult(null);
+        const filters = buildFilters();
+        try {
+            let r: ReportResult;
+            if (id === "task_aging") r = await getTaskAgingReport(filters);
+            else if (id === "completion_trends") r = await getTaskCompletionReport(filters);
+            else if (id === "team_velocity") r = await getTeamVelocityReport(teamId || "all", filters);
+            else if (id === "project_variance") {
+                if (!varianceProjectId) { setError("Select a project first"); return; }
+                r = await apiFetch(`/reports/project/${varianceProjectId}/variance?include_tasks=true`) as ReportResult;
+            }
+            else r = await getWorkloadDistributionReport(filters);
+            setResult(r);
+        } catch (e: any) {
+            setError(e?.message || "Failed to load report");
+        } finally {
+            setLoading(false);
+        }
+    }, [activeReport, dateFrom, dateTo, teamId, varianceProjectId]);
+
+    const handleExport = async (fmt: ExportFormat) => {
+        setExporting(fmt);
+        try { await downloadReport(activeReport as any, fmt, buildFilters()); }
+        catch { /* silent */ }
+        finally { setExporting(null); }
+    };
+
+    const handleSelectReport = (id: ReportId) => {
+        setActiveReport(id);
+        setResult(null);
+        setError("");
+    };
+
+    const isLineChart = ["completion_trends"].includes(activeReport);
+    const chartData = result?.data ?? result?.charts?.[0]?.data ?? [];
+    const xKey = isLineChart ? "date" : (Object.keys(chartData[0] || {})[0] ?? "name");
+    const yKey = isLineChart ? "completed" : (Object.keys(chartData[0] || {})[1] ?? "value");
+
+    return (
+        <div className="min-h-screen flex bg-background text-foreground">
+            {/* Sidebar */}
+            <aside className="w-56 border-r border-foreground/10 bg-foreground/[0.01] p-4 flex flex-col gap-1 shrink-0">
+                <h2 className="text-xs font-semibold text-foreground/50 uppercase tracking-wider mb-3">Reports</h2>
+                {REPORT_MENU.map(({ id, label, Icon }) => (
+                    <button key={id} onClick={() => handleSelectReport(id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${activeReport === id
+                            ? "bg-blue-600/20 text-blue-300 font-medium"
+                            : "text-foreground/60 hover:bg-foreground/[0.02] hover:text-foreground/90"}`}>
+                        <Icon size={14} />{label}
+                    </button>
+                ))}
+            </aside>
+
+            {/* Main */}
+            <div className="flex-1 flex flex-col p-6 gap-6 min-w-0 overflow-y-auto">
+                {activeReport === "dashboard" ? (
+                    <AnalyticsDashboard />
+                ) : (
+                    <>
+                        {/* Filters + Actions */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                            {activeReport === "burn_chart" ? (
+                                <select
+                                    value={burnProjectId} onChange={e => setBurnProjectId(e.target.value)}
+                                    className="px-3 py-2 rounded-xl bg-foreground/[0.02] border border-foreground/10 text-foreground/80 text-sm w-64">
+                                    <option value="">Select project...</option>
+                                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                            ) : activeReport === "project_variance" ? (
+                                <select
+                                    value={varianceProjectId} onChange={e => setVarianceProjectId(e.target.value)}
+                                    className="px-3 py-2 rounded-xl bg-foreground/[0.02] border border-foreground/10 text-foreground/80 text-sm w-64">
+                                    <option value="">Select project for variance...</option>
+                                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                            ) : (
+                                <>
+                                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                                        className="px-3 py-2 rounded-xl bg-foreground/[0.02] border border-foreground/10 text-foreground/80 text-sm" />
+                                    <span className="text-foreground/40 text-sm">to</span>
+                                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                                        className="px-3 py-2 rounded-xl bg-foreground/[0.02] border border-foreground/10 text-foreground/80 text-sm" />
+                                    {teams.length > 0 && (
+                                        <select value={teamId} onChange={e => setTeamId(e.target.value)}
+                                            className="px-3 py-2 rounded-xl bg-foreground/[0.02] border border-foreground/10 text-foreground/80 text-sm">
+                                            <option value="">All Teams</option>
+                                            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                        </select>
+                                    )}
+                                </>
+                            )}
+
+                            {activeReport !== "burn_chart" && (
+                                <button onClick={() => fetchReport()}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
+                                    <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Run Report
+                                </button>
+                            )}
+
+                            {result && (
+                                <>
+                                    {(["csv", "excel"] as ExportFormat[]).map(fmt => (
+                                        <button key={fmt} onClick={() => handleExport(fmt)} disabled={!!exporting}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-foreground/[0.02] border border-foreground/10 text-foreground/60 hover:text-foreground/90 text-xs transition-colors disabled:opacity-50 uppercase">
+                                            {exporting === fmt ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                                            {fmt}
+                                        </button>
+                                    ))}
+                                </>
+                            )}
+                        </div>
+
+                        {/* Report Content */}
+                        <div className="flex-1 rounded-2xl border border-foreground/10 bg-foreground/[0.02] p-5">
+                            {activeReport === "burn_chart" ? (
+                                <BurnChartPanel projectId={burnProjectId} />
+                            ) : loading ? (
+                                <div className="flex items-center justify-center h-48">
+                                    <Loader2 size={28} className="animate-spin text-blue-400" />
+                                </div>
+                            ) : error ? (
+                                <div className="text-center py-12 text-red-400 text-sm">{error}</div>
+                            ) : !result ? (
+                                <div className="flex flex-col items-center justify-center h-48 gap-3">
+                                    <BarChart2 size={40} className="text-foreground/30" />
+                                    <p className="text-foreground/50 text-sm">Configure filters and click Run Report</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {result.summary && Object.keys(result.summary).length > 0 && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            {Object.entries(result.summary).slice(0, 4).map(([k, v]) => (
+                                                <div key={k} className="p-3 rounded-xl bg-foreground/[0.02] border border-foreground/10">
+                                                    <p className="text-xs text-foreground/50 mb-1 capitalize">{k.replace(/_/g, " ")}</p>
+                                                    <p className="text-lg font-bold text-foreground/90">{String(v)}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {chartData.length > 0 && (
+                                        <div className="p-4 rounded-xl bg-foreground/[0.01] border border-white/8">
+                                            {isLineChart
+                                                ? <TrendLine data={chartData as any} valueKey={yKey} />
+                                                : <BarChart data={chartData as any} labelKey={xKey} valueKey={yKey} />
+                                            }
+                                        </div>
+                                    )}
+                                    {result.data && result.data.length > 0 && (
+                                        <DataTable data={result.data} onRowClick={row => {
+                                            if (row.id || row.task_id) router.push("/tasks/all");
+                                            else if (row.project_id) router.push("/projects");
+                                            else if (row.user_id) router.push("/employees");
+                                        }} />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
     );
 }

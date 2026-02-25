@@ -133,7 +133,7 @@ export interface DashboardWidgetData {
 
 // =============== API Functions ===============
 
-const BASE_URL = "/dashboard";
+const BASE_URL = "/api/dashboard";
 
 /**
  * Get personal dashboard data

@@ -3,9 +3,9 @@
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from "./api";
-import type { Department, DepartmentCreate, DepartmentUpdate } from "@/types/api";
+import type { Department, DepartmentCreate, DepartmentUpdate, DepartmentMember, DepartmentProject } from "@/types/api";
 
-const BASE_URL = "/departments";
+const BASE_URL = "/api/departments";
 
 export interface DepartmentsParams {
     skip?: number;
@@ -54,4 +54,18 @@ export async function updateDepartment(
  */
 export async function deleteDepartment(id: string): Promise<void> {
     return apiDelete(`${BASE_URL}/${id}`);
+}
+
+/**
+ * Get all members of a department
+ */
+export async function getDepartmentMembers(id: string): Promise<DepartmentMember[]> {
+    return apiGet<DepartmentMember[]>(`${BASE_URL}/${id}/members`);
+}
+
+/**
+ * Get all projects of a department
+ */
+export async function getDepartmentProjects(id: string): Promise<DepartmentProject[]> {
+    return apiGet<DepartmentProject[]>(`${BASE_URL}/${id}/projects`);
 }

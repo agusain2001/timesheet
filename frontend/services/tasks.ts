@@ -171,7 +171,7 @@ export interface TasksParams {
     [key: string]: string | number | boolean | undefined;
 }
 
-const BASE_URL = "/tasks";
+const BASE_URL = "/api/tasks";
 
 // =============== Task CRUD ===============
 

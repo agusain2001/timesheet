@@ -71,7 +71,7 @@ export interface ScheduledReportCreate {
     recipients: string[];
 }
 
-const BASE_URL = "/reports";
+const BASE_URL = "/api/reports";
 
 // =============== Standard Reports ===============
 
@@ -154,20 +154,36 @@ export async function generateCustomReport(params: {
 // =============== Export ===============
 
 /**
- * Export report to file
+ * Export report to file — calls GET /api/reports/export/{type}?format=csv|xlsx
  */
 export async function exportReport(
     reportType: ReportType,
     format: ExportFormat,
     filters?: ReportFilters
 ): Promise<Blob> {
+    const fmt = format === "excel" ? "xlsx" : format === "pdf" ? "csv" : format;
+    const qs = new URLSearchParams();
+    qs.set("format", fmt);
+    if (filters?.date_from) qs.set("date_from", filters.date_from);
+    if (filters?.date_to) qs.set("date_to", filters.date_to);
+    if (filters?.team_ids?.[0]) qs.set("team_id", filters.team_ids[0]);
+    if (filters?.project_ids?.[0]) qs.set("project_id", filters.project_ids[0]);
+
+    // Map frontend report IDs to backend report types
+    const typeMap: Record<string, string> = {
+        task_aging: "task-aging",
+        completion_trends: "task-completion",
+        team_velocity: "task-aging", // fallback
+        workload: "workload",
+    };
+    const backendType = typeMap[reportType] ?? reportType.replace(/_/g, "-");
+
+    const token = typeof window !== "undefined" ? (localStorage.getItem("token") ?? "") : "";
     const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}${BASE_URL}/export/${reportType}?format=${format}`,
+        `/api/reports/export/${backendType}?${qs.toString()}`,
         {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(filters || {}),
-            credentials: "include",
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
         }
     );
 
@@ -188,10 +204,11 @@ export async function downloadReport(
     filename?: string
 ): Promise<void> {
     const blob = await exportReport(reportType, format, filters);
+    const ext = format === "excel" ? "xlsx" : format === "pdf" ? "csv" : format;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename || `${reportType}_report.${format}`;
+    a.download = filename || `${reportType}_report.${ext}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

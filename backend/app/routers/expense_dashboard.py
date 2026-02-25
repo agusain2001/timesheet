@@ -157,7 +157,7 @@ def get_project_breakdown(
 
 @router.get("/budget-comparison")
 def get_budget_vs_actual(
-    period: str = Query("monthly", regex="^(monthly|quarterly|yearly)$"),
+    period: str = Query("monthly", pattern="^(monthly|quarterly|yearly)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):

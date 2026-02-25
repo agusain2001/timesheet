@@ -1,867 +1,230 @@
-# 🏗️ Architecture Documentation
+# 🏗️ Architecture Documentation — LightIDEA
 
-## Overview
-
-LightIDEA is built following **modern software architecture principles** including separation of concerns, layered architecture, and microservice-ready design patterns. This document provides an in-depth look at the system architecture, backend services, and design decisions.
+> A deep-dive into the system design, data models, service patterns, security architecture, and key technical decisions behind LightIDEA.
 
 ---
 
-## 📐 System Architecture
+## 📐 System Overview
 
-### High-Level Architecture
+LightIDEA is a **multi-tier, full-stack web application** built around a clear separation of concerns. It follows a **monolithic modular** pattern — a single backend process with well-defined internal boundaries that can be decomposed into microservices in the future without major rework.
 
-```mermaid
-graph TB
-    subgraph "Client Layer"
-        A1[Web Browser]
-        A2[Mobile PWA]
-        A3[API Consumer]
-    end
-    
-    subgraph "Presentation Layer - Next.js 16"
-        B1[App Router RSC]
-        B2[Server Components]
-        B3[Client Components]
-        B4[API Routes]
-    end
-    
-    subgraph "API Gateway Layer - FastAPI"
-        C1[CORS Middleware]
-        C2[JWT Authentication]
-        C3[Rate Limiting]
-        C4[Error Handling]
-        C5[Request Logging]
-    end
-    
-    subgraph "Business Logic Layer"
-        D1[Routers - API Endpoints]
-        D2[Services - Business Logic]
-        D3[Schemas - Validation]
-        D4[Utils - Helpers]
-    end
-    
-    subgraph "Data Access Layer"
-        E1[SQLAlchemy ORM]
-        E2[Models - Database Entities]
-        E3[Migrations - Alembic]
-    end
-    
-    subgraph "Data Layer"
-        F1[(SQLite/PostgreSQL)]
-    end
-    
-    subgraph "External Services"
-        G1[Google Gemini AI]
-        G2[Google Calendar API]
-        G3[Email Service]
-        G4[Webhook Endpoints]
-    end
-    
-    A1 --> B1
-    A2 --> B1
-    A3 --> C1
-    
-    B1 --> B2
-    B1 --> B3
-    B4 --> C1
-    
-    C1 --> C2
-    C2 --> C3
-    C3 --> C4
-    C4 --> D1
-    
-    D1 --> D2
-    D2 --> D3
-    D2 --> D4
-    D2 --> E1
-    
-    E1 --> E2
-    E2 --> F1
-    E3 --> F1
-    
-    D2 --> G1
-    D2 --> G2
-    D2 --> G3
-    D2 --> G4
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          CLIENT BROWSER                                   │
+│   (React / Next.js App Router — SSR + Client Components)                 │
+└──────────────────────────────────────────────────────────────────────────┘
+                              ↕  HTTP/REST + WebSocket
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     REVERSE PROXY (nginx / Cloud LB)                      │
+│          Port 80/443 → frontend :3000  |  /api/* → backend :8000         │
+└──────────────────────────────────────────────────────────────────────────┘
+           ↙                                           ↘
+┌─────────────────────┐                   ┌──────────────────────────────┐
+│  FRONTEND :3000     │                   │     BACKEND :8000            │
+│  Next.js 15+        │  ←── JSON/JWT ──→ │     FastAPI (Python 3.10+)   │
+│  TypeScript         │  ←── WebSocket ─→ │     Uvicorn ASGI             │
+│  TailwindCSS 4.0    │                   │     SQLAlchemy ORM           │
+└─────────────────────┘                   └──────────────────────────────┘
+                                                        ↕  SQLAlchemy
+                                          ┌──────────────────────────────┐
+                                          │    DATABASE                   │
+                                          │    SQLite (dev)               │
+                                          │    PostgreSQL (prod)          │
+                                          └──────────────────────────────┘
+                                                        ↕  REST/gRPC
+                                          ┌──────────────────────────────┐
+                                          │    EXTERNAL SERVICES          │
+                                          │    Google Gemini AI           │
+                                          │    Google Calendar API        │
+                                          │    Email (SMTP)               │
+                                          │    Slack/Teams Webhooks       │
+                                          └──────────────────────────────┘
 ```
 
 ---
 
-## 🎯 Backend Service Architecture
+## 🎯 Backend Architecture
 
-### Layered Architecture Pattern
-
-The backend follows a **4-tier layered architecture**:
+### Layered Architecture (4-Tier)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    1. API/Router Layer                       │
-│  • Route definitions                                         │
-│  • Request/response handling                                 │
-│  • Authentication & Authorization                            │
-│  • Input validation                                          │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│                   2. Service/Business Layer                  │
-│  • Core business logic                                       │
-│  • Business rules enforcement                                │
-│  • Transaction management                                    │
-│  • External API integration                                  │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    3. Data Access Layer                      │
-│  • ORM (SQLAlchemy)                                          │
-│  • Database queries                                          │
-│  • Query optimization                                        │
-│  • Relationship management                                   │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│                      4. Database Layer                       │
-│  • SQLite (Development)                                      │
-│  • PostgreSQL (Production)                                   │
-│  • Data persistence                                          │
-│  • ACID transactions                                         │
-└─────────────────────────────────────────────────────────────┘
+Request ──→ [ Middleware Layer ]
+               ↓
+            [ Router / API Layer ]       ← 42 routers in routers/
+               ↓
+            [ Service / Business Layer ] ← 12+ services in services/
+               ↓
+            [ Data Access Layer ]        ← SQLAlchemy ORM, 27+ models
+               ↓
+            [ Database Layer ]           ← SQLite / PostgreSQL
+```
+
+Each layer has a **single responsibility**:
+
+| Layer | Location | Responsibility |
+|-------|----------|----------------|
+| **Middleware** | `main.py` | CORS, rate limiting, security headers, error dispatch |
+| **Router** | `routers/*.py` | Route definitions, auth checks, input parsing, response shaping |
+| **Service** | `services/*.py` | Core business rules, external API calls, file I/O |
+| **ORM** | `models/*.py` | Database entity definitions, relationships |
+| **Schema** | `schemas/*.py` | Pydantic request validation and response serialization |
+
+---
+
+### Middleware Stack (request order)
+
+```
+Incoming Request
+      │
+      ▼
+ [ SecurityHeadersMiddleware ]  — adds X-Frame-Options, HSTS, Cache-Control etc.
+      │
+      ▼
+ [ CORSMiddleware ]             — validates Origin, restricts methods/headers
+      │
+      ▼
+ [ RateLimitExceeded handler ] — slowapi: 200 req/min default per IP
+      │
+      ▼
+ [ JWT Authentication ]        — Bearer token decoded in get_current_active_user()
+      │
+      ▼
+ [ Role Guard ]                — is_admin() / is_manager() / is_lead() checks
+      │
+      ▼
+ [ Router Handler ]            — business logic
+      │
+      ▼
+ [ Error Handlers ]            — AppError, HTTPException, IntegrityError, generic
+      │
+      ▼
+ Outgoing Response
+```
+
+### Security Headers Added to Every Response
+
+```http
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+X-XSS-Protection: 1; mode=block
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+# On /api/* routes only:
+Cache-Control: no-store, no-cache, must-revalidate, private
+Pragma: no-cache
 ```
 
 ---
 
-## 🗂️ Backend Service Components
+### Configuration Management (`config.py`)
 
-### Directory Structure
-
-```
-backend/app/
-├── main.py                    # Application entry point
-├── config.py                  # Configuration management
-├── database.py                # Database connection setup
-├── openapi_config.py          # API documentation config
-│
-├── routers/                   # API Endpoints (34 routers)
-│   ├── __init__.py
-│   ├── auth.py                # Authentication & Authorization
-│   ├── users.py               # User management
-│   ├── clients.py             # Client management
-│   ├── departments.py         # Department management
-│   ├── teams.py               # Team hierarchies
-│   ├── projects.py            # Project management
-│   ├── tasks.py               # Task management
-│   ├── timesheets.py          # Timesheet tracking
-│   ├── time_tracking.py       # Live time tracking
-│   ├── expenses.py            # Expense management
-│   ├── expense_dashboard.py   # Expense analytics
-│   ├── expense_reports.py     # Expense reporting
-│   ├── cost_centers.py        # Cost center management
-│   ├── dashboard.py           # Personal dashboards
-│   ├── manager_dashboards.py  # Manager/exec dashboards
-│   ├── chatbot.py             # AI chatbot
-│   ├── ai_features.py         # AI task intelligence
-│   ├── notifications.py       # Notification system
-│   ├── email_notifications.py # Email notifications
-│   ├── websocket_notifications.py # Real-time WebSocket
-│   ├── calendar.py            # Calendar integration
-│   ├── google_calendar.py     # Google Calendar sync
-│   ├── gantt.py               # Gantt/timeline views
-│   ├── reports.py             # Report generation
-│   ├── search.py              # Global search
-│   ├── views.py               # Custom saved views
-│   ├── integrations.py        # External integrations
-│   ├── support.py             # Support ticket system
-│   ├── advanced_features.py   # Advanced features
-│   ├── mfa.py                 # Multi-factor auth
-│   ├── gdpr.py                # GDPR compliance
-│   ├── permissions.py         # RBAC & permissions
-│   └── workload.py            # Workload planning
-│
-├── models/                    # Database Models (27 models)
-│   ├── __init__.py
-│   ├── user.py                # User model
-│   ├── client.py              # Client model
-│   ├── department.py          # Department model
-│   ├── team.py                # Team model
-│   ├── project.py             # Project model
-│   ├── project_structure.py   # Phases, epics, milestones
-│   ├── task.py                # Task model
-│   ├── task_dependency.py     # Task dependencies
-│   ├── task_collaboration.py  # Comments, mentions
-│   ├── timesheet.py           # Timesheet model
-│   ├── time_tracking.py       # Time tracking sessions
-│   ├── expense.py             # Expense model
-│   ├── expense_category.py    # Expense categories
-│   ├── expense_approval.py    # Approval workflow
-│   ├── expense_audit_log.py   # Audit trail
-│   ├── cost_center.py         # Cost centers
-│   ├── notification.py        # Notifications
-│   ├── email_settings.py      # Email configuration
-│   ├── integration.py         # External integrations
-│   ├── support.py             # Support tickets
-│   ├── saved_view.py          # Custom views
-│   ├── templates.py           # Task/project templates
-│   ├── automation.py          # Automation rules
-│   ├── approval_rule.py       # Approval workflows
-│   ├── permission.py          # RBAC permissions
-│   └── workspace.py           # Multi-tenant workspaces
-│
-├── schemas/                   # Pydantic Schemas
-│   ├── __init__.py
-│   ├── user_schema.py         # User validation schemas
-│   ├── project_schema.py      # Project schemas
-│   ├── task_schema.py         # Task schemas
-│   └── ...
-│
-├── services/                  # Business Logic Services
-│   ├── __init__.py
-│   ├── auth_service.py        # Authentication logic
-│   ├── notification_service.py # Notification system
-│   ├── email_service.py       # Email sending
-│   ├── ai_service.py          # AI integration
-│   ├── sla_service.py         # SLA tracking
-│   └── ...
-│
-└── utils/                     # Utility Functions
-    ├── __init__.py
-    ├── security.py            # Password hashing, JWT
-    ├── dependencies.py        # FastAPI dependencies
-    ├── validators.py          # Custom validators
-    └── helpers.py             # Helper functions
-```
-
----
-
-## 🔌 Core Backend Services
-
-### 1. Authentication & Authorization Service
-
-**Location:** `routers/auth.py`, `utils/security.py`
-
-**Responsibilities:**
-- User registration and login
-- JWT token generation and validation
-- Password hashing with bcrypt
-- Session management
-- Multi-factor authentication (MFA)
-
-**Key Components:**
+Settings are loaded from environment variables via **Pydantic Settings**. On startup, the `get_settings()` function validates critical values:
 
 ```python
-# JWT Token Generation
-def create_access_token(data: dict, expires_delta: timedelta):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + expires_delta
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-# Password Verification
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+# Startup validation flow
+if not SECRET_KEY or SECRET_KEY == insecure_default:
+    → auto-generate random key + warn (dev mode only)
+if not GEMINI_API_KEY:
+    → warn: AI features disabled
+if not ENCRYPTION_KEY:
+    → warn: sensitive fields stored in plaintext
 ```
 
-**Security Features:**
-- ✅ Bcrypt password hashing (10 rounds)
-- ✅ JWT tokens with expiration
-- ✅ Token blacklisting support
-- ✅ MFA with TOTP (Time-based One-Time Password)
-- ✅ Rate limiting on login attempts
-
----
-
-### 2. Project & Task Management Service
-
-**Location:** `routers/projects.py`, `routers/tasks.py`, `routers/project_structure.py`
-
-**Responsibilities:**
-- CRUD operations for projects and tasks
-- Project lifecycle management (phases, epics, milestones)
-- Task dependencies and blocking relationships
-- Task state transitions (Todo → In Progress → Done)
-- Automation rules and workflows
-
-**Data Model:**
-
-```mermaid
-erDiagram
-    PROJECT ||--o{ PHASE : contains
-    PHASE ||--o{ EPIC : contains
-    EPIC ||--o{ MILESTONE : contains
-    PROJECT ||--o{ TASK : has
-    TASK ||--o{ TASK_DEPENDENCY : depends
-    TASK ||--o{ TASK_COMMENT : has
-    USER ||--o{ TASK : assigned
-    TASK }o--|| TASK_STATUS : has
-```
-
-**Key Features:**
-- Project templates for quick setup
-- Recursive task dependencies (finish-to-start, blocking)
-- Automated task assignments based on rules
-- Task prioritization algorithms
-- Custom fields and metadata
-
-**API Endpoints:**
-
-```http
-GET    /api/projects                 # List all projects
-POST   /api/projects                 # Create project
-GET    /api/projects/{id}            # Get project details
-PUT    /api/projects/{id}            # Update project
-DELETE /api/projects/{id}            # Delete project
-GET    /api/projects/{id}/tasks      # Get project tasks
-POST   /api/projects/{id}/phases     # Create phase
-GET    /api/tasks                    # List tasks
-POST   /api/tasks                    # Create task
-PUT    /api/tasks/{id}/complete      # Mark complete
-POST   /api/tasks/{id}/dependencies  # Add dependency
-```
-
----
-
-### 3. Time Tracking Service
-
-**Location:** `routers/timesheets.py`, `routers/time_tracking.py`
-
-**Responsibilities:**
-- Timesheet creation and submission
-- Live time tracking (start/stop timers)
-- Capacity planning and workload analysis
-- Time entry approval workflows
-- Historical time tracking data
-
-**Features:**
-- ⏱️ **Live Timer:** Start/stop/pause time tracking
-- 📊 **Capacity Planning:** Team capacity vs. allocated time
-- ✅ **Approval Workflow:** Manager approval for timesheets
-- 📈 **Analytics:** Time spent by project, task, user
-- 📅 **Calendar Integration:** Sync with Google Calendar
-
-**Data Model:**
-
-```python
-class Timesheet(Base):
-    id: int
-    user_id: int
-    task_id: int
-    project_id: int
-    hours: float
-    date: date
-    description: str
-    status: Enum["draft", "submitted", "approved", "rejected"]
-    created_at: datetime
-    updated_at: datetime
-```
-
-**API Endpoints:**
-
-```http
-GET    /api/timesheets                    # List timesheets
-POST   /api/timesheets                    # Submit timesheet
-PUT    /api/timesheets/{id}/approve       # Approve timesheet
-GET    /api/timesheets/export             # Export to Excel
-POST   /api/time-tracking/start           # Start timer
-POST   /api/time-tracking/stop            # Stop timer
-GET    /api/workload/capacity             # Team capacity
-```
-
----
-
-### 4. Expense Management Service
-
-**Location:** `routers/expenses.py`, `routers/expense_dashboard.py`, `routers/expense_reports.py`
-
-**Responsibilities:**
-- Expense submission and tracking
-- Multi-level approval workflows
-- Receipt upload and OCR
-- Budget tracking and alerts
-- Expense reporting and analytics
-
-**Features:**
-- 💰 **Expense Categories:** Travel, meals, supplies, etc.
-- 📄 **Receipt Upload:** Image/PDF with OCR extraction
-- ✅ **Approval Workflow:** Multi-level approvals
-- 📊 **Dashboard:** Real-time expense analytics
-- 📈 **Reports:** PDF/Excel export with charts
-- 💳 **Payment Methods:** Track payment types
-- 🏢 **Cost Centers:** Allocate to departments/projects
-
-**Approval Workflow:**
-
-```mermaid
-stateDiagram-v2
-    [*] --> Draft
-    Draft --> Submitted: User submits
-    Submitted --> Level1Approval: Request approval
-    Level1Approval --> Level2Approval: L1 approves
-    Level1Approval --> Rejected: L1 rejects
-    Level2Approval --> Approved: L2 approves
-    Level2Approval --> Rejected: L2 rejects
-    Approved --> Paid: Payment processed
-    Rejected --> [*]
-    Paid --> [*]
-```
-
-**API Endpoints:**
-
-```http
-GET    /api/expenses                      # List expenses
-POST   /api/expenses                      # Submit expense
-POST   /api/expenses/{id}/approve         # Approve expense
-POST   /api/expenses/{id}/reject          # Reject expense
-GET    /api/expenses/dashboard/stats      # Dashboard stats
-GET    /api/expenses/reports/generate     # Generate report
-POST   /api/expenses/{id}/upload-receipt  # Upload receipt
-```
-
----
-
-### 5. AI & Intelligent Systems
-
-**Location:** `routers/chatbot.py`, `routers/ai_features.py`, `services/ai_service.py`
-
-**Responsibilities:**
-- Natural language chatbot interface
-- Task deadline prediction
-- Smart task prioritization
-- Intelligent task assignment suggestions
-- Automated report generation
-- Risk detection and alerts
-
-**AI Service Architecture:**
-
-```mermaid
-graph LR
-    A[User Query] --> B{Intent Recognition}
-    B --> C[Data Retrieval]
-    B --> D[Action Execution]
-    B --> E[Report Generation]
-    
-    C --> F[Database Query]
-    D --> G[API Call]
-    E --> H[Gemini API]
-    
-    F --> I[Context Builder]
-    G --> I
-    H --> I
-    
-    I --> J[Gemini Processing]
-    J --> K[Response Generator]
-    K --> L[Natural Language Response]
-    K --> M[Structured Data]
-    K --> N[Automated Actions]
-```
-
-**Key Features:**
-
-1. **Conversational AI:**
-   - Natural language understanding
-   - Context-aware responses
-   - Multi-turn conversations
-   - Query disambiguation
-
-2. **Task Intelligence:**
-   - Deadline prediction (87% accuracy)
-   - Priority recommendations
-   - Assignee suggestions
-   - Effort estimation
-
-3. **Analytics & Insights:**
-   - Trend detection
-   - Risk identification
-   - Performance metrics
-   - Automated reporting
-
-**Integration with Google Gemini:**
-
-```python
-import google.generativeai as genai
-
-# Configure Gemini
-genai.configure(api_key=settings.gemini_api_key)
-
-# Create model instance
-model = genai.GenerativeModel('gemini-2.0-flash-exp')
-
-# Generate response
-async def chat_with_ai(message: str, context: dict):
-    prompt = build_prompt(message, context)
-    response = await model.generate_content_async(prompt)
-    return process_response(response.text)
-```
-
-**API Endpoints:**
-
-```http
-POST   /api/chatbot/chat                  # Chat with AI
-POST   /api/ai/predict-deadline           # Predict task deadline
-POST   /api/ai/prioritize-tasks           # Get priority recommendations
-POST   /api/ai/suggest-assignee           # Smart assignment suggestion
-POST   /api/ai/generate-report            # AI report generation
-GET    /api/ai/insights                   # Project insights
-```
-
----
-
-### 6. Notification Service
-
-**Location:** `routers/notifications.py`, `routers/email_notifications.py`, `routers/websocket_notifications.py`
-
-**Responsibilities:**
-- Real-time in-app notifications (WebSocket)
-- Email notifications
-- Notification preferences management
-- Digest notifications (daily/weekly summaries)
-- Notification templates
-
-**Notification Types:**
-
-| Type | Trigger | Delivery |
-|------|---------|----------|
-| Task Assignment | User assigned to task | WebSocket + Email |
-| Task Completion | Task marked complete | WebSocket |
-| Deadline Reminder | Task due in 24h | Email |
-| Expense Approval | Expense approved/rejected | WebSocket + Email |
-| Timesheet Reminder | End of week | Email |
-| SLA Breach | SLA violated | WebSocket + Email |
-| Comment Mention | @mentioned in comment | WebSocket + Email |
-
-**WebSocket Architecture:**
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant WebSocket
-    participant Backend
-    participant Database
-    
-    User->>Frontend: Login
-    Frontend->>WebSocket: Connect
-    WebSocket->>Backend: Authenticate
-    Backend->>Database: Get user ID
-    Database-->>Backend: User data
-    Backend-->>WebSocket: Connection established
-    
-    Backend->>Database: Event occurs
-    Database-->>Backend: Event data
-    Backend->>WebSocket: Send notification
-    WebSocket->>Frontend: Push update
-    Frontend->>User: Display notification
-```
-
-**API Endpoints:**
-
-```http
-GET    /api/notifications                  # List notifications
-PUT    /api/notifications/{id}/read        # Mark as read
-DELETE /api/notifications/{id}             # Delete notification
-GET    /api/notifications/preferences      # Get preferences
-PUT    /api/notifications/preferences      # Update preferences
-WS     /ws/notifications                   # WebSocket connection
-POST   /api/notifications/email/send       # Send email
-GET    /api/notifications/email/templates  # Email templates
-```
-
----
-
-### 7. Dashboard & Analytics Service
-
-**Location:** `routers/dashboard.py`, `routers/manager_dashboards.py`, `routers/expense_dashboard.py`
-
-**Responsibilities:**
-- Personal employee dashboards
-- Manager team dashboards
-- Executive overview dashboards
-- Real-time metrics and KPIs
-- Chart data generation
-- Custom dashboard views
-
-**Dashboard Types:**
-
-1. **Personal Dashboard:**
-   - My tasks (assigned, overdue, completed)
-   - My timesheets (weekly summary)
-   - My expenses (pending, approved)
-   - Upcoming deadlines
-   - Recent activity
-
-2. **Manager Dashboard:**
-   - Team performance metrics
-   - Project progress tracking
-   - Team capacity and workload
-   - Approval queue (timesheets, expenses)
-   - SLA compliance
-
-3. **Executive Dashboard:**
-   - Company-wide KPIs
-   - Revenue vs. budget
-   - Project portfolio status
-   - Resource utilization
-   - Trend analysis
-
-**Key Metrics:**
-
-```python
-class DashboardStats:
-    total_projects: int
-    active_tasks: int
-    overdue_tasks: int
-    hours_logged_this_week: float
-    pending_expenses: int
-    team_utilization: float
-    upcoming_deadlines: List[Task]
-    recent_activities: List[Activity]
-```
-
-**API Endpoints:**
-
-```http
-GET    /api/dashboard/stats               # Personal stats
-GET    /api/dashboard/charts               # Chart data
-GET    /api/dashboard/manager/team         # Manager team view
-GET    /api/dashboard/executive            # Executive overview
-GET    /api/dashboard/custom               # Custom dashboard
-```
-
----
-
-### 8. Integration & Webhook Service
-
-**Location:** `routers/integrations.py`, `routers/google_calendar.py`
-
-**Responsibilities:**
-- External API integrations
-- Webhook management (incoming/outgoing)
-- Google Calendar synchronization
-- Third-party authentication (OAuth)
-- API key management
-
-**Supported Integrations:**
-
-| Integration | Type | Purpose |
-|-------------|------|---------|
-| Google Calendar | OAuth 2.0 | Sync tasks and events |
-| Slack | Webhook | Notification delivery |
-| Microsoft Teams | Webhook | Notification delivery |
-| Jira | REST API | Task sync |
-| GitHub | Webhook | Commit tracking |
-| Custom Webhooks | HTTP POST | Custom integrations |
-
-**Webhook Architecture:**
-
-```mermaid
-graph LR
-    A[Event Trigger] --> B{Webhook Configured?}
-    B -->|Yes| C[Build Payload]
-    B -->|No| D[Skip]
-    
-    C --> E[Sign Payload]
-    E --> F[Send HTTP POST]
-    F --> G{Success?}
-    
-    G -->|Yes| H[Log Success]
-    G -->|No| I[Retry Queue]
-    
-    I --> J{Max Retries?}
-    J -->|No| F
-    J -->|Yes| K[Log Failure]
-```
-
-**API Endpoints:**
-
-```http
-GET    /api/integrations                   # List integrations
-POST   /api/integrations                   # Create integration
-DELETE /api/integrations/{id}              # Delete integration
-POST   /api/integrations/google/auth       # Google OAuth
-GET    /api/integrations/google/events     # Get calendar events
-POST   /api/integrations/google/sync       # Sync calendar
-POST   /api/integrations/webhooks          # Create webhook
-GET    /api/integrations/webhooks/logs     # Webhook logs
-```
-
----
-
-### 9. Reporting Service
-
-**Location:** `routers/reports.py`, `routers/gantt.py`
-
-**Responsibilities:**
-- Standard report generation
-- Custom report builder
-- Gantt chart data
-- Timeline visualizations
-- Export to PDF/Excel
-- Scheduled reports
-
-**Report Types:**
-
-| Report | Description | Export Format |
-|--------|-------------|---------------|
-| Project Status | Current status of all projects | PDF, Excel |
-| Time Summary | Time logged by user/project | Excel, CSV |
-| Expense Report | Expense breakdown by category | PDF, Excel |
-| Team Performance | Team productivity metrics | PDF |
-| Gantt Chart | Project timeline visualization | PNG, SVG |
-| Custom Report | User-defined data queries | Excel, CSV |
-
-**Gantt Chart Generation:**
-
-```python
-def generate_gantt_data(project_id: int):
-    tasks = get_project_tasks(project_id)
-    return {
-        "tasks": [
-            {
-                "id": task.id,
-                "name": task.title,
-                "start": task.start_date,
-                "end": task.due_date,
-                "progress": task.progress,
-                "dependencies": task.dependencies
-            }
-            for task in tasks
-        ]
-    }
-```
-
-**API Endpoints:**
-
-```http
-GET    /api/reports/standard               # List standard reports
-POST   /api/reports/generate               # Generate report
-GET    /api/reports/{id}/download          # Download report
-POST   /api/reports/schedule               # Schedule recurring report
-GET    /api/gantt/project/{id}             # Gantt chart data
-GET    /api/gantt/timeline                 # Timeline view
-```
-
----
-
-### 10. Search Service
-
-**Location:** `routers/search.py`
-
-**Responsibilities:**
-- Global search across all entities
-- Full-text search
-- Faceted search (filters)
-- Search ranking and relevance
-- Recent searches
-
-**Search Entities:**
-- Users
-- Projects
-- Tasks
-- Clients
-- Departments
-- Expenses
-- Timesheets
-- Support tickets
-
-**Search Algorithm:**
-
-```python
-def global_search(query: str, filters: dict):
-    results = []
-    
-    # Search across multiple tables
-    for entity in [User, Project, Task, Client]:
-        matches = entity.query.filter(
-            entity.name.ilike(f"%{query}%") |
-            entity.description.ilike(f"%{query}%")
-        )
-        
-        # Apply filters
-        if filters.get("entity_type"):
-            matches = matches.filter(type=filters["entity_type"])
-        
-        # Rank by relevance
-        ranked = rank_results(matches, query)
-        results.extend(ranked)
-    
-    return sorted(results, key=lambda x: x.score, reverse=True)
-```
-
-**API Endpoints:**
-
-```http
-GET    /api/search?q={query}               # Global search
-GET    /api/search/advanced                # Advanced search
-GET    /api/search/recent                  # Recent searches
-GET    /api/search/suggestions             # Search suggestions
-```
+**Never** commit `.env` to version control. The `.gitignore` excludes it. Use `.env.example` as a template.
 
 ---
 
 ## 🗄️ Database Architecture
 
-### Entity-Relationship Diagram
+### Entity Relationship Overview
 
 ```mermaid
 erDiagram
-    USER ||--o{ TASK : assigned
-    USER ||--o{ TIMESHEET : logs
-    USER ||--o{ EXPENSE : submits
-    USER ||--o{ NOTIFICATION : receives
-    USER }o--|| DEPARTMENT : belongs_to
-    USER }o--o{ TEAM : member_of
-    
-    CLIENT ||--o{ PROJECT : has
-    
-    DEPARTMENT ||--o{ PROJECT : owns
-    DEPARTMENT ||--o{ COST_CENTER : has
-    
-    PROJECT ||--o{ PHASE : contains
-    PROJECT ||--o{ TASK : has
-    PROJECT ||--o{ TIMESHEET : tracks
-    
-    PHASE ||--o{ EPIC : contains
-    EPIC ||--o{ MILESTONE : contains
-    
-    TASK ||--o{ TASK_DEPENDENCY : has
-    TASK ||--o{ TASK_COMMENT : has
-    TASK ||--o{ TIMESHEET : tracked_in
-    
-    EXPENSE }o--|| EXPENSE_CATEGORY : categorized
-    EXPENSE }o--|| COST_CENTER : allocated_to
-    EXPENSE ||--o{ EXPENSE_APPROVAL : requires
-    EXPENSE ||--o{ EXPENSE_AUDIT_LOG : logged
+    USER ||--o{ TASK : "assigned to"
+    USER ||--o{ TIMESHEET : "submits"
+    USER ||--o{ EXPENSE : "submits"
+    USER ||--o{ NOTIFICATION : "receives"
+    USER }o--|| DEPARTMENT : "belongs to"
+    USER }o--o{ TEAM : "member of"
+
+    PROJECT ||--o{ TASK : "contains"
+    PROJECT ||--o{ PHASE : "has"
+    PROJECT ||--o{ TIMESHEET : "billed to"
+    PROJECT }o--|| CLIENT : "for"
+
+    PHASE ||--o{ EPIC : "groups"
+    EPIC ||--o{ MILESTONE : "tracks"
+
+    TASK ||--o{ TASK_DEPENDENCY : "blocked by"
+    TASK ||--o{ TASK_ATTACHMENT : "has files"
+    TASK ||--o{ TASK_COMMENT : "has comments"
+
+    EXPENSE ||--o{ EXPENSE_ITEM : "contains"
+    EXPENSE ||--o{ EXPENSE_AUDIT_LOG : "tracked by"
+    EXPENSE }o--|| COST_CENTER : "allocated to"
+
+    NOTIFICATION }o--|| USER : "for"
+    INTEGRATION }o--|| USER : "owned by"
+    MFA_SETTINGS }o--|| USER : "for"
 ```
 
-### Database Tables
+### Core Models (27+)
 
-**Core Entities:**
+| Model File | Key Fields | Relationships |
+|-----------|-----------|---------------|
+| `user.py` | id, email, full_name, role, password_hash, is_active, department_id, settings(JSON) | → Department, Tasks, Timesheets, Expenses |
+| `project.py` | id, name, status, priority, start_date, end_date, budget, client_id | → Tasks, Phases, Team |
+| `project_structure.py` | Phase, Epic, Milestone per project | → Project |
+| `task.py` | id, title, status, priority, due_date, assignee_id, project_id, parent_id | → User, Project, Dependencies, Attachments |
+| `task_dependency.py` | task_id, depends_on_id | → Task (self-referential) |
+| `task_collaboration.py` | task_id, user_id, comment, mentions | → Task, User |
+| `timesheet.py` | id, user_id, task_id, hours, date, status | → User, Task, Project |
+| `time_tracking.py` | id, user_id, task_id, start_time, end_time, duration | → User, Task |
+| `expense.py` | id, user_id, status, total_amount, currency, submitted_at | → User, ExpenseItems, AuditLog |
+| `expense_category.py` | name, description | — |
+| `expense_approval.py` | expense_id, approver_id, level, action, comment | → Expense, User |
+| `expense_audit_log.py` | expense_id, user_id, action, old_values, new_values | → Expense, User |
+| `cost_center.py` | id, name, code, budget | — |
+| `notification.py` | id, user_id, type, title, message, read, created_at | → User |
+| `team.py` | id, name, members, lead_id | → User |
+| `client.py` | id, name, email, industry, status | — |
+| `department.py` | id, name, manager_id, parent_id | → User (self-referential for hierarchy) |
+| `integration.py` | id, user_id, type, config_json, events, active | → User |
+| `support.py` | id, user_id, title, status, priority, assigned_to | → User |
+| `saved_view.py` | id, user_id, name, entity_type, filters_json, is_shared | → User |
+| `templates.py` | Task + MFA settings templates | — |
+| `automation.py` | id, name, trigger, conditions, actions_json, active | — |
+| `approval_rule.py` | entity_type, threshold, approver_role | — |
+| `permission.py` | role, resource, action, allowed | — |
+| `workspace.py` | id, name, owner_id, members | → User |
 
-| Table | Rows (est) | Purpose |
-|-------|-----------|---------|
-| users | 100-1000 | User accounts |
-| clients | 50-500 | Client organizations |
-| departments | 10-100 | Organizational units |
-| teams | 20-200 | Team structures |
-| projects | 100-1000 | Projects |
-| phases | 200-2000 | Project phases |
-| epics | 500-5000 | Epics/features |
-| milestones | 1000-10000 | Milestones |
-| tasks | 5000-100000 | Individual tasks |
-| task_dependencies | 2000-20000 | Task relationships |
-| timesheets | 10000-500000 | Time entries |
-| expenses | 5000-100000 | Expense records |
-| notifications | 50000-1000000 | Notifications |
+### Database Connection Strategy
 
-**Database Indexes:**
+```python
+# database.py
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(url, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(url)   # PostgreSQL, MySQL etc.
 
-```sql
--- Performance indexes
-CREATE INDEX idx_task_project ON task(project_id);
-CREATE INDEX idx_task_assignee ON task(assignee_id);
-CREATE INDEX idx_task_status ON task(status);
-CREATE INDEX idx_timesheet_user ON timesheet(user_id);
-CREATE INDEX idx_timesheet_date ON timesheet(date);
-CREATE INDEX idx_expense_user ON expense(user_id);
-CREATE INDEX idx_notification_user ON notification(user_id, is_read);
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_db():          # FastAPI dependency
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+**All tables** are created at startup via `Base.metadata.create_all(bind=engine)`. For production use Alembic migrations.
+
+### Health Check with DB Ping
+
+```
+GET /health → {"status": "healthy", "database": "connected"}
+             or {"status": "degraded", "database": "disconnected"}
 ```
 
 ---
@@ -870,115 +233,565 @@ CREATE INDEX idx_notification_user ON notification(user_id, is_read);
 
 ### Authentication Flow
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant API
-    participant Database
-    
-    User->>Frontend: Enter credentials
-    Frontend->>API: POST /api/auth/login
-    API->>Database: Query user
-    Database-->>API: User data
-    API->>API: Verify password (bcrypt)
-    API->>API: Generate JWT token
-    API-->>Frontend: {token, user}
-    Frontend->>Frontend: Store token (localStorage)
-    
-    User->>Frontend: Access protected resource
-    Frontend->>API: GET /api/projects (Authorization: Bearer {token})
-    API->>API: Validate JWT
-    API->>API: Check permissions
-    API->>Database: Query data
-    Database-->>API: Data
-    API-->>Frontend: {projects}
+```
+1. User sends POST /api/auth/login/json  {email, password}
+         │
+         ▼
+2. verify_password(plain, bcrypt_hash)   ─── fail → 401
+         │
+         ▼
+3. Check user.is_active                  ─── false → 400
+         │
+         ▼
+4. Check MFA enabled?
+   │  Yes → return {mfa_required: true, user_id}
+   │         → Frontend shows OTP prompt
+   │         → POST /api/mfa/verify {user_id, code}
+   │         → verified → continue
+   │  No  → continue
+         │
+         ▼
+5. create_access_token({sub, email, role}, expires)
+         │
+         ▼
+6. Return {access_token, token_type: "bearer"}
+         │
+         ▼
+7. Frontend stores token in cookie:
+   document.cookie = "token=...; path=/; samesite=strict; secure"
 ```
 
-### Role-Based Access Control (RBAC)
+### JWT Structure
 
-**Roles:**
+```json
+{
+  "header": {"alg": "HS256", "typ": "JWT"},
+  "payload": {
+    "sub": "user-uuid",
+    "email": "user@company.com",
+    "role": "admin",
+    "exp": 1740000000
+  },
+  "signature": "HMAC-SHA256(header.payload, SECRET_KEY)"
+}
+```
 
-| Role | Permissions |
-|------|-------------|
-| Admin | Full system access |
-| Manager | Team management, approvals, reports |
-| Employee | Task/timesheet/expense management |
-| Client | View-only access to projects |
-| Guest | Limited read-only access |
+### OAuth 2.0 Flow (Google / Microsoft)
 
-**Permission System:**
+```
+1. Frontend → GET /api/auth/google
+2. Backend → Redirect to Google OAuth2 consent page
+3. User grants permission
+4. Google → GET /api/auth/google/callback?code=...&state=...
+5. Backend exchanges code for tokens via httpx
+6. Backend fetches user email from Google
+7. Backend upserts user in DB
+8. Backend creates JWT
+9. Backend → Redirect to /login/oauth-callback#token=JWT
+   (URL FRAGMENT — never sent to servers, not logged)
+10. Frontend reads hash, clears URL, stores token in cookie
+```
+
+### Role-Based Access Control
 
 ```python
-class Permission:
-    # Project permissions
-    PROJECT_CREATE = "project:create"
-    PROJECT_READ = "project:read"
-    PROJECT_UPDATE = "project:update"
-    PROJECT_DELETE = "project:delete"
-    
-    # Task permissions
-    TASK_CREATE = "task:create"
-    TASK_ASSIGN = "task:assign"
-    TASK_COMPLETE = "task:complete"
-    
-    # Approval permissions
-    TIMESHEET_APPROVE = "timesheet:approve"
-    EXPENSE_APPROVE = "expense:approve"
+# role_guards.py — centralized, no scattered hardcoded checks
+ADMIN_ROLES    = {"admin", "system_admin", "org_admin"}
+MANAGER_ROLES  = ADMIN_ROLES | {"manager", "project_manager"}
+LEAD_ROLES     = MANAGER_ROLES | {"lead", "team_lead"}
+
+def require_admin(current_user = Depends(get_current_active_user)):
+    if not is_admin(current_user):
+        raise HTTPException(403, "Admin access required")
+    return current_user
+
+# Used as FastAPI dependency:
+@router.delete("/{id}")
+def delete_user(user_id, current_user = Depends(require_admin), ...):
+    ...
 ```
+
+### Data Leakage Prevention
+
+| Risk | Mitigation |
+|------|-----------|
+| Error details in API responses | All `str(e)` replaced with generic messages; details logged server-side |
+| Internal paths in errors | File upload errors use generic message |
+| API keys in logs | Only last 4 chars shown: `****XXXX` |
+| Error metadata in chatbot | `str(e)` removed from all chat response objects |
+| Health check internals | Error detail not returned to caller |
+| Token in server logs | OAuth uses URL fragments (not query params) |
+| Cached sensitive responses | `Cache-Control: no-store` on all `/api/*` |
 
 ---
 
-## 🚀 Performance Optimization
+## 🤖 AI Architecture
+
+### Chatbot Service (`chatbot.py`)
 
 ```
+User Message
+     │
+     ▼
+sanitize_user_input()     ← strip injection phrases, limit to 2000 chars
+     │
+     ▼
+fetch_user_context()      ← pull relevant DB data (tasks, projects, expenses)
+     │
+     ▼
+build_prompt()            ← system instruction + context + sanitized message
+     │
+     ▼
+Gemini API call           ← gemini-2.5-flash model
+     │                    ← retry with exponential back-off (2s, 5s, 10s)
+     ▼
+save_chat_message()       ← persist to DB for multi-turn history
+     │
+     ▼
+ChatResponse → User
+```
+
+**Prompt Injection Protection:**
+```python
+DANGEROUS_PHRASES = [
+    "ignore all previous instructions",
+    "ignore the above",
+    "disregard all prior",
+    "forget everything",
+    "system prompt",
+    "reveal your instructions",
+]
+# Each phrase is replaced with "[filtered]" before sending to Gemini
+```
+
+### AI Agent (`ai_agent.py`)
+
+The AI Agent uses **function calling** — Gemini can invoke backend operations directly:
+
+```
+User: "Create a task called 'Fix login bug' assigned to John, due Friday"
+  │
+  ▼
+AI Agent parses intent → selects tool: create_task()
+  │
+  ▼
+function_call: {
+  name: "create_task",
+  args: { title: "Fix login bug", assignee: "john@...", due_date: "2026-02-28" }
+}
+  │
+  ▼
+Backend executes → DB write → success confirmation
+  │
+  ▼
+Agent responds: "✅ Task 'Fix login bug' created and assigned to John, due Feb 28."
+```
+
+Available agent tools: `create_task`, `update_task`, `query_tasks`, `query_projects`, `query_timesheets`, `query_expenses`, `create_comment`, `search_users`
 
 ---
 
-## 📊 Monitoring & Logging
+## ⚡ Real-Time Architecture (WebSocket)
+
+### Connection Flow
+
+```
+1. Frontend: new WebSocket("ws://localhost:8000/ws/notifications?token=JWT")
+2. Backend: decode JWT from query param, get user_id
+3. ConnectionManager.connect(user_id, websocket)
+4. Connection stored in: active_connections: Dict[str, WebSocket]
+
+On event (e.g., task assigned):
+   NotificationService.send_notification(user_id, type, title, message)
+         │
+         ▼
+   manager.send_personal_message(user_id, {type, title, message, timestamp})
+         │
+         ▼
+   frontend receives JSON → displays toast or notification badge
+```
+
+### Notification Types
 
 ```python
-import logging
-
-logger = logging.getLogger(__name__)
-
-# Request logging
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    logger.info(f"{request.method} {request.url}")
-    response = await call_next(request)
-    logger.info(f"Status: {response.status_code}")
-    return response
+class NotificationType(str, Enum):
+    TASK_ASSIGNED     = "task_assigned"
+    TASK_UPDATED      = "task_updated"
+    TASK_COMPLETED    = "task_completed"
+    TASK_OVERDUE      = "task_overdue"
+    EXPENSE_APPROVED  = "expense_approved"
+    EXPENSE_REJECTED  = "expense_rejected"
+    TIMESHEET_APPROVED = "timesheet_approved"
+    COMMENT_MENTION   = "comment_mention"
+    SLA_BREACH        = "sla_breach"
+    SYSTEM            = "system"
 ```
 
 ---
 
-## 🔄 Environment Configuration
+## 🏗️ Frontend Architecture
 
-**Development:**
-```bash
-DATABASE_URL=sqlite:///./timesheet.db
-DEBUG=true
-CORS_ORIGINS=http://localhost:3000
-GEMINI_API_KEY=your-api-key
+### Next.js App Router Structure
+
+```
+app/
+├── (public)/
+│   └── login/          ← Login, Register, OAuth callback
+│
+└── (protected)/        ← All routes require valid JWT
+    ├── layout.tsx       ← Auth guard wrapper, nav, sidebar
+    ├── home/            ← Personal dashboard
+    ├── tasks/
+    │   ├── page.tsx         ← List view (default)
+    │   ├── kanban/page.tsx  ← Kanban board
+    │   ├── swimlane/page.tsx← Swimlane view
+    │   └── calendar/page.tsx← Calendar view
+    ├── projects/        ← Project list + detail
+    ├── dashboards/
+    │   ├── manager/page.tsx
+    │   └── executive/page.tsx
+    ├── my-time/         ← Time tracker + log
+    ├── my-expense/      ← Expense management
+    ├── chatbot/         ← AI Assistant
+    ├── settings/
+    │   ├── profile/
+    │   ├── security/    ← MFA, password change, sessions
+    │   └── notifications/
+    ├── reports/
+    │   ├── page.tsx
+    │   └── scheduled/page.tsx
+    └── ...22 more pages
 ```
 
-**Production:**
-```bash
-DATABASE_URL=postgresql://user:pass@host:5432/lightidea
-DEBUG=false
-CORS_ORIGINS=https://app.lightidea.com
-SECRET_KEY=<strong-random-key>
-GEMINI_API_KEY=your-production-api-key
+### Auth Flow (Frontend)
+
+```typescript
+// lib/auth.ts
+function setToken(token: string) {
+  const isSecure = window.location.protocol === "https:";
+  let cookie = `token=${token}; path=/; samesite=strict`;
+  if (isSecure) cookie += "; secure";
+  document.cookie = cookie;
+}
+
+// Middleware (middleware.ts) — runs on every request
+if (!token && isProtectedRoute) {
+  return redirect("/login");
+}
+```
+
+### Service Layer Pattern
+
+```typescript
+// services/tasks.ts
+export const TasksService = {
+  async getAll(filters?: TaskFilters): Promise<Task[]> {
+    return apiGet<Task[]>("/api/tasks", filters);
+  },
+  async create(data: CreateTaskInput): Promise<Task> {
+    return apiPost<Task>("/api/tasks", data);
+  },
+  // ...
+};
+
+// Used in components:
+const tasks = await TasksService.getAll({ status: "in_progress" });
+```
+
+### HTTP Client (`lib/fetcher.ts`)
+
+```typescript
+async function fetchData<T>(url: string, options?: FetchOptions): Promise<T> {
+  // 1. Inject JWT from cookie into Authorization header
+  // 2. Apply 30s timeout via AbortController
+  // 3. On 401 → clearToken() + redirect to /login
+  // 4. On network error → throw ApiError with status code
+  // 5. Parse JSON response → return typed T
+}
+```
+
+### WebSocket Client (`lib/websocket.ts`)
+
+```typescript
+class NotificationClient {
+  connect(token: string) {
+    this.ws = new WebSocket(`${WS_URL}/ws/notifications?token=${token}`);
+    this.ws.onmessage = (e) => this.handleMessage(JSON.parse(e.data));
+    this.ws.onclose = () => setTimeout(() => this.reconnect(), 3000); // auto-reconnect
+  }
+
+  onNotification(callback: (n: Notification) => void) {
+    this.callbacks.push(callback);
+  }
+}
 ```
 
 ---
 
-## 🎯 Design Patterns Used
+## 🔄 Key Workflow Flows
 
-1. **Dependency Injection** - FastAPI dependencies for current user
-2. **Repository Pattern** - Data access abstraction
-3. **Factory Pattern** - Notification creation
-4. **Observer Pattern** - Event-driven notifications
-5. **Strategy Pattern** - Approval workflows
+### Expense Approval Workflow
 
+```
+Employee                  Manager                   System
+    │                         │                        │
+    │── Create Expense ───────────────────────────────▶│ DB: status=draft
+    │── Submit ─────────────────────────────────────▶  │ DB: status=submitted
+    │                         │◀── Notification ───────│ WebSocket push
+    │                         │── Approve ──────────▶  │ DB: status=approved
+    │◀── Notification ────────────────────────────────  │ WebSocket push
+    │                         │── Mark Paid ────────▶  │ DB: status=paid
+    │                         │                        │ Audit log entry
+```
+
+### Task Dependency Check
+
+```python
+# tasks.py — cycle detection before adding dependency
+def _has_circular_dependency(task_id, dependency_id, db) -> bool:
+    """DFS traversal to detect circular dependency chains."""
+    visited = set()
+    queue = [dependency_id]
+    while queue:
+        current = queue.pop()
+        if current == task_id:
+            return True  # Circular!
+        if current not in visited:
+            visited.add(current)
+            deps = db.query(TaskDependency).filter(
+                TaskDependency.task_id == current
+            ).all()
+            queue.extend(d.depends_on_id for d in deps)
+    return False
+```
+
+### Automation Rule Evaluation
+
+```python
+# automation_engine.py
+def evaluate_rules(event_type: str, entity: dict, db: Session):
+    rules = db.query(AutomationRule).filter(
+        AutomationRule.trigger == event_type,
+        AutomationRule.active == True
+    ).all()
+
+    for rule in rules:
+        if _evaluate_conditions(rule.conditions, entity):
+            _execute_actions(rule.actions, entity, db)
+```
+
+**Supported triggers:** `task.created`, `task.status_changed`, `task.assigned`, `task.due_date_reached`, `expense.submitted`, `timesheet.submitted`
+
+**Supported actions:** `send_notification`, `change_status`, `assign_user`, `create_subtask`, `trigger_webhook`, `send_email`
+
+---
+
+## 📊 Analytics Pipeline
+
+```
+Raw DB Data
+     │
+     ▼
+Aggregation Queries (SQLAlchemy + func.count / func.sum / func.avg)
+     │
+     ▼
+Business metric calculation (team utilization %, SLA compliance rate, etc.)
+     │
+     ▼
+Serialization via Pydantic schemas
+     │
+     ▼
+JSON API response → Frontend charts (custom canvas/SVG components)
+```
+
+### Key Metrics Computed Server-Side
+
+```python
+# Utilization rate
+utilization = (logged_hours / allocated_hours) * 100
+
+# Task completion rate
+completion_rate = (completed_tasks / total_tasks) * 100
+
+# SLA compliance
+sla_compliant = tasks where completed_at <= due_date
+sla_breach_rate = (breached / total) * 100
+
+# Budget variance
+variance = actual_expenses - budgeted_amount
+```
+
+---
+
+## 🔧 Error Handling Strategy
+
+### Centralized Error Handlers (`utils/error_handlers.py`)
+
+```
+Exception Type               HTTP Status   Response Shape
+─────────────────────────────────────────────────────────
+AppError (custom)             varies       {detail, code, field?}
+NotFoundError                 404          {detail: "X not found", code: "NOT_FOUND"}
+ForbiddenError                403          {detail: "...", code: "FORBIDDEN"}
+ConflictError                 409          {detail: "...", code: "CONFLICT"}
+ValidationError               422          {detail: "...", code: "VALIDATION_ERROR"}
+DependencyBlockedError        409          {detail: "...", code: "DEPENDENCY_BLOCKED", blocking_tasks}
+HTTPException (FastAPI)       varies       {detail, code: "HTTP_ERROR"}
+RequestValidationError        422          {detail, code, errors: [{field, message}]}
+IntegrityError (SQLAlchemy)   409          {detail: "Already exists", code: "CONFLICT"}
+OperationalError (SQLAlchemy) 503          {detail: "DB unavailable", code: "DB_ERROR"}
+Exception (catch-all)         500          {detail: "Internal error", code: "INTERNAL_ERROR"}
+```
+
+All unhandled exceptions are **logged server-side** with full stack trace, but clients **only ever see** generic error messages — no `str(e)` reaches the client.
+
+---
+
+## 📦 Deployment Considerations
+
+### Production Checklist
+
+- [ ] Set `SECRET_KEY` to a 128-char+ random hex string
+- [ ] Set `GEMINI_API_KEY` to your production key (rotated if previously committed)
+- [ ] Set `ENCRYPTION_KEY` (Fernet key) for at-rest field encryption
+- [ ] Set `DATABASE_URL` to a PostgreSQL connection string
+- [ ] Set `CORS_ORIGINS` to your actual production domain(s)
+- [ ] Use nginx as reverse proxy with SSL termination
+- [ ] Set `ACCESS_TOKEN_EXPIRE_MINUTES=30` (not 1440)
+- [ ] Run `alembic upgrade head` for migrations instead of `create_all()`
+- [ ] Configure email SMTP for notification delivery
+- [ ] Set up log aggregation (e.g., Datadog, Papertrail)
+- [ ] Enable PostgreSQL connection pooling (PgBouncer)
+- [ ] Add Redis for distributed rate limiting in multi-instance deployments
+
+### Docker Quick Start (Production)
+
+```dockerfile
+# backend/Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+```
+
+```yaml
+# docker-compose.yml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: lightidea
+      POSTGRES_USER: lightidea
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://lightidea:${DB_PASSWORD}@db:5432/lightidea
+    depends_on: [db]
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    environment:
+      NEXT_PUBLIC_API_URL: https://api.yourcompany.com
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+```
+
+---
+
+## 🧪 Testing
+
+### Backend Test Setup (`tests/conftest.py`)
+
+```python
+# In-memory SQLite for isolation
+SQLALCHEMY_DATABASE_URL = "sqlite://"
+engine = create_engine(url, connect_args={"check_same_thread": False})
+
+# Override DB dependency
+app.dependency_overrides[get_db] = override_get_db
+
+# Fixtures: TestClient, registered user, auth headers
+```
+
+### Test Coverage Areas
+
+| Area | File |
+|------|------|
+| Auth register/login | `test_auth.py` |
+| Token refresh | `test_auth.py` |
+| User CRUD | (extend `test_users.py`) |
+| Task CRUD + dependencies | (extend `test_tasks.py`) |
+| Expense approval workflow | (extend `test_expenses.py`) |
+| Role guard enforcement | (extend `test_rbac.py`) |
+
+```bash
+# Run tests
+cd backend
+pytest tests/ -v
+
+# With coverage
+pytest --cov=app --cov-report=html tests/
+```
+
+---
+
+## 🗺️ API Router Map
+
+A full index of all 42 backend routers and their URL prefixes:
+
+| Prefix | File | Key Capabilities |
+|--------|------|-----------------|
+| `/api/auth` | `auth.py` | register, login, OAuth, refresh, MFA |
+| `/api/users` | `users.py` | CRUD, profile, export, activity summary |
+| `/api/clients` | `clients.py` | Client CRUD |
+| `/api/departments` | `departments.py` | Department hierarchy |
+| `/api/teams` | `teams.py` | Team CRUD, member management |
+| `/api/projects` | `projects.py` | Project CRUD |
+| `/api` (phases/epics/milestones) | `project_structure.py` | Project hierarchy |
+| `/api/tasks` | `tasks.py` | Task CRUD, attachments, dependencies |
+| `/api/task-templates` | `task_templates.py` | Template save/apply |
+| `/api/timesheets` | `timesheets.py` | Submit, approve, export |
+| `/api/time-tracking` | `time_tracking.py` | Live timer |
+| `/api/my-time` | `my_time.py` | Personal time log |
+| `/api/expenses` | `expenses.py` | Expense CRUD, approval workflow |
+| `/api/expenses/dashboard` | `expense_dashboard.py` | Analytics charts |
+| `/api/expenses/reports` | `expense_reports.py` | Excel/PDF/Tax export |
+| `/api/cost-centers` | `cost_centers.py` | Cost center CRUD |
+| `/api/dashboard` | `dashboard.py` | Personal + manager dashboards |
+| `/api/dashboard` | `manager_dashboards.py` | Manager + executive views |
+| `/api/chatbot` | `chatbot.py` | AI chat, file analysis |
+| `/api/ai` | `ai_features.py` | Predict deadline, prioritize |
+| `/api/ai-agent` | `ai_agent.py` | Agentic function-calling AI |
+| `/api/notifications` | `notifications.py` | Notification CRUD + preferences |
+| `/api/notifications/email` | `email_notifications.py` | Email templates + send |
+| `/ws/notifications` | `websocket_notifications.py` | WebSocket real-time push |
+| `/api/calendar` | `calendar.py` | Calendar event data |
+| `/api/integrations` | `google_calendar.py` | Google Calendar sync |
+| `/api/gantt` | `gantt.py` | Gantt chart data |
+| `/api/reports` | `reports.py` | Report gen, schedule |
+| `/api/search` | `search.py` | Global search + suggestions |
+| `/api/views` | `views.py` | Custom saved views |
+| `/api/workload` | `workload.py` | Capacity planning |
+| `/api/workspaces` | `workspaces.py` | Multi-workspace |
+| `/api/support` | `support.py` | Support tickets |
+| `/api/integrations` | `integrations.py` | Webhooks + external APIs |
+| `/api/integrations/chat` | `chat_integrations.py` | Slack / Teams delivery |
+| `/api/automation` | `automation.py` | Automation rules engine |
+| `/api/advanced` | `advanced_features.py` | Bulk import, advanced ops |
+| `/api/mfa` | `mfa.py` | TOTP setup/verify/disable |
+| `/api/gdpr` | `gdpr.py` | Data export, deletion, consent |
+| `/api` (permissions) | `permissions.py` | RBAC permission management |
+| `/api/settings` | `settings.py` | Profile, security, notification settings |
+| `/health` | `main.py` | Health check + DB ping |

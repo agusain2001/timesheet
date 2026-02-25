@@ -74,7 +74,7 @@ export interface WorkspacesParams {
     [key: string]: string | number | boolean | undefined;
 }
 
-const BASE_URL = "/workspaces";
+const BASE_URL = "/api/workspaces";
 
 // =============== Workspace CRUD ===============
 

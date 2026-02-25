@@ -207,14 +207,14 @@ export interface ExpensesParams {
 // Expense CRUD API
 // ============================================
 
-const BASE_URL = "/expenses";
+const BASE_URL = "/api/expenses";
 
 export async function getExpenses(params?: ExpensesParams): Promise<Expense[]> {
     return apiGet<Expense[]>(BASE_URL, params);
 }
 
 export async function getMyExpenses(params?: ExpensesParams): Promise<Expense[]> {
-    return apiGet<Expense[]>(`${BASE_URL}/me`, params);
+    return apiGet<Expense[]>(`${BASE_URL}/my`, params);
 }
 
 export async function getPendingExpenses(): Promise<Expense[]> {
@@ -288,7 +288,7 @@ export async function uploadReceipt(expenseId: string, file: File, itemId?: stri
         formData.append("item_id", itemId);
     }
 
-    const response = await fetch(`/api${BASE_URL}/${expenseId}/receipt`, {
+    const response = await fetch(`${BASE_URL}/${expenseId}/receipt`, {
         method: "POST",
         body: formData,
         credentials: "include",
@@ -317,7 +317,7 @@ export async function getExpenseAuditLog(expenseId: string): Promise<ExpenseAudi
 // Dashboard & Analytics API
 // ============================================
 
-const DASHBOARD_URL = "/expense-dashboard";
+const DASHBOARD_URL = "/api/expense-dashboard";
 
 export async function getExpenseDashboardStats(): Promise<ExpenseDashboardStats> {
     return apiGet<ExpenseDashboardStats>(`${DASHBOARD_URL}/stats`);
@@ -364,7 +364,7 @@ export async function getBudgetComparison(period: "monthly" | "quarterly" | "yea
 // Reports API
 // ============================================
 
-const REPORTS_URL = "/expense-reports";
+const REPORTS_URL = "/api/expense-reports";
 
 export async function exportExpenseReport(params: {
     format: "pdf" | "excel";
@@ -379,7 +379,7 @@ export async function exportExpenseReport(params: {
         if (value) queryParams.append(key, value);
     });
 
-    const response = await fetch(`/api${REPORTS_URL}/export?${queryParams}`, {
+    const response = await fetch(`${REPORTS_URL}/export?${queryParams}`, {
         method: "GET",
         credentials: "include",
     });
@@ -399,7 +399,7 @@ export async function getTaxReport(params: {
     queryParams.append("year", params.year.toString());
     if (params.quarter) queryParams.append("quarter", params.quarter.toString());
 
-    const response = await fetch(`/api${REPORTS_URL}/tax?${queryParams}`, {
+    const response = await fetch(`${REPORTS_URL}/tax?${queryParams}`, {
         method: "GET",
         credentials: "include",
     });
@@ -416,11 +416,11 @@ export async function getTaxReport(params: {
 // ============================================
 
 export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
-    return apiGet<ExpenseCategory[]>("/expense-categories");
+    return apiGet<ExpenseCategory[]>("/api/expense-categories");
 }
 
 export async function getCostCenters(): Promise<CostCenter[]> {
-    return apiGet<CostCenter[]>("/cost-centers");
+    return apiGet<CostCenter[]>("/api/cost-centers");
 }
 
 // ============================================

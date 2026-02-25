@@ -31,6 +31,69 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+class UserProfileUpdate(BaseModel):
+    """Extended profile update schema for user profile page."""
+    full_name: Optional[str] = None
+    position: Optional[str] = None
+    avatar_url: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    # Business Details
+    region: Optional[str] = None
+    company_size: Optional[str] = None
+    business_sector: Optional[str] = None
+    website: Optional[str] = None
+    # Contact Information  
+    contact_person_name: Optional[str] = None
+    contact_person_role: Optional[str] = None
+    primary_phone: Optional[str] = None
+    secondary_phone: Optional[str] = None
+    # Financial & Billing
+    preferred_currency: Optional[str] = None
+    billing_type: Optional[str] = None
+    # Working preferences
+    timezone: Optional[str] = None
+    working_hours_start: Optional[str] = None
+    working_hours_end: Optional[str] = None
+
+class UserProfileResponse(BaseModel):
+    """Extended profile response for user profile page."""
+    id: str
+    email: str
+    full_name: str
+    employee_id: str = ""
+    alias: Optional[str] = None
+    user_type: str = "individual"
+    role: str
+    avatar_url: Optional[str] = None
+    position: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    # Business Details
+    region: Optional[str] = None
+    company_size: Optional[str] = None
+    business_sector: Optional[str] = None
+    website: Optional[str] = None
+    # Contact Information
+    contact_person_name: Optional[str] = None
+    contact_person_role: Optional[str] = None
+    primary_phone: Optional[str] = None
+    secondary_phone: Optional[str] = None
+    # Financial & Billing
+    preferred_currency: Optional[str] = None
+    billing_type: Optional[str] = None
+    # Working preferences
+    timezone: Optional[str] = None
+    working_hours_start: Optional[str] = None
+    working_hours_end: Optional[str] = None
+    # Meta
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
 class UserBrief(BaseModel):
     """Brief user info for embedded responses."""
     id: str
@@ -53,6 +116,18 @@ class TokenData(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+class RegisterRequest(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str
+    confirm_password: str
+
+class OAuthCallbackResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: "UserResponse"
+    is_new_user: bool = False
 
 
 # =============== Client Schemas ===============
@@ -125,7 +200,32 @@ class DepartmentUpdate(BaseModel):
 class DepartmentResponse(DepartmentBase):
     id: str
     managers: List[DepartmentManagerResponse] = []
+    member_count: int = 0
     
+    class Config:
+        from_attributes = True
+
+
+class DepartmentMemberResponse(BaseModel):
+    id: str
+    full_name: str
+    email: str
+    position: Optional[str] = None
+    role: str = "employee"
+    avatar_url: Optional[str] = None
+    employee_code: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentProjectResponse(BaseModel):
+    id: str
+    name: str
+    status: str = "active"
+    business_sector: Optional[str] = None
+    managed_by: Optional[str] = None  # primary manager name
+
     class Config:
         from_attributes = True
 
@@ -219,7 +319,7 @@ class TaskBase(BaseModel):
     due_date: Optional[datetime] = None
 
 class TaskCreate(TaskBase):
-    pass
+    status: Optional[str] = None
 
 class TaskUpdate(BaseModel):
     name: Optional[str] = None
@@ -242,6 +342,24 @@ class TaskResponse(TaskBase):
     client: Optional[ClientBrief] = None
     assignee: Optional[UserBrief] = None
     
+    class Config:
+        from_attributes = True
+
+
+# =============== Task Comment Schemas ===============
+class CommentCreate(BaseModel):
+    content: str
+
+class CommentResponse(BaseModel):
+    id: str
+    task_id: str
+    user_id: str
+    content: str
+    is_edited: bool = False
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    user: Optional[UserBrief] = None
+
     class Config:
         from_attributes = True
 
@@ -637,20 +755,35 @@ class ExpenseReportResponse(BaseModel):
 # =============== Support Schemas ===============
 class SupportRequestBase(BaseModel):
     message: str
+    subject: Optional[str] = None
+    priority: str = "normal"
+    related_module: Optional[str] = None
+    image_url: Optional[str] = None
 
 class SupportRequestCreate(SupportRequestBase):
-    pass
+    recipient_ids: Optional[List[str]] = None
+    is_draft: bool = False
 
 class SupportRequestUpdate(BaseModel):
     message: Optional[str] = None
+    subject: Optional[str] = None
+    priority: Optional[str] = None
+    related_module: Optional[str] = None
+    image_url: Optional[str] = None
     status: Optional[str] = None
+    is_draft: Optional[bool] = None
+    recipient_ids: Optional[List[str]] = None
 
 class SupportRequestResponse(SupportRequestBase):
     id: str
     user_id: str
     status: str
+    is_draft: bool = False
+    recipient_ids: Optional[List[str]] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
+    user: Optional[UserBrief] = None
     
     class Config:
         from_attributes = True
@@ -686,3 +819,58 @@ class ChatMessage(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     context_used: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    extracted_data: Optional[Dict[str, Any]] = None
+
+class ChatAttachment(BaseModel):
+    file_name: str
+    file_url: str
+    file_type: str
+    size: int
+
+class ChatHistoryItem(BaseModel):
+    id: str
+    role: str
+    content: str
+    attachments: List[Dict[str, Any]] = []
+    metadata: Dict[str, Any] = {}
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class DocumentScanResult(BaseModel):
+    file_name: str
+    file_type: str
+    raw_text: Optional[str] = None
+    vendor_name: Optional[str] = None
+    date: Optional[str] = None
+    total_amount: Optional[float] = None
+    currency: str = "EGP"
+    category: Optional[str] = None
+    description: Optional[str] = None
+    summary: Optional[str] = None
+    confidence: str = "medium"
+
+class DocumentScanResponse(BaseModel):
+    success: bool
+    message: str
+    results: List[DocumentScanResult] = []
+
+class SaveToActivityRequest(BaseModel):
+    activity_type: str  # "expense" or "task"
+    title: str
+    description: Optional[str] = None
+    project_id: Optional[str] = None
+    # Expense-specific fields
+    vendor: Optional[str] = None
+    amount: Optional[float] = None
+    currency: str = "EGP"
+    category: Optional[str] = None
+    date: Optional[str] = None
+
+class SaveToActivityResponse(BaseModel):
+    success: bool
+    message: str
+    activity_id: Optional[str] = None
+    activity_type: Optional[str] = None

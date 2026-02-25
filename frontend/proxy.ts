@@ -3,14 +3,8 @@ import type { NextRequest } from "next/server";
 
 // Protected routes that require authentication
 const protectedPaths = [
-  "/clients",
-  "/divisions",
-  "/employees",
-  "/projects",
+  "/home",
   "/tasks",
-  "/timesheets",
-  "/expenses",
-  "/dashboard",
   "/settings",
 ];
 
@@ -36,10 +30,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // If auth path and has token, redirect to clients (dashboard)
+  // If auth path and has token, redirect to home (dashboard)
   if (isAuthPath && token) {
-    return NextResponse.redirect(new URL("/clients", request.url));
+    return NextResponse.redirect(new URL("/home", request.url));
   }
 
   return NextResponse.next();
 }
+

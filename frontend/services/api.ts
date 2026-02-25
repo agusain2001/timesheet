@@ -59,10 +59,12 @@ export async function apiGet<T>(
 export async function apiPost<T>(
     endpoint: string,
     data?: unknown,
+    options?: RequestInit & { token?: string | null; responseType?: "json" | "blob" }
 ): Promise<T> {
     return apiFetch<T>(endpoint, {
         method: "POST",
         body: data ? JSON.stringify(data) : undefined,
+        ...options,
     });
 }
 
