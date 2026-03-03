@@ -430,7 +430,7 @@ async def list_scheduled_reports(
     """List scheduled reports for current user."""
     from app.services.scheduler_service import scheduler_service
     
-    jobs = scheduler_service.get_scheduled_jobs()
+    jobs = scheduler_service.list_jobs()
     
     # Filter to only show report jobs for this user
     user_reports = [

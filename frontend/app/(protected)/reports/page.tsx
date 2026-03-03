@@ -15,6 +15,7 @@ import {
     type ReportResult, type ReportFilters, type ExportFormat,
 } from "@/services/reports";
 import { useRouter } from "next/navigation";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -622,6 +623,17 @@ export default function ReportsPage() {
 
             {/* Main */}
             <div className="flex-1 flex flex-col p-6 gap-6 min-w-0 overflow-y-auto">
+                <HowItWorks
+                    pageKey="reports"
+                    description="Generate analytics reports by selecting a report type from the left sidebar, applying filters, and clicking Run Report."
+                    bullets={[
+                        "Analytics Dashboard: auto-loads live KPIs, charts, and project summaries.",
+                        "Task Aging: shows tasks that have been open too long — helps surface stale work.",
+                        "Team Velocity: measures how many tasks are completed per sprint/week.",
+                        "Burn Chart: requires selecting a project, then shows burn-down/up progress.",
+                        "Export to CSV or Excel once a report is generated.",
+                    ]}
+                />
                 {activeReport === "dashboard" ? (
                     <AnalyticsDashboard />
                 ) : (

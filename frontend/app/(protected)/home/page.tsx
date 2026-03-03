@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getPersonalDashboard, type PersonalDashboard } from "@/services/dashboard";
 import { getToken } from "@/lib/auth";
 import AddTaskModal from "@/components/AddTaskModal";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ============ Helper ============
 
@@ -372,6 +373,19 @@ export default function HomePage() {
                     </button>
                 </div>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="home"
+                description="Your personal dashboard shows tasks assigned to you, upcoming deadlines, and your logged hours — all in one place."
+                bullets={[
+                    "Stat cards at the top are clickable — they filter your tasks by status.",
+                    "Upcoming Deadlines shows tasks due within the next 7 days, sorted by due date.",
+                    "Recent Activity logs the latest changes to your tasks and projects.",
+                    "The time tracker shows hours logged today and this week vs your target.",
+                    "Click Add Task to quickly create a new task from this dashboard.",
+                ]}
+            />
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

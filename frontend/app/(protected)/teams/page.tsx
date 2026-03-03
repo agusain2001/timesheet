@@ -19,6 +19,7 @@ import {
     BarChart2,
 } from "lucide-react";
 import { getToken } from "@/lib/auth";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -295,7 +296,7 @@ function TeamFormModal({
             if (isEdit) {
                 await apiFetch(`/teams/${team!.id}`, { method: "PUT", body: JSON.stringify(form) });
             } else {
-                await apiFetch("/api/teams", { method: "POST", body: JSON.stringify(form) });
+                await apiFetch("/teams", { method: "POST", body: JSON.stringify(form) });
             }
             onSave();
         } catch (err: any) {
@@ -892,9 +893,9 @@ export default function TeamsPage() {
         setLoading(true);
         try {
             const [t, u, d] = await Promise.all([
-                apiFetch("/api/teams"),
-                apiFetch("/api/users"),
-                apiFetch("/api/departments"),
+                apiFetch("/teams"),
+                apiFetch("/users"),
+                apiFetch("/departments"),
             ]);
             setTeams(t || []);
             setUsers(u || []);
@@ -961,6 +962,19 @@ export default function TeamsPage() {
                         </button>
                     </div>
                 </div>
+
+                {/* How It Works */}
+                <HowItWorks
+                    pageKey="teams"
+                    color="purple"
+                    description="Teams lets you create and manage cross-functional teams, assign members, set capacity, and track workload in one place."
+                    bullets={[
+                        "Click New Team to create a team and assign a department, lead, and weekly capacity.",
+                        "Click a team card to open the detail panel — view members, skill distribution, and active count.",
+                        "Switch to Tree View to see your team hierarchy at a glance.",
+                        "Use the Add button in the detail panel to add new members with role and allocation percentage.",
+                    ]}
+                />
 
                 {/* Filters */}
                 <div className="flex items-center gap-3">

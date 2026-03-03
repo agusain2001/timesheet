@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import { apiGet } from "@/services/api";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -195,7 +196,7 @@ function TemplateModal({ tpl, onSave, onClose }: {
         };
         try {
             if (tpl) await apiFetch(`/task-templates/${tpl.id}`, { method: "PUT", body: JSON.stringify(payload) });
-            else await apiFetch("/api/task-templates", { method: "POST", body: JSON.stringify(payload) });
+            else await apiFetch("/task-templates", { method: "POST", body: JSON.stringify(payload) });
             onSave();
         } catch (e: any) {
             setError(e?.message ?? "Save failed");
@@ -330,7 +331,7 @@ export default function TemplatesPage() {
     const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await apiFetch("/api/task-templates?limit=100");
+            const data = await apiFetch("/task-templates?limit=100");
             setTemplates(Array.isArray(data) ? data : (data?.items ?? []));
         } catch { setTemplates([]); }
         finally { setLoading(false); }
@@ -340,7 +341,7 @@ export default function TemplatesPage() {
 
     const handleDuplicate = async (tpl: Template) => {
         try {
-            await apiFetch("/api/task-templates", {
+            await apiFetch("/task-templates", {
                 method: "POST",
                 body: JSON.stringify({
                     name: `${tpl.name} (Copy)`,
@@ -387,6 +388,19 @@ export default function TemplatesPage() {
                     <Plus size={16} /> New Template
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="templates"
+                color="blue"
+                description="Task Templates are reusable blueprints that let you quickly create new tasks pre-filled with a standard type, priority, status, and checklist."
+                bullets={[
+                    "Click New Template to define a reusable task structure with defaults.",
+                    "Click the copy icon on any template card to instantly create a duplicate.",
+                    "Click the pencil icon to edit an existing template's fields and checklist.",
+                    "Use templates to enforce consistent workflows across your team.",
+                ]}
+            />
 
             {/* Search */}
             <input

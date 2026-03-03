@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.database import get_db
 from app.models import Team, TeamMember, User, Task, TimeEntry
+from app.models.department import Department
 from app.utils import get_current_active_user
 
 router = APIRouter()
@@ -74,6 +75,7 @@ class TeamResponse(TeamBase):
     updated_at: Optional[datetime] = None
     members: List[TeamMemberResponse] = []
     lead_name: Optional[str] = None
+    department_name: Optional[str] = None
     member_count: int = 0
     sub_teams: List["TeamResponse"] = []
     
@@ -118,6 +120,11 @@ def build_team_response(team: Team, db: Session, include_subtems: bool = False) 
     if team.lead_id:
         lead = db.query(User).filter(User.id == team.lead_id).first()
         lead_name = lead.full_name if lead else None
+
+    department_name = None
+    if team.department_id:
+        dept = db.query(Department).filter(Department.id == team.department_id).first()
+        department_name = dept.name if dept else None
     
     sub_teams_list = []
     if include_subtems and team.sub_teams:
@@ -130,6 +137,7 @@ def build_team_response(team: Team, db: Session, include_subtems: bool = False) 
         "description": team.description,
         "parent_team_id": team.parent_team_id,
         "department_id": team.department_id,
+        "department_name": department_name,
         "lead_id": team.lead_id,
         "lead_name": lead_name,
         "capacity_hours_week": team.capacity_hours_week,

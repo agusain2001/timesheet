@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Department, DepartmentManager, User
 from app.models.project import Project
+from app.models.team import Team
 from app.schemas import (
     DepartmentCreate, DepartmentUpdate, DepartmentResponse,
     DepartmentManagerResponse, DepartmentMemberResponse, DepartmentProjectResponse
@@ -29,13 +30,15 @@ def build_department_response(dept: Department, db: Session) -> dict:
         ))
     
     member_count = db.query(User).filter(User.department_id == dept.id).count()
-    
+    team_count = db.query(Team).filter(Team.department_id == dept.id, Team.is_active == True).count()
+
     return {
         "id": dept.id,
         "name": dept.name,
         "notes": dept.notes,
         "managers": managers,
         "member_count": member_count,
+        "team_count": team_count,
     }
 
 

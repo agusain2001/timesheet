@@ -14,6 +14,7 @@ import {
 } from "@/services/clients";
 import type { Client, ClientCreate, ClientUpdate, ClientProject } from "@/types/api";
 import { AddClientModal, EditClientModal } from "@/components/ClientModals";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function getInitials(name: string) {
@@ -650,6 +651,19 @@ export default function ClientsPage() {
                     Add Client
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="clients"
+                color="green"
+                description="Clients lets you manage your company's client accounts, including contact info, billing details, and linked projects."
+                bullets={[
+                    "Click Add Client to register a new client with contact details, region, and business sector.",
+                    "Click any row to open the client's detail panel.",
+                    "Click the ⋯ menu to edit, view related projects, or delete a client.",
+                    "Select multiple clients with checkboxes to bulk export them as CSV.",
+                ]}
+            />
 
             {/* Bulk Selection Bar — shown when 1+ selected */}
             {selectedIds.size > 0 && (

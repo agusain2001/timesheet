@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import { ProjectDetailModal } from "@/components/DashboardPanels";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -91,6 +92,19 @@ export default function ExecutiveDashboard() {
                     <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="executive-dashboard"
+                color="purple"
+                description="The Executive Dashboard gives a bird's-eye view of all projects, their health, delivery trends, and team utilization."
+                bullets={[
+                    "Click KPI cards (Healthy / At Risk / Critical) to filter the project health grid below.",
+                    "Each project card is clickable — click one to see a detailed breakdown.",
+                    "Delivery Trends shows month-by-month on-time vs delayed vs cancelled tasks.",
+                    "Health score is calculated from task completion rate, overdue count, and SLA status.",
+                ]}
+            />
 
             {loading ? (
                 <div className="flex items-center justify-center h-64">

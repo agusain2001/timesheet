@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import { TaskListModal, TaskDetailModal } from "@/components/DashboardPanels";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -130,6 +131,20 @@ export default function ManagerDashboard() {
                     <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="manager-dashboard"
+                color="purple"
+                description="The Manager Dashboard gives you a real-time view of your team's workload, bottlenecks, and SLA health."
+                bullets={[
+                    "Click any KPI stat card to view the tasks behind that number.",
+                    "Workload shows each team member's utilization — red means over-allocated.",
+                    "Bottlenecks are auto-detected when tasks are blocked or stalled too long.",
+                    "SLA Breaches highlight tasks that have missed their service level agreements.",
+                    "Switch to AI Optimization for AI-powered workload redistribution suggestions.",
+                ]}
+            />
 
             {/* Tabs */}
             <div className="flex gap-1 p-1 bg-foreground/[0.02] border border-foreground/10 rounded-xl w-fit">

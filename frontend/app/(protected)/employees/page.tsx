@@ -5,6 +5,7 @@ import { getToken } from "@/lib/auth";
 import { getUsers, getUserProjects, exportUsers, type UsersParams, type UserProject } from "@/services/users";
 import { getDepartments } from "@/services/departments";
 import type { User, Department } from "@/types/api";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getInitials(name: string) {
@@ -519,6 +520,19 @@ export default function EmployeesPage() {
                     </button>
                 </div>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="employees"
+                color="green"
+                description="Employees shows all users in your workspace — view their profiles, department, position, and related projects."
+                bullets={[
+                    "Click the ⋯ menu on any row to view details or see related projects.",
+                    "Select employees with checkboxes then click Export to download as CSV or Excel.",
+                    "Click Invite User to send an email invitation to a new team member.",
+                    "Use Bulk Upload to add multiple employees at once via a CSV file.",
+                ]}
+            />
 
             {/* Controls */}
             <div className="flex items-center justify-between gap-3 flex-wrap">

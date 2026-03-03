@@ -14,6 +14,8 @@ function NotificationToast({ notif, onDismiss }: { notif: WsNotification; onDism
     return () => clearTimeout(t);
   }, [onDismiss]);
 
+  if (!notif.title && !notif.message) return null;
+
   return (
     <div
       className="fixed bottom-6 right-6 z-[999] flex items-start gap-3 max-w-sm w-full bg-foreground/[0.05] border border-foreground/10 rounded-2xl shadow-2xl p-4 animate-in slide-in-from-bottom-4 duration-300"

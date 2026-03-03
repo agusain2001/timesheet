@@ -14,6 +14,7 @@ import {
 } from "@/services/expenses";
 
 import NewExpenseModal from "@/components/NewExpenseModal";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ============ Config ============
 
@@ -300,6 +301,20 @@ export default function MyExpensePage() {
                     New Expense
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="my-expense"
+                color="amber"
+                description="My Expenses lets you create, track, and submit expense requests for approval — keeping all your receipts and spending records organized."
+                bullets={[
+                    "Click New Expense to create an expense report with line items.",
+                    "Filter by status (Draft, Pending, Approved, etc.) using the pill tabs.",
+                    "Drafts can be deleted; submitted expenses follow an approval workflow.",
+                    "Click the ⋯ menu on any row to edit, submit for approval, or view receipts.",
+                    "Submitted expenses will be reviewed by your manager before approval.",
+                ]}
+            />
 
             {/* Status Filter Pills */}
             <div className="flex items-center gap-2 flex-wrap">

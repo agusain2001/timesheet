@@ -6,6 +6,7 @@ import {
     Play, Clock, Info, CheckCircle2, BarChart2,
 } from "lucide-react";
 import { getToken } from "@/lib/auth";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -304,13 +305,18 @@ export default function ScheduledReportsPage() {
                 </div>
             </div>
 
-            {/* Info Banner */}
-            <div className="flex items-start gap-3 p-4 rounded-2xl border border-blue-500/20 bg-blue-500/[0.04]">
-                <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
-                <div className="text-sm text-foreground/60">
-                    <strong className="text-foreground/80">How it works:</strong> Scheduled reports are automatically generated on your chosen schedule. You can use them to track project health, team performance, and task trends without manual effort. Each report type generates a snapshot of real-time data at the time of execution.
-                </div>
-            </div>
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="scheduled-reports"
+                color="blue"
+                description="Scheduled Reports automatically generate and email reports on a recurring basis — daily, weekly, or monthly — so you never miss key insights."
+                bullets={[
+                    "Click Schedule Report to pick a report type, frequency, time, and email recipients.",
+                    "Each report card shows the last run time, next run time, and current status.",
+                    "Click Run Now to trigger an immediate execution outside the schedule.",
+                    "Reports are generated in the background and emailed automatically.",
+                ]}
+            />
 
             {/* Table */}
             {loading ? (

@@ -82,7 +82,11 @@ export function useWebSocket(): UseWebSocketReturn {
                     setUnreadCount(msg.count);
                 } else if (msg.type === "pong") {
                     // heartbeat ok — no-op
-                } else if (msg.type !== "read_confirmed" && msg.type !== "error") {
+                } else if (
+                    msg.type !== "read_confirmed" &&
+                    msg.type !== "error" &&
+                    msg.type !== "connection"
+                ) {
                     // Real notification
                     setLatestMessage(msg);
                     setUnreadCount((c) => c + 1);

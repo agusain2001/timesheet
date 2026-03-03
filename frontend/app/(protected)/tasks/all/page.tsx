@@ -16,6 +16,7 @@ import DuplicateTaskModal from "@/components/DuplicateTaskModal";
 import CommentsModal from "@/components/CommentsModal";
 import TaskDetailPanel from "@/components/TaskDetailPanel";
 import BulkActionBar from "@/components/views/BulkActionBar";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -386,6 +387,73 @@ export default function AllTasksPage() {
                     </button>
                 </div>
             </div>
+
+            {/* How It Works */}
+            {view === "list" && (
+                <HowItWorks
+                    pageKey="tasks-list"
+                    color="blue"
+                    description="List view shows all your tasks in a sortable, filterable table — the quickest way to find and manage tasks."
+                    bullets={[
+                        "Click any column header to sort tasks by that field.",
+                        "Use the filter bar to narrow by status, priority, or assignee.",
+                        "Select tasks with checkboxes to perform bulk status or priority changes.",
+                        "Click a task name to open the details panel on the right.",
+                    ]}
+                />
+            )}
+            {view === "kanban" && (
+                <HowItWorks
+                    pageKey="tasks-kanban"
+                    color="blue"
+                    description="Kanban view organises tasks into columns by status — drag cards between columns to update their status instantly."
+                    bullets={[
+                        "Drag a card from one column to another to change its status.",
+                        "Click the + button at the bottom of a column to add a task directly in that status.",
+                        "Select multiple cards with checkboxes for bulk operations.",
+                        "Click any card to open the full Task Detail panel.",
+                    ]}
+                />
+            )}
+            {view === "calendar" && (
+                <HowItWorks
+                    pageKey="tasks-calendar"
+                    color="blue"
+                    description="Calendar view plots tasks by due date — great for spotting deadline clusters and planning your week."
+                    bullets={[
+                        "Click any day cell to quickly add a task with that due date pre-filled.",
+                        "Drag a task chip to a different day to reschedule it.",
+                        "Click a task chip to open the details panel.",
+                        "Use the month navigation arrows to browse past or future months.",
+                    ]}
+                />
+            )}
+            {view === "gantt" && (
+                <HowItWorks
+                    pageKey="tasks-gantt"
+                    color="blue"
+                    description="Gantt (Timeline) view shows tasks on a horizontal timeline — ideal for tracking project progress and date dependencies."
+                    bullets={[
+                        "Each bar represents a task's start-to-due date range.",
+                        "Drag the right edge of a bar to extend or shorten its end date.",
+                        "Drag the whole bar to shift both the start and end dates together.",
+                        "Zoom in/out using the timeline scale controls at the top right.",
+                    ]}
+                />
+            )}
+            {view === "swimlane" && (
+                <HowItWorks
+                    pageKey="tasks-swimlane"
+                    color="blue"
+                    description="Swimlane view groups tasks into horizontal lanes — switch grouping between Assignee, Priority, or Status using the Group By control."
+                    bullets={[
+                        "Change grouping with the Group By selector in the toolbar above.",
+                        "Drag cards horizontally between status columns within a lane.",
+                        "Click the + at the end of a lane to add a task directly into that group.",
+                        "Collapsed lanes can be expanded by clicking the lane header.",
+                    ]}
+                />
+            )}
 
             {/* Toolbar (not shown for list view) */}
             {view !== "list" && (

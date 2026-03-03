@@ -20,6 +20,7 @@ import DeleteTaskModal from "@/components/DeleteTaskModal";
 import CommentsModal from "@/components/CommentsModal";
 import DuplicateTaskModal from "@/components/DuplicateTaskModal";
 import TaskDetailPanel from "@/components/TaskDetailPanel";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ============ Config ============
 
@@ -782,6 +783,20 @@ export default function MyTimePage() {
                     </div>
                 </div>
             )}
+
+            {/* ── How It Works ── */}
+            <HowItWorks
+                pageKey="my-time"
+                color="blue"
+                description="My Time is your personal task timesheet — track which tasks you've worked on, for how long, and your weekly progress toward your hours target."
+                bullets={[
+                    "The Current Task card shows the running timer for your active task.",
+                    "Click the Working / Paused toggle on any row to start or pause tracking.",
+                    "Weekly Progress bars show how many hours you've logged each day this week.",
+                    "Use filters (Priority, Status, Type) or the search icon to narrow down your task list.",
+                    "Click a task name to open the full Task Detail panel with comments and history.",
+                ]}
+            />
 
             {/* ── Header ── */}
             <div className="flex items-center justify-between">

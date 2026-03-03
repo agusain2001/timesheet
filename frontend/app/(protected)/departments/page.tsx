@@ -10,6 +10,7 @@ import {
     createDepartment,
 } from "@/services/departments";
 import type { Department, DepartmentMember, DepartmentProject } from "@/types/api";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ============ Helpers ============
 function getInitials(name: string): string {
@@ -502,6 +503,19 @@ export default function DepartmentsPage() {
                     Add Department
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="departments"
+                color="amber"
+                description="Departments lets you organise employees into company divisions, view their projects, and manage headcount at a glance."
+                bullets={[
+                    "Click Add Department to create a new division with a name and description.",
+                    "Click any row to open the department's details page.",
+                    "Click the ⋯ menu to view all members or see all projects handled by that department.",
+                    "Use the Sort By No. of Members button to order departments by headcount.",
+                ]}
+            />
 
             {/* Toolbar */}
             <div className="flex items-center justify-between">

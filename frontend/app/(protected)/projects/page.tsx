@@ -15,6 +15,7 @@ import {
 import { getClients } from "@/services/clients";
 import type { Client } from "@/types/api";
 import { AddProjectModal, EditProjectModal } from "@/components/ProjectModals";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getInitials(name: string) {
@@ -709,6 +710,20 @@ export default function ProjectsPage() {
                     Add Project
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="projects"
+                color="blue"
+                description="Projects lets you create and manage all your company's projects, track their status, and see which team members are involved."
+                bullets={[
+                    "Click Add Project to create a new project with a client, manager, dates, and status.",
+                    "Click the ⋯ menu on any row to view project details, edit, manage team members, or delete.",
+                    "Click View Project Details to open the side panel showing project info and team structure.",
+                    "Use the Sector and Status filter chips to narrow down the project list.",
+                    "Click Move to Tasks in the detail panel to jump straight to that project's tasks.",
+                ]}
+            />
 
             {/* Filters row */}
             <div className="flex items-center justify-between gap-3 flex-wrap">

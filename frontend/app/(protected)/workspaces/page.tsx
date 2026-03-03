@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Building2, Plus, Settings, Trash2, Users, Loader2, Check, X, Edit2, Globe, Lock } from "lucide-react";
 import { getToken } from "@/lib/auth";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -299,6 +300,19 @@ export default function WorkspacesPage() {
                     <Plus size={15} /> New Workspace
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="workspaces"
+                color="purple"
+                description="Workspaces are isolated environments to organise your teams and projects — useful for separating different clients, products, or divisions."
+                bullets={[
+                    "Click New Workspace to create a workspace with a name, slug, description, and visibility (public/private).",
+                    "Click Members on any card to manage who has access to that workspace.",
+                    "Hover over a workspace card to reveal the edit and delete actions.",
+                    "Private workspaces are only accessible to members you explicitly add.",
+                ]}
+            />
 
             {/* Content */}
             {loading ? (

@@ -12,6 +12,7 @@ import {
     type SupportRequestCreate,
 } from "@/services/support";
 import { AddRequestModal } from "@/components/SupportModals";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ============ Helpers ============
 
@@ -195,6 +196,19 @@ export default function SupportPage() {
                     Add Request
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="support"
+                color="green"
+                description="The Support page lets you submit and track help requests. Use it to report issues, ask questions, or flag blockers to your team."
+                bullets={[
+                    "Click Add Request to open a support ticket — set subject, priority, and module.",
+                    "Filter by Source (requester) or Priority to quickly find relevant tickets.",
+                    "Use the Search button to find requests by keyword in subject or message.",
+                    "Select multiple requests with checkboxes for bulk actions.",
+                ]}
+            />
 
             {/* Filter Chips */}
             <div className="flex items-center justify-between">

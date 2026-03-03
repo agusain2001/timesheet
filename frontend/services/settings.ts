@@ -1,4 +1,5 @@
 import { apiGet, apiPut, apiPost } from "@/services/api";
+import { ApiError } from "@/lib/fetcher";
 
 // ---- Types ----
 
@@ -34,6 +35,7 @@ export interface ProfileUpdatePayload {
 }
 
 export interface DeviceSession {
+    session_id: string;
     device_name: string;
     location: string;
     last_active: string;
@@ -42,6 +44,7 @@ export interface DeviceSession {
 
 export interface SecuritySettings {
     mfa_enabled: boolean;
+    mfa_configured: boolean;
     active_sessions: DeviceSession[];
 }
 
@@ -77,11 +80,19 @@ export const updateSettingsProfile = (data: ProfileUpdatePayload) =>
 export const getSecuritySettings = () =>
     apiGet<SecuritySettings>("/api/settings/security");
 
-export const changePassword = (data: PasswordChangePayload) =>
-    apiPut<{ message: string }>("/api/settings/security/password", data);
+export const changePassword = async (data: PasswordChangePayload): Promise<{ message: string }> => {
+    try {
+        return await apiPut<{ message: string }>("/api/settings/security/password", data);
+    } catch (err) {
+        if (err instanceof ApiError) {
+            throw new Error(err.message);
+        }
+        throw err;
+    }
+};
 
-export const logoutDevice = (device_name: string) =>
-    apiPost<{ message: string }>("/api/settings/security/logout-device", { device_name });
+export const logoutDevice = (session_id: string) =>
+    apiPost<{ message: string }>("/api/settings/security/logout-device", { session_id });
 
 export const getNotificationPrefs = () =>
     apiGet<NotificationPrefs>("/api/settings/notifications");

@@ -11,6 +11,7 @@ import {
     listIntegrations, createIntegration, deleteIntegration,
     type Webhook, type Integration, type WebhookLog,
 } from "@/services/integrations";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -54,8 +55,8 @@ function WebhookCard({ wh, onToggle, onDelete, onTest, onViewLogs }: {
 
     return (
         <div className={`p-4 rounded-2xl border transition-all ${wh.is_active
-                ? "border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.01]"
-                : "border-foreground/5 bg-foreground/[0.01] dark:bg-white/[0.01] opacity-60"
+            ? "border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.01]"
+            : "border-foreground/5 bg-foreground/[0.01] dark:bg-white/[0.01] opacity-60"
             }`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -150,8 +151,8 @@ function WebhookModal({ onSave, onClose }: { onSave: (wh: Webhook) => void; onCl
                             {WEBHOOK_EVENTS.map((ev) => (
                                 <button key={ev} type="button" onClick={() => toggle(ev)}
                                     className={`px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors ${form.events.includes(ev)
-                                            ? "bg-blue-500/20 text-blue-500 dark:text-blue-400 border border-blue-500/30"
-                                            : "bg-foreground/[0.03] text-foreground/60 border border-foreground/10 hover:bg-foreground/[0.06]"
+                                        ? "bg-blue-500/20 text-blue-500 dark:text-blue-400 border border-blue-500/30"
+                                        : "bg-foreground/[0.03] text-foreground/60 border border-foreground/10 hover:bg-foreground/[0.06]"
                                         }`}>
                                     {ev}
                                 </button>
@@ -322,13 +323,26 @@ export default function IntegrationsPage() {
                 )}
             </div>
 
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="integrations"
+                color="blue"
+                description="Integrations lets you connect external tools (Slack, Google Calendar, Drive, etc.) and set up webhooks to push real-time events to your own systems."
+                bullets={[
+                    "App Integrations tab — click Connect next to any provider to link your account; click Disconnect to remove access.",
+                    "Webhooks tab — click New Webhook to register an endpoint URL that receives event payloads (e.g. task.created).",
+                    "Test a webhook with the play button, or view delivery history with the eye icon.",
+                    "Enable or disable individual webhooks using the toggle button — no data is lost when disabled.",
+                ]}
+            />
+
             {/* Tabs */}
             <div className="flex gap-1 bg-foreground/[0.04] border border-foreground/10 rounded-xl p-1 w-fit">
                 {TABS.map(({ id, label, icon: Icon }) => (
                     <button key={id} onClick={() => setTab(id)}
                         className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === id
-                                ? "bg-blue-600 text-white"
-                                : "text-foreground/50 hover:text-foreground"
+                            ? "bg-blue-600 text-white"
+                            : "text-foreground/50 hover:text-foreground"
                             }`}>
                         <Icon size={14} /> {label}
                     </button>
@@ -345,8 +359,8 @@ export default function IntegrationsPage() {
                         const IconComp = ICON_MAP[p.type] || Globe;
                         return (
                             <div key={p.provider} className={`p-5 rounded-2xl border transition-all ${connected
-                                    ? "border-green-500/20 bg-green-500/5 dark:bg-green-500/5"
-                                    : "border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.01] hover:bg-foreground/[0.04] dark:hover:bg-foreground/[0.02]"
+                                ? "border-green-500/20 bg-green-500/5 dark:bg-green-500/5"
+                                : "border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.01] hover:bg-foreground/[0.04] dark:hover:bg-foreground/[0.02]"
                                 }`}>
                                 <div className="flex items-center gap-3 mb-3">
                                     <span className="text-2xl">{p.icon}</span>

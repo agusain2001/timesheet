@@ -67,6 +67,7 @@ export interface AutomationRuleCreate {
     description?: string;
     trigger_event: TriggerEvent;
     conditions: AutomationCondition[];
+    trigger_conditions?: Record<string, unknown> | null;
     actions: AutomationAction[];
     project_id?: string;
     is_active?: boolean;

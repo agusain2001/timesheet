@@ -13,6 +13,7 @@ import {
     saveToActivity,
 } from "@/services/chatbot";
 import type { DocumentScanResult } from "@/types/api";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Web Speech API types (not in default TS lib) ───────────────────────────
 
@@ -662,6 +663,22 @@ export default function AIPage() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-64px)] bg-background text-foreground" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+
+            {/* How It Works */}
+            <div className="px-6 pt-3">
+                <HowItWorks
+                    pageKey="ai-assistant"
+                    color="purple"
+                    description="The AI Assistant can answer project questions, create and update tasks, log time, scan documents, and summarize priorities — all via natural language."
+                    bullets={[
+                        "Switch modes (General / Task Manager / Analyst) using the mode picker in the top bar.",
+                        "Type a request like 'Create a task for...' or 'What's overdue this week?' to get started.",
+                        "Attach files (images, PDFs) using the paperclip icon — the AI can analyze their content.",
+                        "Use the microphone button to speak your request instead of typing.",
+                        "Actions like task creation or time logging are performed live — you'll see a confirmation card.",
+                    ]}
+                />
+            </div>
 
             {/* Drag overlay */}
             {dragging && (

@@ -7,6 +7,7 @@ import {
     Users, BarChart2, TrendingDown, Activity
 } from "lucide-react";
 import { getToken } from "@/lib/auth";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -154,6 +155,19 @@ export default function CapacityPage() {
                     <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
                 </button>
             </div>
+
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="capacity"
+                color="amber"
+                description="Capacity Planning shows resource allocation across your team — spot overloaded members and track project burndown in one view."
+                bullets={[
+                    "Team Capacity tab shows each member's allocation percentage — click any row to view their employee profile.",
+                    "Alerts tab flags overallocated members for the current period — click an alert to jump to their workload.",
+                    "Burndown tab lets you select a project and see remaining vs. ideal work hours over time.",
+                    "Use the Refresh button to pull the latest allocation data from the server.",
+                ]}
+            />
 
             {loading ? (
                 <div className="flex items-center justify-center h-64">
@@ -358,8 +372,9 @@ export default function CapacityPage() {
                         </div>
                     )}
                 </>
-            )}
+            )
+            }
 
-        </div>
+        </div >
     );
 }

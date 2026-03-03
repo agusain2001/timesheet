@@ -201,6 +201,7 @@ class DepartmentResponse(DepartmentBase):
     id: str
     managers: List[DepartmentManagerResponse] = []
     member_count: int = 0
+    team_count: int = 0
     
     class Config:
         from_attributes = True

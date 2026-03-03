@@ -1,7 +1,8 @@
 """Settings router - Profile, Security, Notifications, Privacy."""
+import re
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -58,6 +59,7 @@ class PasswordChangeRequest(BaseModel):
 
 
 class DeviceSession(BaseModel):
+    session_id: str
     device_name: str
     location: str
     last_active: str
@@ -66,11 +68,12 @@ class DeviceSession(BaseModel):
 
 class SecurityResponse(BaseModel):
     mfa_enabled: bool
+    mfa_configured: bool
     active_sessions: List[DeviceSession]
 
 
 class LogoutDeviceRequest(BaseModel):
-    device_name: str
+    session_id: str
 
 
 class NotificationPrefsRequest(BaseModel):
@@ -104,6 +107,63 @@ class PrivacyResponse(BaseModel):
 
 
 # ============================================================
+# Helpers
+# ============================================================
+
+def _validate_password_strength(password: str) -> None:
+    """Validate password meets minimum security requirements."""
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+    if not re.search(r'[A-Z]', password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+    if not re.search(r'[a-z]', password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
+    if not re.search(r'[0-9]', password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one number")
+
+
+def _get_profile_response(user: User) -> ProfileResponse:
+    """Build a ProfileResponse from a User object."""
+    settings = user.settings or {}
+    dept_name = user.department.name if user.department else None
+    return ProfileResponse(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        phone=user.phone,
+        avatar_url=user.avatar_url,
+        role=user.role,
+        position=user.position,
+        bio=user.bio,
+        department=dept_name,
+        employee_id_display=settings.get("employee_id_display", str(user.id)[:8].upper()),
+        emergency_contact_name=settings.get("emergency_contact_name"),
+        emergency_contact_no=settings.get("emergency_contact_no"),
+        city=settings.get("city"),
+        pincode=settings.get("pincode"),
+        tax_address=settings.get("tax_address"),
+        updated_at=str(user.updated_at) if user.updated_at else None,
+    )
+
+
+def _get_notification_response(user: User, db: Session) -> NotificationPrefsResponse:
+    """Build notification prefs response from user settings."""
+    ts_prefs = (user.settings or {}).get("timesheet_notifications", {})
+    prefs_row = db.query(NotificationPreference).filter(
+        NotificationPreference.user_id == user.id
+    ).first()
+    return NotificationPrefsResponse(
+        daily_submission_reminder=ts_prefs.get("daily_submission_reminder", False),
+        weekly_submission_reminder=ts_prefs.get("weekly_submission_reminder", False),
+        timesheet_approved=ts_prefs.get("timesheet_approved", True),
+        timesheet_rejected=ts_prefs.get("timesheet_rejected", True),
+        manager_comment_alerts=ts_prefs.get("manager_comment_alerts", True),
+        weekly_summary_email=prefs_row.weekly_digest if prefs_row else ts_prefs.get("weekly_summary_email", False),
+        security_alerts=ts_prefs.get("security_alerts", True),
+    )
+
+
+# ============================================================
 # Profile Endpoints
 # ============================================================
 
@@ -113,27 +173,7 @@ def get_settings_profile(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get current user's profile for settings page."""
-    settings = current_user.settings or {}
-    dept_name = current_user.department.name if current_user.department else None
-
-    return ProfileResponse(
-        id=current_user.id,
-        full_name=current_user.full_name,
-        email=current_user.email,
-        phone=current_user.phone,
-        avatar_url=current_user.avatar_url,
-        role=current_user.role,
-        position=current_user.position,
-        bio=current_user.bio,
-        department=dept_name,
-        employee_id_display=settings.get("employee_id_display", str(current_user.id)[:8].upper()),
-        emergency_contact_name=settings.get("emergency_contact_name"),
-        emergency_contact_no=settings.get("emergency_contact_no"),
-        city=settings.get("city"),
-        pincode=settings.get("pincode"),
-        tax_address=settings.get("tax_address"),
-        updated_at=str(current_user.updated_at) if current_user.updated_at else None,
-    )
+    return _get_profile_response(current_user)
 
 
 @router.put("/profile", response_model=ProfileResponse)
@@ -144,15 +184,18 @@ def update_settings_profile(
 ):
     """Update current user's profile."""
     if data.full_name is not None:
-        current_user.full_name = data.full_name
+        current_user.full_name = data.full_name.strip()
     if data.phone is not None:
-        current_user.phone = data.phone
+        current_user.phone = data.phone.strip()
     if data.bio is not None:
-        current_user.bio = data.bio
+        current_user.bio = data.bio.strip()
 
     # Extended fields stored in settings JSON
     if not current_user.settings:
         current_user.settings = {}
+
+    import copy
+    settings_copy = copy.deepcopy(current_user.settings)
 
     extended_fields = [
         "employee_id_display", "emergency_contact_name",
@@ -161,32 +204,12 @@ def update_settings_profile(
     update_dict = data.model_dump(exclude_unset=True)
     for field in extended_fields:
         if field in update_dict:
-            current_user.settings[field] = update_dict[field]
+            settings_copy[field] = update_dict[field]
 
+    current_user.settings = settings_copy
     db.commit()
     db.refresh(current_user)
-
-    settings = current_user.settings or {}
-    dept_name = current_user.department.name if current_user.department else None
-
-    return ProfileResponse(
-        id=current_user.id,
-        full_name=current_user.full_name,
-        email=current_user.email,
-        phone=current_user.phone,
-        avatar_url=current_user.avatar_url,
-        role=current_user.role,
-        position=current_user.position,
-        bio=current_user.bio,
-        department=dept_name,
-        employee_id_display=settings.get("employee_id_display", str(current_user.id)[:8].upper()),
-        emergency_contact_name=settings.get("emergency_contact_name"),
-        emergency_contact_no=settings.get("emergency_contact_no"),
-        city=settings.get("city"),
-        pincode=settings.get("pincode"),
-        tax_address=settings.get("tax_address"),
-        updated_at=str(current_user.updated_at) if current_user.updated_at else None,
-    )
+    return _get_profile_response(current_user)
 
 
 # ============================================================
@@ -200,6 +223,7 @@ def get_security_settings(
 ):
     """Get security settings (MFA status + active sessions)."""
     mfa = db.query(MFASettings).filter(MFASettings.user_id == current_user.id).first()
+    mfa_configured = mfa is not None
     mfa_enabled = bool(mfa and mfa.is_enabled == "true")
 
     # Build sessions from settings JSON
@@ -208,16 +232,21 @@ def get_security_settings(
 
     # Ensure there's always at least one "current" session entry
     if not raw_sessions:
+        import uuid as _uuid
         raw_sessions = [{
+            "session_id": str(_uuid.uuid4()),
             "device_name": "Current Browser",
             "location": "Unknown",
-            "last_active": datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+            "last_active": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
             "is_current": True,
         }]
 
     sessions = [DeviceSession(**s) for s in raw_sessions]
-
-    return SecurityResponse(mfa_enabled=mfa_enabled, active_sessions=sessions)
+    return SecurityResponse(
+        mfa_enabled=mfa_enabled,
+        mfa_configured=mfa_configured,
+        active_sessions=sessions
+    )
 
 
 @router.put("/security/password")
@@ -226,12 +255,21 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Change user password."""
+    """Change user password with validation."""
+    # Match check
     if data.new_password != data.confirm_password:
         raise HTTPException(status_code=400, detail="New passwords do not match")
 
+    # Verify current password
     if not verify_password(data.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    # Same password check
+    if data.current_password == data.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+
+    # Strength validation
+    _validate_password_strength(data.new_password)
 
     current_user.password_hash = get_password_hash(data.new_password)
     db.commit()
@@ -244,15 +282,18 @@ def logout_device(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Remove a device/session from active sessions list."""
+    """Remove a device/session from active sessions list by session_id."""
+    import copy
     if not current_user.settings:
         current_user.settings = {}
 
-    sessions = current_user.settings.get("active_sessions", [])
-    updated = [s for s in sessions if s.get("device_name") != data.device_name]
-    current_user.settings["active_sessions"] = updated
+    settings_copy = copy.deepcopy(current_user.settings)
+    sessions = settings_copy.get("active_sessions", [])
+    updated = [s for s in sessions if s.get("session_id") != data.session_id]
+    settings_copy["active_sessions"] = updated
+    current_user.settings = settings_copy
     db.commit()
-    return {"message": f"Device '{data.device_name}' logged out"}
+    return {"message": "Session logged out successfully"}
 
 
 @router.put("/security/mfa")
@@ -260,10 +301,13 @@ def toggle_mfa(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Toggle MFA on/off."""
+    """Toggle MFA on/off. Only works if MFA is already configured."""
     mfa = db.query(MFASettings).filter(MFASettings.user_id == current_user.id).first()
     if not mfa:
-        raise HTTPException(status_code=400, detail="MFA not configured. Please set up MFA first via /api/mfa/setup")
+        raise HTTPException(
+            status_code=400,
+            detail="MFA not configured. Please set up MFA first."
+        )
     mfa.is_enabled = "false" if mfa.is_enabled == "true" else "true"
     db.commit()
     return {"mfa_enabled": mfa.is_enabled == "true"}
@@ -279,23 +323,7 @@ def get_notification_preferences(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get notification preferences for the settings page."""
-    prefs = db.query(NotificationPreference).filter(
-        NotificationPreference.user_id == current_user.id
-    ).first()
-
-    # Fall back to defaults
-    settings = current_user.settings or {}
-    ts_prefs = settings.get("timesheet_notifications", {})
-
-    return NotificationPrefsResponse(
-        daily_submission_reminder=ts_prefs.get("daily_submission_reminder", False),
-        weekly_submission_reminder=ts_prefs.get("weekly_submission_reminder", False),
-        timesheet_approved=ts_prefs.get("timesheet_approved", False),
-        timesheet_rejected=ts_prefs.get("timesheet_rejected", False),
-        manager_comment_alerts=ts_prefs.get("manager_comment_alerts", False),
-        weekly_summary_email=prefs.weekly_digest if prefs else ts_prefs.get("weekly_summary_email", False),
-        security_alerts=ts_prefs.get("security_alerts", False),
-    )
+    return _get_notification_response(current_user, db)
 
 
 @router.put("/notifications", response_model=NotificationPrefsResponse)
@@ -305,13 +333,16 @@ def update_notification_preferences(
     current_user: User = Depends(get_current_active_user)
 ):
     """Update notification preferences."""
+    import copy
     if not current_user.settings:
         current_user.settings = {}
 
-    existing = current_user.settings.get("timesheet_notifications", {})
+    settings_copy = copy.deepcopy(current_user.settings)
+    existing = settings_copy.get("timesheet_notifications", {})
     update_dict = data.model_dump(exclude_unset=True)
     existing.update(update_dict)
-    current_user.settings["timesheet_notifications"] = existing
+    settings_copy["timesheet_notifications"] = existing
+    current_user.settings = settings_copy
 
     # Sync weekly digest to NotificationPreference table if present
     if "weekly_summary_email" in update_dict:
@@ -323,21 +354,7 @@ def update_notification_preferences(
 
     db.commit()
     db.refresh(current_user)
-
-    ts_prefs = current_user.settings.get("timesheet_notifications", {})
-    prefs_row = db.query(NotificationPreference).filter(
-        NotificationPreference.user_id == current_user.id
-    ).first()
-
-    return NotificationPrefsResponse(
-        daily_submission_reminder=ts_prefs.get("daily_submission_reminder", False),
-        weekly_submission_reminder=ts_prefs.get("weekly_submission_reminder", False),
-        timesheet_approved=ts_prefs.get("timesheet_approved", False),
-        timesheet_rejected=ts_prefs.get("timesheet_rejected", False),
-        manager_comment_alerts=ts_prefs.get("manager_comment_alerts", False),
-        weekly_summary_email=prefs_row.weekly_digest if prefs_row else ts_prefs.get("weekly_summary_email", False),
-        security_alerts=ts_prefs.get("security_alerts", False),
-    )
+    return _get_notification_response(current_user, db)
 
 
 # ============================================================
@@ -364,13 +381,16 @@ def update_privacy_settings(
     current_user: User = Depends(get_current_active_user)
 ):
     """Update privacy settings."""
+    import copy
     if not current_user.settings:
         current_user.settings = {}
 
-    existing = current_user.settings.get("privacy", {})
+    settings_copy = copy.deepcopy(current_user.settings)
+    existing = settings_copy.get("privacy", {})
     update_dict = data.model_dump(exclude_unset=True)
     existing.update(update_dict)
-    current_user.settings["privacy"] = existing
+    settings_copy["privacy"] = existing
+    current_user.settings = settings_copy
 
     db.commit()
     db.refresh(current_user)
