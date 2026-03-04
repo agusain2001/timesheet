@@ -1,343 +1,188 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/Next.js-16.1-black?style=for-the-badge&logo=next.js" alt="Next.js" />
-  <img src="https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/FastAPI-0.109-green?style=for-the-badge&logo=fastapi" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/TailwindCSS-3.4-38bdf8?style=for-the-badge&logo=tailwindcss" alt="TailwindCSS" />
-</p>
+# Time Sheet — Frontend
 
-# ⏱️ TimeSheet LightIDEA
-
-A modern, full-stack **Time Management & Project Tracking** application built with Next.js 16 and FastAPI. Features a beautiful glassmorphism UI, real-time data synchronization, and comprehensive project management capabilities.
-
-## ✨ Features
-
-| Module | Description |
-|--------|-------------|
-| 🔐 **Authentication** | JWT-based auth with secure token handling |
-| 👥 **Client Management** | Full CRUD operations for managing clients |
-| 🏢 **Department/Division** | Organize teams by departments with managers |
-| 👨‍💼 **Employee Management** | Track employees, roles, and positions |
-| 📋 **Project Tracking** | Create and monitor project progress |
-| ✅ **Task Management** | Assign tasks with priorities and due dates |
-| ⏰ **Timesheets** | Log work hours and track productivity |
-| 💰 **Expense Tracking** | Submit and approve expense reports |
-| 📊 **Dashboard Analytics** | Real-time stats and visual insights |
-| 🤖 **AI Chatbot** | Google Gemini-powered assistant |
-| 🔔 **Notifications** | Real-time alerts and updates |
+A modern, role-based timesheet and project management application built with **Next.js 16** and **React 19**. This repository contains only the frontend module.
 
 ---
 
-## 🏗️ Architecture
+## Tech Stack
+
+| Layer | Technology | Version |
+|---|---|---|
+| Framework | [Next.js](https://nextjs.org/) | 16.1.4 |
+| UI Library | [React](https://react.dev/) | 19.2.3 |
+| Language | TypeScript | ^5 |
+| Styling | Tailwind CSS | ^4 |
+| Icons | Lucide React | ^0.562.0 |
+| Forms | React Hook Form + Zod | ^7 / ^4 |
+| Theming | next-themes | ^0.4.6 |
+| Notifications | Sonner | ^2.0.7 |
+| Utility | clsx | ^2.1.1 |
+
+---
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│  │   Browser   │    │   Mobile    │    │   Desktop   │    │     API     │  │
-│  │   (React)   │    │   (PWA)     │    │   Client    │    │   Consumer   │  │
-│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘    └──────┬──────┘  │
-└─────────┼──────────────────┼──────────────────┼──────────────────┼─────────┘
-          │                  │                  │                  │
-          └──────────────────┴─────────┬────────┴──────────────────┘
-                                       │
-┌──────────────────────────────────────┴──────────────────────────────────────┐
-│                           FRONTEND (Next.js 16)                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                         App Router (RSC)                              │   │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐     │   │
-│  │  │  (public)  │  │ (protected)│  │   proxy    │  │   layout   │     │   │
-│  │  │   /login   │  │  /clients  │  │  auth.ts   │  │  theme.tsx │     │   │
-│  │  └────────────┘  └────────────┘  └────────────┘  └────────────┘     │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐       │
-│  │     Features      │  │     Services      │  │       Lib         │       │
-│  ├───────────────────┤  ├───────────────────┤  ├───────────────────┤       │
-│  │ • clients/        │  │ • api.ts          │  │ • auth.ts         │       │
-│  │ • divisions/      │  │ • clients.ts      │  │ • fetcher.ts      │       │
-│  │ • employees/      │  │ • departments.ts  │  │ • env.ts          │       │
-│  │ • projects/       │  │ • users.ts        │  │ • toast.ts        │       │
-│  │ • tasks/          │  │ • projects.ts     │  │ • constants.ts    │       │
-│  │ • auth/           │  │ • tasks.ts        │  └───────────────────┘       │
-│  └───────────────────┘  │ • timesheets.ts   │                              │
-│                         │ • expenses.ts     │  ┌───────────────────┐       │
-│  ┌───────────────────┐  │ • dashboard.ts    │  │      Types        │       │
-│  │    Components     │  │ • notifications.ts│  ├───────────────────┤       │
-│  ├───────────────────┤  │ • chatbot.ts      │  │ • api.ts (30+)    │       │
-│  │ • ui/ (Button,    │  └───────────────────┘  │ • constants.ts    │       │
-│  │   Input, Card)    │                         └───────────────────┘       │
-│  │ • shared/         │                                                      │
-│  │ • layout/         │                                                      │
-│  └───────────────────┘                                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                              Port: 3000                                      │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       │ HTTP/REST
-                                       │ (JSON + JWT)
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           BACKEND (FastAPI)                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                            API Gateway                                │   │
-│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐   │   │
-│  │  │  CORS   │  │   JWT   │  │  Rate   │  │ Logging │  │  Error  │   │   │
-│  │  │ Handler │  │  Auth   │  │ Limiter │  │  Midw   │  │ Handler │   │   │
-│  │  └─────────┘  └─────────┘  └─────────┘  └─────────┘  └─────────┘   │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                           Routers (/api)                              │   │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐        │   │
-│  │  │   /auth    │ │  /users    │ │ /clients   │ │/departments│        │   │
-│  │  │  register  │ │    GET     │ │    CRUD    │ │    CRUD    │        │   │
-│  │  │   login    │ │   /me      │ │   search   │ │  managers  │        │   │
-│  │  └────────────┘ └────────────┘ └────────────┘ └────────────┘        │   │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐        │   │
-│  │  │ /projects  │ │   /tasks   │ │/timesheets │ │ /expenses  │        │   │
-│  │  │    CRUD    │ │    CRUD    │ │   submit   │ │  approve   │        │   │
-│  │  │   status   │ │  complete  │ │   export   │ │   reject   │        │   │
-│  │  └────────────┘ └────────────┘ └────────────┘ └────────────┘        │   │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐                       │   │
-│  │  │ /dashboard │ │ /chatbot   │ │/notifications│                      │   │
-│  │  │   stats    │ │   Gemini   │ │    CRUD    │                       │   │
-│  │  │   charts   │ │   AI Chat  │ │  mark read │                       │   │
-│  │  └────────────┘ └────────────┘ └────────────┘                       │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐    │
-│  │      Schemas       │  │       Utils        │  │      Models        │    │
-│  │   (Pydantic 2.0)   │  │   (JWT, Hashing)   │  │   (SQLAlchemy)     │    │
-│  └────────────────────┘  └────────────────────┘  └────────────────────┘    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                              Port: 8000                                      │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       │ SQLAlchemy ORM
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DATABASE LAYER                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                         SQLite / PostgreSQL                           │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │   │
-│  │  │  Users   │ │ Clients  │ │Departments│ │ Projects │ │  Tasks   │  │   │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘  │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐              │   │
-│  │  │Timesheets│ │ Expenses │ │Cost Ctrs │ │Notifications│            │   │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘              │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
+Browser (Next.js SSR/CSR)
+        │
+        ▼
+ Next.js Rewrites  (/api/* , /ws/*)
+        │
+        ▼
+  Backend API  (FastAPI — separate service)
+        │
+        ▼
+  PostgreSQL Database
+```
+
+- **Routing:** Next.js App Router with route groups — `(public)` for auth pages, `(protected)` for authenticated pages.
+- **API Proxy:** All `/api/*` and `/ws/*` requests are rewritten to the backend via `next.config.ts`, so no CORS issues in production.
+- **Auth:** JWT-based authentication managed via HTTP-only cookies and React context.
+- **Theming:** Light/Dark mode via `next-themes` with CSS variables.
+- **Build Output:** `standalone` mode for optimised Docker deployment.
+
+---
+
+## File Structure
+
+```
+frontend/
+├── app/
+│   ├── (public)/              # Auth pages (login, register)
+│   └── (protected)/           # Authenticated pages
+│       ├── home/
+│       ├── dashboards/
+│       ├── tasks/
+│       ├── projects/
+│       ├── employees/
+│       ├── clients/
+│       ├── teams/
+│       ├── departments/
+│       ├── workspaces/
+│       ├── capacity/
+│       ├── reports/
+│       ├── ai/
+│       ├── automation/
+│       ├── my-time/
+│       ├── my-expense/
+│       ├── settings/
+│       ├── notifications/
+│       └── integrations/
+├── components/                # Shared UI components
+├── contexts/                  # React context providers (Auth, Theme)
+├── features/                  # Feature-specific logic
+├── hooks/                     # Custom React hooks
+├── services/                  # API service layer (per-module)
+├── types/                     # TypeScript type definitions
+├── utils/                     # Utility/helper functions
+├── public/                    # Static assets
+├── next.config.ts             # Next.js configuration & API proxy
+├── tailwind.config.ts         # Tailwind CSS configuration
+├── tsconfig.json              # TypeScript configuration
+├── Dockerfile                 # Docker build configuration
+└── package.json
 ```
 
 ---
 
-## 📁 Project Structure
+## Prerequisites
 
-```
-timesheet-lightidea/
-├── 📂 app/                          # Next.js App Router
-│   ├── 📂 (public)/                 # Public routes (no auth)
-│   │   └── 📂 login/                # Login page
-│   ├── 📂 (protected)/              # Protected routes (auth required)
-│   │   ├── 📂 clients/              # Client management
-│   │   ├── 📂 divisions/            # Division/department management
-│   │   ├── 📂 employees/            # Employee management
-│   │   ├── 📂 projects/             # Project management
-│   │   └── 📂 tasks/                # Task management
-│   ├── layout.tsx                   # Root layout with providers
-│   └── globals.css                  # Global styles
-│
-├── 📂 features/                     # Feature-based modules
-│   ├── 📂 auth/                     # Authentication feature
-│   │   └── components/LoginForm.tsx
-│   ├── 📂 clients/                  # Clients feature
-│   │   └── components/ManageClients.tsx
-│   ├── 📂 divisions/                # Divisions feature
-│   ├── 📂 employees/                # Employees feature
-│   ├── 📂 projects/                 # Projects feature
-│   └── 📂 tasks/                    # Tasks feature
-│
-├── 📂 services/                     # API Service Layer
-│   ├── api.ts                       # Base fetch with auth
-│   ├── clients.ts                   # Clients API
-│   ├── departments.ts               # Departments API
-│   ├── users.ts                     # Users API
-│   ├── projects.ts                  # Projects API
-│   ├── tasks.ts                     # Tasks API
-│   ├── timesheets.ts                # Timesheets API
-│   ├── expenses.ts                  # Expenses API
-│   ├── dashboard.ts                 # Dashboard API
-│   ├── notifications.ts             # Notifications API
-│   ├── chatbot.ts                   # AI Chatbot API
-│   └── index.ts                     # Barrel export
-│
-├── 📂 components/                   # Shared UI Components
-│   ├── 📂 ui/                       # Base UI (Button, Input, Card)
-│   ├── 📂 shared/                   # Shared components
-│   └── 📂 layout/                   # Layout components
-│
-├── 📂 lib/                          # Utilities & Helpers
-│   ├── auth.ts                      # Auth functions (login, logout)
-│   ├── fetcher.ts                   # HTTP client with error handling
-│   ├── env.ts                       # Environment config
-│   └── toast.ts                     # Toast notifications
-│
-├── 📂 types/                        # TypeScript Definitions
-│   ├── api.ts                       # API types (30+ interfaces)
-│   └── constants.ts                 # Constant types
-│
-├── proxy.ts                         # Route protection (Next.js 16)
-├── next.config.ts                   # Next.js configuration
-├── tailwind.config.ts               # Tailwind CSS config
-├── .env.local                       # Environment variables
-└── package.json                     # Dependencies
-```
+### System Requirements
+
+| Requirement | Minimum | Recommended |
+|---|---|---|
+| OS | Ubuntu 22.04 LTS | Any Linux-based VM |
+| RAM | 2 GB | 4 GB |
+| Disk | 20 GB SSD | — |
+| Node.js | 20 LTS | 20 LTS |
+
+### Required Software
+
+- **Node.js** v20 LTS — [Download](https://nodejs.org/)
+- **npm** v10+ (bundled with Node.js)
+- **Docker Engine** 24+ *(if running via Docker)*
+- **Docker Compose** v2.20+ *(if running via Docker)*
 
 ---
 
-## 🚀 Quick Start
+## System Configuration
 
-### Prerequisites
+### Environment Variables
 
-- **Node.js** 18+ 
-- **Python** 3.10+
-- **npm** or **yarn**
-
-### 1️⃣ Clone & Install
-
-```bash
-# Clone repository
-git clone https://github.com/agusain2001/timesheet-lightidea.git
-cd timesheet-lightidea
-
-# Install frontend dependencies
-npm install
-
-# Install backend dependencies (in separate terminal)
-cd ../backend
-pip install -r requirements.txt
-```
-
-### 2️⃣ Environment Setup
-
-Create `.env.local` in the frontend root:
+Create a `.env.local` file in the `frontend/` directory:
 
 ```env
-# Backend API
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
-NEXT_PUBLIC_API_TIMEOUT=30000
-
-# Auth
-AUTH_REDIRECT_URL=http://localhost:3000
-
-# Features
-NEXT_PUBLIC_ENABLE_NOTIFICATIONS=true
-NEXT_PUBLIC_ENABLE_VALIDATION=true
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-### 3️⃣ Start Development Servers
+In production (cloud / Docker), set this at **build time**:
 
 ```bash
-# Terminal 1 - Backend
-cd backend
-python -m uvicorn app.main:app --reload --port 8000
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com npm run build
+```
 
-# Terminal 2 - Frontend
-cd frontend
+### API Proxy (`next.config.ts`)
+
+All API and WebSocket traffic is proxied automatically — no manual proxy setup needed:
+
+| Route Pattern | Forwarded To |
+|---|---|
+| `/api/*` | `NEXT_PUBLIC_API_URL/api/*` |
+| `/ws/*` | `NEXT_PUBLIC_API_URL/ws/*` |
+
+### Firewall Rules
+
+| Port | Access | Purpose |
+|---|---|---|
+| 80, 443 | Public | Nginx (HTTP/HTTPS) |
+| 3000 | **Internal only** | Next.js (proxied by Nginx) |
+
+---
+
+## Installation & Running
+
+### Local Development
+
+```bash
+# Install dependencies
+npm ci --frozen-lockfile
+
+# Start the dev server
 npm run dev
 ```
 
-### 4️⃣ Create Test User
+App will be available at `http://localhost:3000`.
+
+### Production Build
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123","full_name":"Test User"}'
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com npm run build
+npm run start
 ```
 
-### 5️⃣ Access the App
+### Docker
 
-Open **http://localhost:3000** and login with your credentials.
-
----
-
-## 🔌 API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/register` | POST | Register new user |
-| `/api/auth/login/json` | POST | Login (JSON body) |
-| `/api/users/me` | GET | Get current user |
-| `/api/clients` | GET/POST | List/Create clients |
-| `/api/departments` | GET/POST | List/Create departments |
-| `/api/projects` | GET/POST | List/Create projects |
-| `/api/tasks` | GET/POST | List/Create tasks |
-| `/api/timesheets` | GET/POST | List/Create timesheets |
-| `/api/expenses` | GET/POST | List/Create expenses |
-| `/api/dashboard/stats` | GET | Dashboard statistics |
-| `/api/chatbot/chat` | POST | AI chat message |
-| `/api/notifications` | GET | List notifications |
+```bash
+# From the project root
+docker compose up -d
+```
 
 ---
 
-## 🛠️ Tech Stack
+## Scripts
 
-### Frontend
-| Technology | Purpose |
-|------------|---------|
-| **Next.js 16** | React framework with App Router |
-| **TypeScript** | Type-safe development |
-| **Tailwind CSS** | Utility-first styling |
-| **React Hook Form** | Form handling |
-| **Zod** | Schema validation |
-| **Sonner** | Toast notifications |
-| **Lucide React** | Icons |
-| **Next Themes** | Dark/Light mode |
-
-### Backend
-| Technology | Purpose |
-|------------|---------|
-| **FastAPI** | Python web framework |
-| **SQLAlchemy** | ORM for database |
-| **Pydantic v2** | Data validation |
-| **Python-Jose** | JWT handling |
-| **Passlib** | Password hashing |
-| **Google Gemini** | AI chatbot |
+| Command | Description |
+|---|---|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run start` | Start production server |
+| `npm run lint` | Run ESLint |
 
 ---
 
-## 🎨 UI Preview
+## Pre-Deploy Checklist
 
-The application features a modern **glassmorphism** design with:
-
-- 🌙 Dark/Light theme support
-- ✨ Smooth animations and transitions
-- 📱 Fully responsive layout
-- 🎯 Intuitive navigation
-- 🔔 Real-time notifications
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-<p align="center">
-  Made with ❤️ by <a href="https://github.com/agusain2001">Ashish Gusain</a>
-</p>
+- [ ] `NEXT_PUBLIC_API_URL` set to the correct backend URL before build
+- [ ] Backend API is running and reachable
+- [ ] Port `3000` is **not** exposed publicly (Nginx proxies it)
+- [ ] SSL certificates are configured on Nginx
