@@ -1,0 +1,48 @@
+# ════════════════════════════════════════════════════════════════
+# Time Sheet — Frontend Standalone Docker Compose
+# ════════════════════════════════════════════════════════════════
+#
+# Services:
+#   frontend — Next.js 16 (standalone, port 3000)
+#
+# Usage:
+#   1. Set NEXT_PUBLIC_API_URL to your backend URL
+#   2. docker compose up -d
+#   3. Open http://localhost:3000
+#
+# NOTE: NEXT_PUBLIC_API_URL is a BUILD-TIME variable.
+#       You must rebuild the image if the API URL changes.
+#       docker compose up --build
+# ════════════════════════════════════════════════════════════════
+
+services:
+
+  # ─── Next.js Frontend ─────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        # Set this to your actual backend API URL at build time
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: timesheet_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - frontend_net
+
+# ─── Network ──────────────────────────────────────────────────
+networks:
+  frontend_net:
+    driver: bridge
