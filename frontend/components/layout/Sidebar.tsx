@@ -7,6 +7,8 @@ import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { BOTTOM_NAV_ITEMS, NAV_ITEMS } from "@/lib/navigation";
 import { NavItem } from "@/types/constants";
+import { getCurrentUser } from "@/services/users";
+import { User } from "@/types/api";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -14,14 +16,42 @@ export function Sidebar() {
   const [mounted, setMounted] = useState(false);
   const [openItem, setOpenItem] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => setMounted(true), []);
+
+  // Fetch current user (with accessible_pages) once on mount
+  useEffect(() => {
+    getCurrentUser()
+      .then(setCurrentUser)
+      .catch(() => setCurrentUser(null));
+  }, []);
 
   if (!mounted) return null; // prevents theme flicker
 
   const isDark = theme === "dark";
 
+  /**
+   * Determine whether a nav item should be visible for the current user.
+   *
+   * Rules:
+   *  - Admins & managers see everything.
+   *  - Employees see only items whose pageKey is in their accessible_pages list.
+   *  - Items without a pageKey are always shown (no restriction needed).
+   */
+  const isVisible = (item: NavItem): boolean => {
+    if (!currentUser) return true; // still loading → show all
+    if (currentUser.role === "admin" || currentUser.role === "manager") return true;
+
+    // Employee: check accessible_pages
+    if (!item.pageKey) return true; // no key = always accessible
+    if (!currentUser.accessible_pages) return true; // not loaded yet
+    return currentUser.accessible_pages.includes(item.pageKey);
+  };
+
   const renderNavItem = (item: NavItem) => {
+    if (!isVisible(item)) return null; // hide restricted items
+
     const Icon = item.icon;
     const hasChildren = !!item.children?.length;
     const isOpen = openItem === item.name;
@@ -139,4 +169,3 @@ export function Sidebar() {
     </aside>
   );
 }
-

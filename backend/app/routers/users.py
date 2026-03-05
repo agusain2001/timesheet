@@ -8,11 +8,15 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from app.database import get_db
 from app.models import User, Project, ProjectManager
+from app.models.page_access import UserPageAccess, get_accessible_pages
 from app.schemas import UserResponse, UserUpdate, UserCreate, UserProfileResponse, UserProfileUpdate
 from app.utils import get_current_active_user, get_password_hash
 from app.utils.role_guards import is_admin, is_manager
 
 router = APIRouter()
+
+# Admin-manageable roles (in order of privilege)
+ALLOWED_ROLES = ["employee", "manager", "admin"]
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -48,9 +52,27 @@ def create_user(
 
 
 @router.get("/me", response_model=UserResponse)
-def get_current_user_info(current_user: User = Depends(get_current_active_user)):
-    """Get current user information."""
-    return current_user
+def get_current_user_info(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get current user information including accessible pages."""
+    rows = db.query(UserPageAccess).filter(UserPageAccess.user_id == current_user.id).all()
+    accessible = get_accessible_pages(current_user.role, rows)
+    # Attach to the response as a transient attribute (UserResponse may or may not have this field)
+    user_dict = {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "position": current_user.position,
+        "avatar_url": current_user.avatar_url,
+        "department_id": current_user.department_id,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at,
+        "accessible_pages": accessible,
+    }
+    return user_dict
 
 
 @router.get("/profile", response_model=UserProfileResponse)
@@ -561,19 +583,30 @@ def update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update a user."""
+    """Update a user. Employees can only update their own basic fields."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Only admin or the user themselves can update
     if not is_admin(current_user) and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
     update_data = user_data.model_dump(exclude_unset=True)
+
+    # Employees can only update a limited set of their own fields
+    EMPLOYEE_ALLOWED_FIELDS = {"full_name", "position", "phone", "bio", "avatar_url",
+                               "timezone", "working_hours_start", "working_hours_end",
+                               "notification_preferences", "ui_preferences"}
+    if not is_admin(current_user) and not is_manager(current_user):
+        # Strip any restricted fields an employee is not allowed to change
+        restricted_keys = set(update_data.keys()) - EMPLOYEE_ALLOWED_FIELDS
+        for k in restricted_keys:
+            update_data.pop(k)
+
     for field, value in update_data.items():
         setattr(user, field, value)
-    
+
     db.commit()
     db.refresh(user)
     return user
@@ -606,3 +639,53 @@ def delete_user(
     db.delete(user)
     db.commit()
     return None
+
+
+@router.put("/{user_id}/role")
+def update_user_role(
+    user_id: str,
+    new_role: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Change a user's role (admin only).
+    Allowed roles: employee, manager, admin.
+    Safety: cannot demote the last admin.
+    """
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if new_role not in ALLOWED_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid role. Allowed: {', '.join(ALLOWED_ROLES)}"
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Safety: don't let the last admin get demoted
+    if is_admin(user) and new_role not in ("admin", "system_admin", "org_admin"):
+        admin_count = db.query(User).filter(
+            User.role.in_(["admin", "system_admin", "org_admin"])
+        ).count()
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot demote the last admin user"
+            )
+
+    old_role = user.role
+    user.role = new_role
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "success": True,
+        "user_id": user_id,
+        "old_role": old_role,
+        "new_role": new_role,
+    }
+

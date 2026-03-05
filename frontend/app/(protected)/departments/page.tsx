@@ -8,9 +8,26 @@ import {
     getDepartmentMembers,
     getDepartmentProjects,
     createDepartment,
+    updateDepartment,
+    deleteDepartment,
 } from "@/services/departments";
+import type { DepartmentUpdate } from "@/types/api";
 import type { Department, DepartmentMember, DepartmentProject } from "@/types/api";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+
+// ============ Toast ============
+function Toast({ message, type, onDone }: { message: string; type: "success" | "error"; onDone: () => void }) {
+    useEffect(() => { const t = setTimeout(onDone, 3200); return () => clearTimeout(t); }, [onDone]);
+    return (
+        <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium animate-in slide-in-from-bottom-2
+            ${type === "success" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-red-500/10 border-red-500/30 text-red-400"}`}>
+            {type === "success"
+                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M20 6L9 17l-5-5" /></svg>
+                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>}
+            {message}
+        </div>
+    );
+}
 
 // ============ Helpers ============
 function getInitials(name: string): string {
@@ -203,11 +220,15 @@ function RowMenu({
     onViewDetails,
     onViewMembers,
     onViewProjects,
+    onEdit,
+    onDelete,
 }: {
     dept: Department;
     onViewDetails: () => void;
     onViewMembers: () => void;
     onViewProjects: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
 }) {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -233,7 +254,7 @@ function RowMenu({
                 </svg>
             </button>
             {open && (
-                <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-foreground/10 bg-background shadow-2xl z-50 py-1 overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-foreground/10 bg-background shadow-2xl z-50 py-1 overflow-hidden">
                     <button
                         onClick={() => { setOpen(false); onViewDetails(); }}
                         className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs text-foreground/80 hover:bg-foreground/10 hover:text-foreground transition"
@@ -260,6 +281,25 @@ function RowMenu({
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                         </svg>
                         Related Projects
+                    </button>
+                    <div className="border-t border-foreground/8 my-1" />
+                    <button
+                        onClick={() => { setOpen(false); onEdit(); }}
+                        className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs text-foreground/80 hover:bg-foreground/10 hover:text-foreground transition"
+                    >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                        Edit Department
+                    </button>
+                    <button
+                        onClick={() => { setOpen(false); onDelete(); }}
+                        className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs text-red-500 hover:bg-red-500/10 transition"
+                    >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        </svg>
+                        Delete Department
                     </button>
                 </div>
             )}
@@ -384,6 +424,144 @@ function AddDepartmentModal({
     );
 }
 
+// ============ Edit Department Modal ============
+function EditDepartmentModal({
+    dept,
+    onClose,
+    onSaved,
+}: {
+    dept: Department;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const [name, setName] = useState(dept.name);
+    const [notes, setNotes] = useState(dept.notes ?? "");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name.trim()) { setError("Department name is required."); return; }
+        setSaving(true);
+        setError(null);
+        try {
+            const data: DepartmentUpdate = { name: name.trim(), notes: notes.trim() || undefined };
+            await updateDepartment(dept.id, data);
+            onSaved();
+            onClose();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to update department");
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-[440px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-foreground/10">
+                    <div>
+                        <h2 className="text-base font-bold text-foreground">Edit Department</h2>
+                        <p className="text-xs text-foreground/50 mt-0.5">Update department name or description.</p>
+                    </div>
+                    <button onClick={onClose} className="text-foreground/40 hover:text-foreground transition p-1 mt-0.5">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground/70">Department Name <span className="text-red-400">*</span></label>
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            autoFocus
+                            className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground/70">Description <span className="text-foreground/30">(optional)</span></label>
+                        <textarea
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            rows={3}
+                            className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition resize-none"
+                        />
+                    </div>
+                    {error && (
+                        <p className="text-xs text-red-400 flex items-center gap-1.5">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                            {error}
+                        </p>
+                    )}
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
+                        <button type="submit" disabled={saving} className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition flex items-center gap-1.5">
+                            {saving ? <><svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>Saving...</> : "Save Changes"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ============ Delete Department Modal ============
+function DeleteDepartmentModal({
+    dept,
+    onClose,
+    onDeleted,
+}: {
+    dept: Department;
+    onClose: () => void;
+    onDeleted: () => void;
+}) {
+    const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleDelete = async () => {
+        setDeleting(true);
+        setError(null);
+        try {
+            await deleteDepartment(dept.id);
+            onDeleted();
+            onClose();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to delete department");
+            setDeleting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-[380px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 overflow-hidden p-6 text-center" onClick={(e) => e.stopPropagation()}>
+                <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-red-500">
+                        <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" />
+                    </svg>
+                </div>
+                <h2 className="text-base font-bold text-foreground mb-1">Delete Department</h2>
+                <p className="text-xs text-foreground/50 mb-4">This will permanently remove the department and may affect linked members and projects.</p>
+                <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] p-3 text-left mb-5 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                        <span className="text-foreground/50">Department Name</span>
+                        <span className="text-foreground/90 font-medium">{dept.name}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                        <span className="text-foreground/50">Members</span>
+                        <span className="text-foreground/90 font-medium">{dept.member_count ?? 0} members</span>
+                    </div>
+                </div>
+                {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+                <div className="flex gap-2">
+                    <button onClick={onClose} className="flex-1 px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
+                    <button onClick={handleDelete} disabled={deleting} className="flex-1 px-4 py-2 text-xs rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 disabled:opacity-50 transition">
+                        {deleting ? "Deleting..." : "Delete"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 function DeptSkeleton() {
     return (
@@ -426,6 +604,12 @@ export default function DepartmentsPage() {
     const [membersModal, setMembersModal] = useState<Department | null>(null);
     const [projectsModal, setProjectsModal] = useState<Department | null>(null);
     const [addModal, setAddModal] = useState(false);
+    const [editModal, setEditModal] = useState<Department | null>(null);
+    const [deleteModal, setDeleteModal] = useState<Department | null>(null);
+
+    // Toast
+    const [toastMsg, setToastMsg] = useState<{ message: string; type: "success" | "error" } | null>(null);
+    const showToast = useCallback((message: string, type: "success" | "error" = "success") => setToastMsg({ message, type }), []);
 
     const fetchDepartments = useCallback(() => {
         const token = getToken();
@@ -565,7 +749,7 @@ export default function DepartmentsPage() {
             </div>
 
             {/* Table */}
-            <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] overflow-hidden">
+            <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02]">
                 {/* Header row */}
                 <div className="grid grid-cols-[40px_1fr_180px_100px_1fr_48px] items-center px-4 py-3 border-b border-foreground/10 text-xs font-semibold text-foreground/40 uppercase tracking-wider">
                     <div>
@@ -638,6 +822,8 @@ export default function DepartmentsPage() {
                                         onViewDetails={() => router.push(`/departments/${dept.id}`)}
                                         onViewMembers={() => setMembersModal(dept)}
                                         onViewProjects={() => setProjectsModal(dept)}
+                                        onEdit={() => setEditModal(dept)}
+                                        onDelete={() => setDeleteModal(dept)}
                                     />
                                 </div>
                             </div>
@@ -656,8 +842,25 @@ export default function DepartmentsPage() {
             {addModal && (
                 <AddDepartmentModal
                     onClose={() => setAddModal(false)}
-                    onCreated={fetchDepartments}
+                    onCreated={() => { fetchDepartments(); showToast("Department created successfully"); }}
                 />
+            )}
+            {editModal && (
+                <EditDepartmentModal
+                    dept={editModal}
+                    onClose={() => setEditModal(null)}
+                    onSaved={() => { fetchDepartments(); showToast("Department updated successfully"); }}
+                />
+            )}
+            {deleteModal && (
+                <DeleteDepartmentModal
+                    dept={deleteModal}
+                    onClose={() => setDeleteModal(null)}
+                    onDeleted={() => { fetchDepartments(); showToast("Department deleted successfully"); }}
+                />
+            )}
+            {toastMsg && (
+                <Toast message={toastMsg.message} type={toastMsg.type} onDone={() => setToastMsg(null)} />
             )}
         </div>
     );

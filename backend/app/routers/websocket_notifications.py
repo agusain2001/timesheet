@@ -34,6 +34,9 @@ async def websocket_notifications(
     db: Session = Depends(get_db)
 ):
     """WebSocket endpoint for real-time notifications."""
+    # Accept the connection first (required before any send/close operation)
+    await websocket.accept()
+
     # Authenticate
     user = await get_user_from_token(token, db)
     if not user:
@@ -42,8 +45,8 @@ async def websocket_notifications(
     
     user_id = str(user.id)
     
-    # Connect
-    await manager.connect(websocket, user_id)
+    # Connect (manager will use the already-accepted websocket)
+    await manager.connect(websocket, user_id, skip_accept=True)
     
     try:
         while True:
@@ -92,7 +95,12 @@ async def websocket_notifications(
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
     
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError):
+        # WebSocketDisconnect  → clean client-initiated close
+        # RuntimeError         → abrupt disconnect (browser tab close / page refresh)
+        pass
+    finally:
+        # Always remove the connection from the manager on exit
         manager.disconnect(websocket, user_id)
 
 

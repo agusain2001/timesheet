@@ -14,6 +14,7 @@ export interface User {
     avatar_url?: string;
     is_active: boolean;
     created_at: string;
+    accessible_pages?: string[]; // Populated by /users/me for RBAC sidebar filtering
 }
 
 export interface UserCreate {

@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models import Client, User, Project, ProjectManager
 from app.schemas import ClientCreate, ClientUpdate, ClientResponse
 from app.utils import get_current_active_user
+from app.utils.role_guards import is_admin, is_manager
 import csv
 import io
 
@@ -68,7 +69,9 @@ def bulk_delete_clients(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete multiple clients by their IDs."""
+    """Delete multiple clients by their IDs. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise HTTPException(status_code=403, detail="Manager or admin access required")
     deleted = 0
     failed = []
     for client_id in request.client_ids:
@@ -120,7 +123,9 @@ def create_client(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Create a new client."""
+    """Create a new client. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise HTTPException(status_code=403, detail="Manager or admin access required")
     db_client = Client(**client_data.model_dump())
     db.add(db_client)
     db.commit()
@@ -148,7 +153,9 @@ def update_client(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update a client."""
+    """Update a client. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise HTTPException(status_code=403, detail="Manager or admin access required")
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -168,7 +175,9 @@ def delete_client(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a client."""
+    """Delete a client. Requires admin role."""
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")

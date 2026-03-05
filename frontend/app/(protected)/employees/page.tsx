@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { getToken } from "@/lib/auth";
-import { getUsers, getUserProjects, exportUsers, type UsersParams, type UserProject } from "@/services/users";
+import { getUsers, getUserProjects, exportUsers, updateUser, deleteUser, createUser, type UsersParams, type UserProject } from "@/services/users";
 import { getDepartments } from "@/services/departments";
 import type { User, Department } from "@/types/api";
 import { HowItWorks } from "@/components/ui/HowItWorks";
@@ -392,6 +392,262 @@ function BulkUploadModal({ onClose, onDone }: { onClose: () => void; onDone: (ms
     );
 }
 
+// ─── Add Employee Modal ───────────────────────────────────────────────────────
+function AddEmployeeModal({
+    departments,
+    onClose,
+    onCreated,
+}: {
+    departments: Department[];
+    onClose: () => void;
+    onCreated: () => void;
+}) {
+    const [form, setForm] = useState({
+        full_name: "",
+        email: "",
+        password: "",
+        position: "",
+        department_id: "",
+        role: "employee",
+    });
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!form.full_name.trim()) { setError("Full name is required."); return; }
+        if (!form.email.trim()) { setError("Email is required."); return; }
+        if (!form.password || form.password.length < 6) { setError("Password must be at least 6 characters."); return; }
+        setSaving(true); setError(null);
+        try {
+            await createUser({
+                full_name: form.full_name.trim(),
+                email: form.email.trim(),
+                password: form.password,
+                position: form.position.trim() || undefined,
+                department_id: form.department_id || undefined,
+                role: form.role || "employee",
+            });
+            onCreated();
+            onClose();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to create employee");
+            setSaving(false);
+        }
+    };
+
+    const inp = "w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition";
+
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-[500px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-foreground/10">
+                    <div>
+                        <h2 className="text-base font-bold text-foreground">Add New Employee</h2>
+                        <p className="text-xs text-foreground/50 mt-0.5">Create a new employee account in the workspace.</p>
+                    </div>
+                    <button onClick={onClose} className="text-foreground/40 hover:text-foreground transition p-1 mt-0.5">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-xs font-medium text-foreground/70">Full Name <span className="text-red-400">*</span></label>
+                            <input type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} autoFocus className={inp} placeholder="e.g. John Doe" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Email <span className="text-red-400">*</span></label>
+                            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inp} placeholder="john@company.com" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Password <span className="text-red-400">*</span></label>
+                            <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={inp} placeholder="Min 6 characters" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Position</label>
+                            <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className={inp} placeholder="e.g. Software Engineer" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Role</label>
+                            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={inp + " cursor-pointer"}>
+                                <option value="employee">Employee</option>
+                                <option value="manager">Manager</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-xs font-medium text-foreground/70">Department</label>
+                            <select value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })} className={inp + " cursor-pointer"}>
+                                <option value="">Select Department</option>
+                                {departments.map((d) => (<option key={d.id} value={d.id}>{d.name}</option>))}
+                            </select>
+                        </div>
+                    </div>
+                    {error && (
+                        <p className="text-xs text-red-400 flex items-center gap-1.5">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                            {error}
+                        </p>
+                    )}
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
+                        <button type="submit" disabled={saving} className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition flex items-center gap-1.5">
+                            {saving ? <><svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>Creating...</> : "Add Employee"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ─── Edit Employee Modal ───────────────────────────────────────────────────────
+function EditEmployeeModal({
+    employee,
+    departments,
+    onClose,
+    onSaved,
+}: {
+    employee: User;
+    departments: Department[];
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const [form, setForm] = useState({
+        full_name: employee.full_name ?? "",
+        position: employee.position ?? "",
+        department_id: employee.department_id ?? "",
+        phone: (employee as any).phone ?? "",
+    });
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!form.full_name.trim()) { setError("Full name is required."); return; }
+        setSaving(true); setError(null);
+        try {
+            await updateUser(employee.id, {
+                full_name: form.full_name.trim(),
+                position: form.position.trim() || undefined,
+                department_id: form.department_id || undefined,
+            });
+            onSaved();
+            onClose();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to update employee");
+            setSaving(false);
+        }
+    };
+
+    const inp = "w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition";
+
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-[460px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-foreground/10">
+                    <div>
+                        <h2 className="text-base font-bold text-foreground">Edit Employee</h2>
+                        <p className="text-xs text-foreground/50 mt-0.5">Update employee details and department assignment.</p>
+                    </div>
+                    <button onClick={onClose} className="text-foreground/40 hover:text-foreground transition p-1 mt-0.5">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground/70">Full Name <span className="text-red-400">*</span></label>
+                        <input type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} autoFocus className={inp} placeholder="Employee full name" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Position</label>
+                            <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className={inp} placeholder="e.g. Software Engineer" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Department</label>
+                            <select value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })} className={inp + " cursor-pointer"}>
+                                <option value="">Select Department</option>
+                                {departments.map((d) => (<option key={d.id} value={d.id}>{d.name}</option>))}
+                            </select>
+                        </div>
+                    </div>
+                    {error && (
+                        <p className="text-xs text-red-400 flex items-center gap-1.5">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                            {error}
+                        </p>
+                    )}
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
+                        <button type="submit" disabled={saving} className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition flex items-center gap-1.5">
+                            {saving ? <><svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>Saving...</> : "Save Changes"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ─── Delete Employee Modal ────────────────────────────────────────────────────
+function DeleteEmployeeModal({
+    employee,
+    onClose,
+    onDeleted,
+}: {
+    employee: User;
+    onClose: () => void;
+    onDeleted: () => void;
+}) {
+    const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleDelete = async () => {
+        setDeleting(true); setError(null);
+        try {
+            await deleteUser(employee.id);
+            onDeleted();
+            onClose();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to delete employee");
+            setDeleting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-[380px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 p-6 text-center" onClick={(e) => e.stopPropagation()}>
+                <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-red-500">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                    </svg>
+                </div>
+                <h2 className="text-base font-bold text-foreground mb-1">Remove Employee</h2>
+                <p className="text-xs text-foreground/50 mb-4">This will permanently remove the employee from the workspace and all linked data.</p>
+                <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] p-3 text-left mb-5 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                        <span className="text-foreground/50">Name</span>
+                        <span className="text-foreground/90 font-medium">{employee.full_name}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                        <span className="text-foreground/50">Email</span>
+                        <span className="text-foreground/90 font-medium">{employee.email}</span>
+                    </div>
+                </div>
+                {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+                <div className="flex gap-2">
+                    <button onClick={onClose} className="flex-1 px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
+                    <button onClick={handleDelete} disabled={deleting} className="flex-1 px-4 py-2 text-xs rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 disabled:opacity-50 transition">
+                        {deleting ? "Removing..." : "Remove"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function EmployeesPage() {
     const [users, setUsers] = useState<User[]>([]);
@@ -403,8 +659,11 @@ export default function EmployeesPage() {
     // UI States
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [relatedProjectsUser, setRelatedProjectsUser] = useState<User | null>(null);
+    const [editUser_, setEditUser] = useState<User | null>(null);
+    const [deleteUser_, setDeleteUser_] = useState<User | null>(null);
     const [exportOpen, setExportOpen] = useState(false);
     const [showInvite, setShowInvite] = useState(false);
+    const [showAddEmployee, setShowAddEmployee] = useState(false);
     const [showBulkUpload, setShowBulkUpload] = useState(false);
     const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
@@ -412,6 +671,7 @@ export default function EmployeesPage() {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+    const showToast = useCallback((message: string, type: "success" | "error" = "success") => setToast({ message, type }), []);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -514,9 +774,14 @@ export default function EmployeesPage() {
                         Bulk Upload
                     </button>
                     <button onClick={() => setShowInvite(true)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition">
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-foreground/70 text-xs font-medium hover:bg-foreground/10 transition">
                         <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></svg>
                         Invite User
+                    </button>
+                    <button onClick={() => setShowAddEmployee(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition">
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
+                        Add Employee
                     </button>
                 </div>
             </div>
@@ -611,9 +876,12 @@ export default function EmployeesPage() {
 
                                         {/* Dropdown Menu */}
                                         {menuOpen === user.id && (
-                                            <div ref={menuRef} className="absolute right-0 top-full mt-1 w-40 rounded-xl border border-foreground/10 bg-background shadow-2xl py-1 z-20">
+                                            <div ref={menuRef} className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-foreground/10 bg-background shadow-2xl py-1 z-20">
                                                 <button onClick={() => { setSelectedUser(user); setMenuOpen(null); }} className="w-full text-left px-4 py-2 text-xs hover:bg-foreground/5 text-foreground/80 transition">View Details</button>
                                                 <button onClick={() => { setRelatedProjectsUser(user); setMenuOpen(null); }} className="w-full text-left px-4 py-2 text-xs hover:bg-foreground/5 text-foreground/80 transition">Related Projects</button>
+                                                <div className="border-t border-foreground/8 my-1" />
+                                                <button onClick={() => { setEditUser(user); setMenuOpen(null); }} className="w-full text-left px-4 py-2 text-xs hover:bg-foreground/5 text-foreground/80 transition">Edit Employee</button>
+                                                <button onClick={() => { setDeleteUser_(user); setMenuOpen(null); }} className="w-full text-left px-4 py-2 text-xs hover:bg-red-500/10 text-red-500 transition">Remove Employee</button>
                                             </div>
                                         )}
                                     </div>
@@ -640,13 +908,38 @@ export default function EmployeesPage() {
             {exportOpen && (
                 <ExportModal count={selectedIds.size} onClose={() => setExportOpen(false)} onExport={handleExport} />
             )}
+            {/* Add Employee Modal */}
+            {showAddEmployee && (
+                <AddEmployeeModal
+                    departments={departments}
+                    onClose={() => setShowAddEmployee(false)}
+                    onCreated={() => { loadData(); showToast("Employee added successfully"); }}
+                />
+            )}
             {/* Invite Modal */}
             {showInvite && (
-                <InviteModal onClose={() => setShowInvite(false)} onDone={(msg) => { setToast({ message: msg, type: "success" }); }} />
+                <InviteModal onClose={() => setShowInvite(false)} onDone={(msg) => { showToast(msg); }} />
             )}
             {/* Bulk Upload Modal */}
             {showBulkUpload && (
-                <BulkUploadModal onClose={() => setShowBulkUpload(false)} onDone={(msg) => { setToast({ message: msg, type: "success" }); }} />
+                <BulkUploadModal onClose={() => setShowBulkUpload(false)} onDone={(msg) => { showToast(msg); }} />
+            )}
+            {/* Edit Employee Modal */}
+            {editUser_ && (
+                <EditEmployeeModal
+                    employee={editUser_}
+                    departments={departments}
+                    onClose={() => setEditUser(null)}
+                    onSaved={() => { loadData(); showToast("Employee updated successfully"); }}
+                />
+            )}
+            {/* Delete Employee Modal */}
+            {deleteUser_ && (
+                <DeleteEmployeeModal
+                    employee={deleteUser_}
+                    onClose={() => setDeleteUser_(null)}
+                    onDeleted={() => { loadData(); showToast("Employee removed successfully"); }}
+                />
             )}
         </div>
     );

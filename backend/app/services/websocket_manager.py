@@ -15,9 +15,10 @@ class ConnectionManager:
         # All connections for broadcasting
         self.all_connections: Set[WebSocket] = set()
     
-    async def connect(self, websocket: WebSocket, user_id: str):
+    async def connect(self, websocket: WebSocket, user_id: str, skip_accept: bool = False):
         """Accept a new WebSocket connection."""
-        await websocket.accept()
+        if not skip_accept:
+            await websocket.accept()
         
         if user_id not in self.active_connections:
             self.active_connections[user_id] = set()

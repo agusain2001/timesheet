@@ -27,7 +27,8 @@ class UserResponse(UserBase):
     id: str
     is_active: bool
     created_at: datetime
-    
+    accessible_pages: Optional[List[str]] = None  # Only populated on /me endpoint
+
     class Config:
         from_attributes = True
 

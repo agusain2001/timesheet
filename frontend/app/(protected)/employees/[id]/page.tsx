@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
     ArrowLeft, Mail, Phone, MapPin, Clock, Briefcase, Star,
     CheckCircle2, AlertTriangle, TrendingUp, Users, FolderOpen,
@@ -9,6 +10,7 @@ import {
     ChevronRight, RefreshCw, ExternalLink
 } from "lucide-react";
 import { apiGet, apiPut } from "@/services/api";
+import { getCurrentUser } from "@/services/users";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -266,6 +268,12 @@ export default function EmployeeProfilePage() {
     const [activeTab, setActiveTab] = useState<Tab>("Overview");
     const [taskFilter, setTaskFilter] = useState<"active" | "completed">("active");
     const [projectFilter, setProjectFilter] = useState<"active" | "past">("active");
+    const [currentUserRole, setCurrentUserRole] = useState<string>("employee");
+
+    // Fetch the logged-in user's role to show admin-only controls
+    useEffect(() => {
+        getCurrentUser().then(u => setCurrentUserRole(u.role)).catch(() => { });
+    }, []);
 
     const fetchData = useCallback(async () => {
         if (!userId) return;
@@ -404,6 +412,16 @@ export default function EmployeeProfilePage() {
                                 <button onClick={fetchData} className="p-2 rounded-xl bg-foreground/[0.03] border border-foreground/10 text-foreground/50 hover:text-foreground/80 transition-colors">
                                     <RefreshCw size={14} />
                                 </button>
+                                {/* Admin-only: Manage Permissions button */}
+                                {currentUserRole === "admin" && (
+                                    <Link
+                                        href={`/employees/${userId}/permissions`}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/15 border border-blue-500/30 text-blue-400 text-xs font-medium hover:bg-blue-600/25 transition-colors"
+                                    >
+                                        <Shield size={12} />
+                                        Permissions
+                                    </Link>
+                                )}
                             </div>
                         </div>
                     </div>

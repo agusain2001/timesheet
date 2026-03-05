@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models import Team, TeamMember, User, Task, TimeEntry
 from app.models.department import Department
 from app.utils import get_current_active_user
+from app.utils.role_guards import is_admin, is_manager
 
 router = APIRouter()
 
@@ -189,7 +190,9 @@ def create_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Create a new team."""
+    """Create a new team. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise HTTPException(status_code=403, detail="Manager or admin access required")
     db_team = Team(
         name=team_data.name,
         description=team_data.description,
@@ -245,7 +248,9 @@ def update_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update a team."""
+    """Update a team. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise HTTPException(status_code=403, detail="Manager or admin access required")
     team = db.query(Team).filter(Team.id == team_id).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -310,7 +315,9 @@ def delete_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a team (soft delete by deactivating)."""
+    """Delete a team (soft delete by deactivating). Requires admin role."""
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
     team = db.query(Team).filter(Team.id == team_id).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -360,7 +367,9 @@ def add_team_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Add a member to a team."""
+    """Add a member to a team. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise HTTPException(status_code=403, detail="Manager or admin access required")
     team = db.query(Team).filter(Team.id == team_id).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -430,7 +439,9 @@ def remove_team_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Remove a member from a team."""
+    """Remove a member from a team. Requires manager+ role."""
+    if not is_manager(current_user):
+        raise HTTPException(status_code=403, detail="Manager or admin access required")
     member = db.query(TeamMember).filter(
         TeamMember.id == member_id,
         TeamMember.team_id == team_id

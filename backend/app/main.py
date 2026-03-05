@@ -29,6 +29,8 @@ from app.routers import ai_agent
 from app.routers import views, email_notifications
 # Phase 5: GDPR, Permissions, Google Calendar, Project Structure, Workspaces
 from app.routers import gdpr, permissions, google_calendar, project_structure, workspaces
+# Page Access (RBAC page-level control)
+from app.routers import page_access as page_access_router
 # Settings
 from app.routers import settings as settings_router
 # Automation engine router
@@ -196,6 +198,9 @@ app.include_router(automation.router, prefix="/api/automation", tags=["Automatio
 
 # ========== Chat Integrations (Slack & Teams) ==========
 app.include_router(chat_integrations.router, prefix="/api/integrations/chat", tags=["Chat Integrations"])
+
+# ========== Page Access Control (RBAC) ==========
+app.include_router(page_access_router.router, prefix="/api", tags=["Page Access Control"])
 
 
 @app.get("/")

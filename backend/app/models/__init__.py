@@ -67,6 +67,9 @@ from app.models.custom_field import CustomFieldDefinition, CustomFieldValue, Fie
 # Chat History
 from app.models.chat_history import ChatHistory
 
+# Page Access
+from app.models.page_access import UserPageAccess, ALWAYS_ACCESSIBLE, RESTRICTED_PAGES, ALL_PAGE_KEYS, get_accessible_pages
+
 
 __all__ = [
     # Core
@@ -130,5 +133,8 @@ __all__ = [
 
     # Chat History
     "ChatHistory",
+
+    # Page Access
+    "UserPageAccess", "ALWAYS_ACCESSIBLE", "RESTRICTED_PAGES", "ALL_PAGE_KEYS", "get_accessible_pages",
 ]
 

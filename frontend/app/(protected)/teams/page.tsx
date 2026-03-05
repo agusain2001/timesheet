@@ -21,6 +21,20 @@ import {
 import { getToken } from "@/lib/auth";
 import { HowItWorks } from "@/components/ui/HowItWorks";
 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function Toast({ message, type, onDone }: { message: string; type: "success" | "error"; onDone: () => void }) {
+    useEffect(() => { const t = setTimeout(onDone, 3200); return () => clearTimeout(t); }, [onDone]);
+    return (
+        <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium
+            ${type === "success" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-red-500/10 border-red-500/30 text-red-400"}`}>
+            {type === "success"
+                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M20 6L9 17l-5-5" /></svg>
+                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>}
+            {message}
+        </div>
+    );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TeamMember {
@@ -888,6 +902,9 @@ export default function TeamsPage() {
     const [deleting, setDeleting] = useState(false);
     const [filterDept, setFilterDept] = useState("");
     const [treeView, setTreeView] = useState(false);
+    const [toastMsg, setToastMsg] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+    const showToast = useCallback((message: string, type: "success" | "error" = "success") => setToastMsg({ message, type }), []);
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -921,11 +938,13 @@ export default function TeamsPage() {
         setDeleting(true);
         try {
             await apiFetch(`/teams/${deleteTeam.id}`, { method: "DELETE" });
+            const deletedName = deleteTeam.name;
             setDeleteTeam(null);
             if (selectedTeam?.id === deleteTeam.id) setSelectedTeam(null);
             fetchAll();
+            showToast(`"${deletedName}" team deleted successfully`);
         } catch (err: any) {
-            alert(err.message);
+            showToast(err.message || "Failed to delete team", "error");
         } finally {
             setDeleting(false);
         }
@@ -933,6 +952,7 @@ export default function TeamsPage() {
 
     return (
         <div className="flex h-full min-h-screen bg-background text-foreground/90">
+            {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onDone={() => setToastMsg(null)} />}
             {/* Main content */}
             <div className="flex-1 flex flex-col p-6 gap-6">
                 {/* Header */}
@@ -1062,7 +1082,13 @@ export default function TeamsPage() {
                     allTeams={teams}
                     users={users}
                     departments={departments}
-                    onSave={() => { setShowForm(false); setEditTeam(null); fetchAll(); }}
+                    onSave={() => {
+                        const isEdit = !!(editTeam && editTeam.id);
+                        setShowForm(false);
+                        setEditTeam(null);
+                        fetchAll();
+                        showToast(isEdit ? "Team updated successfully" : "Team created successfully");
+                    }}
                     onClose={() => { setShowForm(false); setEditTeam(null); }}
                 />
             )}
