@@ -1,3 +1,5 @@
+"use client";
+
 import { ShieldOff } from "lucide-react";
 import Link from "next/link";
 

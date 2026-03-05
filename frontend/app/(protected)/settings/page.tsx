@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
     User, Shield, Bell, Eye, Camera, Lock, Smartphone,
     EyeOff, Eye as EyeIcon, Save, AlertTriangle,
@@ -818,7 +818,7 @@ function HelpTab() {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MAIN PAGE
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-export default function SettingsPage() {
+function SettingsPageInner() {
     const searchParams = useSearchParams();
     const router = useRouter();
 
@@ -889,6 +889,18 @@ export default function SettingsPage() {
             {activeTab === "privacy" && <PrivacyTab />}
             {activeTab === "help" && <HelpTab />}
         </div>
+    );
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center h-48 text-foreground/40">
+                <Loader2 size={22} className="animate-spin" />
+            </div>
+        }>
+            <SettingsPageInner />
+        </Suspense>
     );
 }
 
