@@ -41,7 +41,18 @@ export function Sidebar() {
    */
   const isVisible = (item: NavItem): boolean => {
     if (!currentUser) return true; // still loading → show all
-    if (currentUser.role === "admin" || currentUser.role === "manager") return true;
+
+    // If this item specifies required roles, check first
+    if (item.roles && item.roles.length > 0) {
+      if (!item.roles.includes(currentUser.role)) return false;
+    }
+
+    if (
+      currentUser.role === "admin" ||
+      currentUser.role === "org_admin" ||
+      currentUser.role === "system_admin" ||
+      currentUser.role === "manager"
+    ) return true;
 
     // Employee: check accessible_pages
     if (!item.pageKey) return true; // no key = always accessible
@@ -115,7 +126,7 @@ export function Sidebar() {
               isOpen ? "max-h-[800px] opacity-100 mt-3 pb-2" : "max-h-0 opacity-0",
             )}
           >
-            {item.children!.map((child) => {
+            {item.children!.filter(isVisible).map((child) => {
               const ChildIcon = child.icon;
               const childIsActive =
                 child.href && pathname.startsWith(child.href);

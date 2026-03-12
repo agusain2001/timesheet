@@ -11,6 +11,8 @@ from app.schemas import (
     DepartmentManagerResponse, DepartmentMemberResponse, DepartmentProjectResponse
 )
 from app.utils import get_current_active_user
+from app.utils.role_guards import is_admin, is_manager
+from app.utils.tenant import scope_to_org, set_org_id
 
 router = APIRouter()
 
@@ -52,10 +54,10 @@ def get_all_departments(
 ):
     """Get all departments."""
     query = db.query(Department)
-    
+    # Tenant isolation
+    query = scope_to_org(query, Department, current_user)
     if search:
         query = query.filter(Department.name.ilike(f"%{search}%"))
-    
     departments = query.offset(skip).limit(limit).all()
     return [build_department_response(dept, db) for dept in departments]
 
@@ -67,11 +69,10 @@ def create_department(
     current_user: User = Depends(get_current_active_user)
 ):
     """Create a new department."""
-    # Check admin role
-    if current_user.role not in ["admin", "manager"]:
+    if not is_manager(current_user):
         raise HTTPException(status_code=403, detail="Not authorized")
-    
     db_dept = Department(name=dept_data.name, notes=dept_data.notes)
+    set_org_id(db_dept, current_user)
     db.add(db_dept)
     db.flush()  # Get the ID before adding managers
     
@@ -161,7 +162,7 @@ def delete_department(
     current_user: User = Depends(get_current_active_user)
 ):
     """Delete a department."""
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     dept = db.query(Department).filter(Department.id == dept_id).first()

@@ -15,6 +15,7 @@ from app.utils.security import get_current_active_user
 ADMIN_ROLES = {"admin", "system_admin", "org_admin"}
 MANAGER_ROLES = {"admin", "system_admin", "org_admin", "project_manager", "manager"}
 LEAD_ROLES = {"admin", "system_admin", "org_admin", "project_manager", "manager", "team_lead"}
+SUPER_ADMIN_ROLES = {"system_admin"}
 
 
 def require_roles(allowed_roles: List[str]):
@@ -64,6 +65,11 @@ def is_lead_or_above(user: User) -> bool:
     return user.role in LEAD_ROLES
 
 
+def is_super_admin(user: User) -> bool:
+    """Check if user is a platform-level super admin (system_admin)."""
+    return user.role in SUPER_ADMIN_ROLES
+
+
 def can_modify_task(task, current_user: User) -> bool:
     """
     Check if the current user can modify a task.
@@ -79,8 +85,19 @@ def can_modify_task(task, current_user: User) -> bool:
 
 
 def can_delete_task(task, current_user: User) -> bool:
-    """Check if user can delete a task."""
-    if is_manager(current_user):
+    """Check if user can delete a task.
+    Super admins: always yes.
+    Admins: yes within their org.
+    Others: only if they own the task.
+    """
+    if is_super_admin(current_user):
+        return True
+    if is_admin(current_user):
+        # Org admin can delete any task in their org
+        task_org = getattr(task, "organization_id", None)
+        user_org = getattr(current_user, "organization_id", None)
+        if task_org and user_org and task_org != user_org:
+            return False
         return True
     return task.owner_id == current_user.id
 

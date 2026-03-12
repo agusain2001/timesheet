@@ -25,6 +25,7 @@ import {
     KeyRound,
     Lock,
     Link2,
+    UserCheck,
 } from "lucide-react";
 
 export const NAV_ITEMS: NavItem[] = [
@@ -75,6 +76,27 @@ export const NAV_ITEMS: NavItem[] = [
     { name: "Automation", href: "/automation", icon: Zap, pageKey: "automation" },
     { name: "AI", href: "/ai", icon: BotMessageSquare, pageKey: "ai" },
     { name: "Support", href: "/support", icon: HeadsetIcon, pageKey: "support" },
+    {
+        // Visible only to org admins and system admins
+        name: "Admin",
+        icon: Shield,
+        pageKey: "admin",
+        roles: ["admin", "org_admin", "system_admin"],
+        children: [
+            {
+                name: "Approvals",
+                href: "/admin/approvals",
+                icon: UserCheck,
+                roles: ["admin", "org_admin", "system_admin"],
+            },
+            {
+                name: "Org Settings",
+                href: "/settings/organization",
+                icon: Building2,
+                roles: ["admin", "org_admin", "system_admin"],
+            },
+        ],
+    },
 ];
 
 export const BOTTOM_NAV_ITEMS: NavItem[] = [

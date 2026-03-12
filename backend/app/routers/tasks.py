@@ -18,6 +18,7 @@ from app.utils import (
     NotFoundError,
     DependencyBlockedError,
 )
+from app.utils.tenant import scope_to_org, set_org_id, is_super_admin
 from app.services.notification_service import NotificationService
 from app.services.automation_engine import run_automation_rules
 
@@ -132,14 +133,17 @@ def get_all_tasks(
     status_filter: Optional[str] = None,
     priority: Optional[str] = None,
     search: Optional[str] = None,
+    parent_task_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get tasks. Managers see all; others see only their own or assigned tasks."""
+    """Get tasks. Managers see all in their org; others see only their own or assigned tasks."""
     query = db.query(Task)
+    # Tenant isolation
+    query = scope_to_org(query, Task, current_user)
 
-    # Non-managers only see tasks they are involved in
-    if not is_manager(current_user):
+    # Non-managers only see tasks they are involved in (unless filtering by project etc.)
+    if not is_manager(current_user) and not project_id and not team_id:
         query = query.filter(
             (Task.assignee_id == current_user.id) |
             (Task.owner_id == current_user.id)
@@ -161,6 +165,13 @@ def get_all_tasks(
         query = query.filter(Task.priority == priority)
     if search:
         query = query.filter(Task.name.ilike(f"%{search}%"))
+    # Subtask filter — returns only children of this task
+    if parent_task_id:
+        query = query.filter(Task.parent_task_id == parent_task_id)
+    else:
+        # By default, only return root tasks (no subtask flooding in task list)
+        # Unless parent_task_id is explicitly requested, skip tasks that have a parent
+        pass  # Don't auto-hide subtasks — keep legacy behavior
 
     tasks = query.order_by(Task.created_at.desc()).offset(skip).limit(limit).all()
     return [build_task_response(t, db) for t in tasks]
@@ -333,13 +344,14 @@ def delete_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a task. Only task owners and managers can delete."""
+    """Delete a task. Only task owners and managers can delete within their org."""
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise NotFoundError("Task", task_id)
 
-    if not can_delete_task(task, current_user):
-        raise ForbiddenError("delete this task")
+    if not is_super_admin(current_user):
+        if not can_delete_task(task, current_user):
+            raise ForbiddenError("delete this task")
 
     db.delete(task)
     db.commit()

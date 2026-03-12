@@ -37,6 +37,10 @@ from app.routers import settings as settings_router
 from app.routers import automation
 # Chat integrations (Slack & Teams)
 from app.routers import chat_integrations
+# Organizations (multi-tenancy)
+from app.routers import organizations
+# User Approvals
+from app.routers import user_approvals
 # OpenAPI documentation enhancement
 from app.openapi_config import setup_custom_openapi
 from app.utils.error_handlers import register_error_handlers
@@ -201,6 +205,12 @@ app.include_router(chat_integrations.router, prefix="/api/integrations/chat", ta
 
 # ========== Page Access Control (RBAC) ==========
 app.include_router(page_access_router.router, prefix="/api", tags=["Page Access Control"])
+
+# ========== Organizations (Multi-tenancy) ==========
+app.include_router(organizations.router, prefix="/api/organizations", tags=["Organizations"])
+
+# ========== User Approvals (Org Admin) ==========
+app.include_router(user_approvals.router, prefix="/api", tags=["User Approvals"])
 
 
 @app.get("/")

@@ -3,6 +3,9 @@
 # Import Base first
 from app.database import Base
 
+# Organization MUST be imported before User (FK dependency order)
+from app.models.organization import Organization
+
 # Core models - import in order of dependencies
 from app.models.user import User, UserRole, AvailabilityStatus
 from app.models.department import Department, DepartmentManager
@@ -72,6 +75,9 @@ from app.models.page_access import UserPageAccess, ALWAYS_ACCESSIBLE, RESTRICTED
 
 
 __all__ = [
+    # Organization (multi-tenancy root)
+    "Organization",
+
     # Core
     "User", "UserRole", "AvailabilityStatus",
     "Department", "DepartmentManager",

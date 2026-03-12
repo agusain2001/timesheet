@@ -16,6 +16,7 @@ from app.schemas import (
 )
 from app.utils import get_current_active_user
 from app.utils.role_guards import is_manager, is_admin
+from app.utils.tenant import scope_to_org
 from app.services.file_upload import save_receipt
 from app.services.notification_service import NotificationService
 
@@ -54,8 +55,9 @@ def get_all_expenses(
 ):
     """Get all expenses with optional filters."""
     query = db.query(Expense)
-    
-    # Non-admins see their own or pending for approval
+    # First scope to org (managers see own org; super admin sees all)
+    query = scope_to_org(query, Expense, current_user)
+    # Non-managers only see their own expenses
     if not is_manager(current_user):
         query = query.filter(Expense.user_id == current_user.id)
     elif user_id:
@@ -100,10 +102,12 @@ def get_pending_expenses(
     """Get pending expenses for approval (managers only)."""
     if not is_manager(current_user):
         raise HTTPException(status_code=403, detail="Manager access required")
-    
-    expenses = db.query(Expense).filter(
+    query = db.query(Expense).filter(
         Expense.status.in_([ExpenseStatus.PENDING.value, ExpenseStatus.SUBMITTED.value])
-    ).order_by(Expense.created_at.desc()).all()
+    )
+    # scope to org
+    query = scope_to_org(query, Expense, current_user)
+    expenses = query.order_by(Expense.created_at.desc()).all()
     
     # Populate user info
     for expense in expenses:

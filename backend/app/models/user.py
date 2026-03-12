@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Float, JSON, func
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Float, JSON, func, Integer
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -38,9 +38,16 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
     
-    # Organization
+    # Organization / Tenant
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     role = Column(String(50), default=UserRole.EMPLOYEE.value)
     department_id = Column(String(36), ForeignKey("departments.id"), nullable=True)
+
+    # Verification & Approval Status
+    email_verified = Column(Boolean, default=False)
+    # user_status: pending | approved | rejected | suspended
+    user_status = Column(String(20), default="pending")
+    email_verification_token = Column(String(255), nullable=True)
     
     # Profile
     avatar_url = Column(String(500), nullable=True)
@@ -77,6 +84,7 @@ class User(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
+    organization = relationship("Organization", back_populates="users")
     department = relationship("Department", back_populates="employees")
     timesheets = relationship("Timesheet", back_populates="user")
     expenses = relationship("Expense", back_populates="user")

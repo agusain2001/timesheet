@@ -123,6 +123,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     confirm_password: str
+    organization_id: Optional[str] = None
+    organization_slug: Optional[str] = None  # Alternative: join by org slug
 
 class OAuthCallbackResponse(BaseModel):
     access_token: str

@@ -196,13 +196,17 @@ def create_team(
     db_team = Team(
         name=team_data.name,
         description=team_data.description,
-        parent_team_id=team_data.parent_team_id,
-        department_id=team_data.department_id,
-        lead_id=team_data.lead_id,
+        # Convert empty strings to None for optional FK fields
+        parent_team_id=team_data.parent_team_id or None,
+        department_id=team_data.department_id or None,
+        lead_id=team_data.lead_id or None,
         capacity_hours_week=team_data.capacity_hours_week,
         color=team_data.color,
         icon=team_data.icon
     )
+    # Stamp organization
+    if hasattr(current_user, 'organization_id') and current_user.organization_id:
+        db_team.organization_id = current_user.organization_id
     db.add(db_team)
     db.flush()
     

@@ -16,6 +16,7 @@ from app.utils import (
     ForbiddenError,
     NotFoundError,
 )
+from app.utils.tenant import scope_to_org, set_org_id, is_super_admin
 
 router = APIRouter()
 
@@ -62,6 +63,8 @@ def get_all_projects(
 ):
     """Get all projects with optional filters."""
     query = db.query(Project)
+    # Tenant isolation — only see this organization's projects
+    query = scope_to_org(query, Project, current_user)
     
     if client_id:
         query = query.filter(Project.client_id == client_id)
@@ -87,14 +90,16 @@ def create_project(
         raise ForbiddenError("create projects")
     db_project = Project(
         name=project_data.name,
-        client_id=project_data.client_id,
-        department_id=project_data.department_id,
+        client_id=project_data.client_id or None,
+        department_id=project_data.department_id or None,
         start_date=project_data.start_date,
         end_date=project_data.end_date,
         status=project_data.status,
         contacts=project_data.contacts,
         notes=project_data.notes
     )
+    # Stamp organization
+    set_org_id(db_project, current_user)
     db.add(db_project)
     db.flush()  # Get the ID before adding managers
     
@@ -197,12 +202,16 @@ def delete_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a project. Requires admin or org_admin role."""
+    """Delete a project. Requires admin+ role and must be in the same organization."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise NotFoundError("Project", project_id)
-    if not is_admin(current_user):
-        raise ForbiddenError("delete projects")
+    # Org admins can only delete within their org; super admins can delete any
+    if not is_super_admin(current_user):
+        if not is_admin(current_user):
+            raise ForbiddenError("delete projects")
+        if project.organization_id and project.organization_id != current_user.organization_id:
+            raise ForbiddenError("delete projects from another organization")
     db.delete(project)
     db.commit()
     return None

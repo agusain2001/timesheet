@@ -472,8 +472,9 @@ function SubtasksSection({ taskId }: { taskId: string }) {
         fetch(`${API}/api/tasks?parent_task_id=${taskId}`, {
             headers: { Authorization: `Bearer ${token}` },
         })
-            .then(r => r.ok ? r.json() : { items: [] })
-            .then(d => setSubtasks(d.items ?? []))
+            .then(r => r.ok ? r.json() : [])
+            // Backend returns plain array OR {items:[...]} — handle both
+            .then(d => setSubtasks(Array.isArray(d) ? d : (d.items ?? [])))
             .catch(() => { });
     }, [taskId]);
 
@@ -488,8 +489,15 @@ function SubtasksSection({ taskId }: { taskId: string }) {
                 body: JSON.stringify({ name: newTitle.trim(), parent_task_id: taskId, task_type: "personal", status: "todo", priority: "medium" }),
             });
             if (res.ok) {
-                const newTask = await res.json();
-                setSubtasks(prev => [...prev, newTask]);
+                // Refetch subtask list instead of appending, to guarantee consistency
+                const listRes = await fetch(`${API}/api/tasks?parent_task_id=${taskId}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (listRes.ok) {
+                    const d = await listRes.json();
+                    // Backend returns a plain array (not {items:[]})
+                    setSubtasks(Array.isArray(d) ? d : (d.items ?? []));
+                }
                 setNewTitle("");
                 setShowForm(false);
             }
@@ -498,7 +506,8 @@ function SubtasksSection({ taskId }: { taskId: string }) {
 
     const toggleSubtask = async (sub: Subtask) => {
         const token = getToken();
-        const newStatus = sub.status === "done" ? "todo" : "done";
+        // Backend uses 'completed' not 'done'
+        const newStatus = sub.status === "completed" ? "todo" : "completed";
         await fetch(`${API}/api/tasks/${sub.id}`, {
             method: "PUT",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -507,7 +516,7 @@ function SubtasksSection({ taskId }: { taskId: string }) {
         setSubtasks(prev => prev.map(s => s.id === sub.id ? { ...s, status: newStatus } : s));
     };
 
-    const completed = subtasks.filter(s => s.status === "done").length;
+    const completed = subtasks.filter(s => s.status === "completed").length;
 
     return (
         <Section title={`Subtasks${subtasks.length > 0 ? ` (${completed}/${subtasks.length})` : ""}`}>
@@ -528,11 +537,11 @@ function SubtasksSection({ taskId }: { taskId: string }) {
                             <div key={sub.id} className="flex items-center gap-2.5 group px-2 py-1.5 rounded-lg hover:bg-foreground/[0.03] transition-colors">
                                 <button
                                     onClick={() => toggleSubtask(sub)}
-                                    className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${sub.status === "done" ? "bg-green-500 border-green-500" : "border-foreground/20 hover:border-green-500"}`}
+                                    className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${sub.status === "completed" ? "bg-green-500 border-green-500" : "border-foreground/20 hover:border-green-500"}`}
                                 >
-                                    {sub.status === "done" && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                    {sub.status === "completed" && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                 </button>
-                                <span className={`text-sm flex-1 ${sub.status === "done" ? "line-through text-foreground/40" : "text-foreground/80"}`}>{sub.name}</span>
+                                <span className={`text-sm flex-1 ${sub.status === "completed" ? "line-through text-foreground/40" : "text-foreground/80"}`}>{sub.name}</span>
                             </div>
                         ))}
                     </div>

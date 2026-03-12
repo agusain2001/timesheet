@@ -94,7 +94,7 @@ class TaskTemplate(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    created_by = relationship("User", backref="created_task_templates")
+    created_by = relationship("User", back_populates="task_templates")
 
 
 class ProjectTemplate(Base):
@@ -121,4 +121,4 @@ class ProjectTemplate(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    created_by = relationship("User", backref="created_project_templates")
+    created_by = relationship("User", back_populates="project_templates")

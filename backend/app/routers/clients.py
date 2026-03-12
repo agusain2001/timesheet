@@ -8,6 +8,7 @@ from app.models import Client, User, Project, ProjectManager
 from app.schemas import ClientCreate, ClientUpdate, ClientResponse
 from app.utils import get_current_active_user
 from app.utils.role_guards import is_admin, is_manager
+from app.utils.tenant import scope_to_org, set_org_id
 import csv
 import io
 
@@ -52,14 +53,14 @@ def get_all_clients(
 ):
     """Get all clients with optional filters."""
     query = db.query(Client)
-    
+    # Tenant isolation
+    query = scope_to_org(query, Client, current_user)
     if region:
         query = query.filter(Client.region == region)
     if sector:
         query = query.filter(Client.business_sector == sector)
     if search:
         query = query.filter(Client.name.ilike(f"%{search}%"))
-    
     return query.offset(skip).limit(limit).all()
 
 
@@ -127,6 +128,7 @@ def create_client(
     if not is_manager(current_user):
         raise HTTPException(status_code=403, detail="Manager or admin access required")
     db_client = Client(**client_data.model_dump())
+    set_org_id(db_client, current_user)
     db.add(db_client)
     db.commit()
     db.refresh(db_client)
