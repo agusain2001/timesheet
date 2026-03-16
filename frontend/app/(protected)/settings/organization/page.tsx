@@ -120,7 +120,7 @@ export default function OrganizationSettingsPage() {
         setLoading(true);
         setError("");
         try {
-            const data = await apiFetch("/organizations/my");
+            const data = await apiFetch<OrgData>("/organizations/my");
             setOrg(data);
         } catch (e: any) {
             setError(e.message || "Failed to load organization");
@@ -135,7 +135,7 @@ export default function OrganizationSettingsPage() {
         if (!org) return;
         setSaving(true);
         try {
-            const updated = await apiFetch(`/organizations/${org.id}`, {
+            const updated = await apiFetch<OrgData>(`/organizations/${org.id}`, {
                 method: "PUT",
                 body: JSON.stringify({ [field]: value || null }),
             });
