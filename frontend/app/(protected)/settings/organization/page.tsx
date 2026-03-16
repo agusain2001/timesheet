@@ -6,33 +6,7 @@ import {
     Save, Upload, CheckCircle, AlertCircle, RefreshCw, Pencil
 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "";
-
-function getToken() {
-    if (typeof window !== "undefined") {
-        const matches = document.cookie.match(/(?:^|; )access_token=([^;]*)/);
-        return matches ? decodeURIComponent(matches[1]) : "";
-    }
-    return "";
-}
-
-async function apiFetch(path: string, options?: RequestInit) {
-    const token = getToken();
-    const res = await fetch(`${API}/api${path}`, {
-        ...options,
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            ...(options?.headers || {}),
-        },
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Request failed" }));
-        throw new Error(err.detail || "Request failed");
-    }
-    if (res.status === 204) return null;
-    return res.json();
-}
+import { apiFetch } from "@/services/api";
 
 interface OrgData {
     id: string;
