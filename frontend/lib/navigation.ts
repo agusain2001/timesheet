@@ -26,6 +26,7 @@ import {
     Lock,
     Link2,
     UserCheck,
+    Crown,
 } from "lucide-react";
 
 export const NAV_ITEMS: NavItem[] = [
@@ -76,26 +77,24 @@ export const NAV_ITEMS: NavItem[] = [
     { name: "Automation", href: "/automation", icon: Zap, pageKey: "automation" },
     { name: "AI", href: "/ai", icon: BotMessageSquare, pageKey: "ai" },
     { name: "Support", href: "/support", icon: HeadsetIcon, pageKey: "support" },
+    // ── Admin-only items ── visible only to admin / org_admin / system_admin
     {
-        // Visible only to org admins and system admins
-        name: "Admin",
-        icon: Shield,
-        pageKey: "admin",
+        name: "Org",
+        href: "/organizations",
+        icon: Building2,
         roles: ["admin", "org_admin", "system_admin"],
-        children: [
-            {
-                name: "Approvals",
-                href: "/admin/approvals",
-                icon: UserCheck,
-                roles: ["admin", "org_admin", "system_admin"],
-            },
-            {
-                name: "Org Settings",
-                href: "/settings/organization",
-                icon: Building2,
-                roles: ["admin", "org_admin", "system_admin"],
-            },
-        ],
+    },
+    {
+        name: "Approvals",
+        href: "/admin/approvals",
+        icon: UserCheck,
+        roles: ["admin", "org_admin", "system_admin"],
+    },
+    {
+        name: "Super Admin",
+        href: "/super-admin",
+        icon: Crown,
+        roles: ["system_admin"],
     },
 ];
 

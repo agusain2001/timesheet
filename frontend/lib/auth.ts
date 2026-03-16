@@ -121,22 +121,35 @@ export async function register(
   email: string,
   password: string,
   confirmPassword: string,
-): Promise<AuthResponse> {
-  const response = await fetchData<FastAPITokenResponse>("/api/auth/register", {
+  organizationId?: string,
+): Promise<{ pending: boolean; user?: User; access?: string }> {
+  const API = process.env.NEXT_PUBLIC_API_URL || "";
+  const res = await fetch(`${API}/api/auth/register`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       full_name: fullName,
       email,
       password,
       confirm_password: confirmPassword,
+      organization_id: organizationId || null,
     }),
   });
 
-  const token = response.access_token;
-  setToken(token);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || "Registration failed");
+  }
 
+  // If backend didn't return a token (pending approval) return pending flag
+  if (!data.access_token) {
+    return { pending: true };
+  }
+
+  const token = data.access_token as string;
+  setToken(token);
   const user = await fetchData<User>("/api/users/me", { token });
-  return { access: token, user };
+  return { pending: false, access: token, user };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

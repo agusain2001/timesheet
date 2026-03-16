@@ -57,7 +57,7 @@ function WorkspaceModal({ workspace, onSave, onClose }: {
         try {
             const data = workspace
                 ? await apiFetch(`/workspaces/${workspace.id}`, { method: "PUT", body: JSON.stringify(form) })
-                : await apiFetch("/api/workspaces", { method: "POST", body: JSON.stringify(form) });
+                : await apiFetch("/workspaces", { method: "POST", body: JSON.stringify(form) });
             onSave(data);
         } catch (e: any) { setError(e?.message || "Failed to save workspace"); }
         finally { setSaving(false); }
@@ -264,7 +264,7 @@ export default function WorkspacesPage() {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await apiFetch("/api/workspaces");
+            const data = await apiFetch("/workspaces");
             setWorkspaces(Array.isArray(data) ? data : (data?.items ?? []));
         } catch { setWorkspaces([]); }
         finally { setLoading(false); }

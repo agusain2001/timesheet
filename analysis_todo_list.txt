@@ -1,0 +1,392 @@
+================================================================================
+ LIGHTIDEA TIMESHEET — FULL ANALYSIS & TODO LIST
+ Date: 2026-03-12
+================================================================================
+
+This document analyzes all reported issues, bugs, and missing features/modules
+across the LightIDEA Timesheet & Project Management System.
+
+Issues are grouped by MODULE. Each item is tagged with severity:
+  [BUG]      = Existing feature is broken or behaving incorrectly
+  [MISSING]  = Feature/module does not exist yet and needs to be built
+  [UI]       = Visual/UX issue
+  [SECURITY] = Security concern that must be addressed before launch
+
+
+================================================================================
+ MODULE 1: ORGANIZATION / MULTI-TENANCY (MISSING — CRITICAL)
+================================================================================
+
+Status: NOT IMPLEMENTED — This is the #1 priority module.
+
+Currently there is only a "Workspace" model (workspaces table) which has:
+  name, slug, description, owner_id, logo_url, settings
+
+What is MISSING:
+
+  [MISSING] 1.1 — Organization Table
+    Need a proper "organizations" table with:
+      - organization_id (PK)
+      - name
+      - logo_url
+      - tax_id
+      - address (street, city, state, country, zip)
+      - phone
+      - email (contact email)
+      - website
+      - industry/sector
+      - subscription_plan (for future package/pricing)
+      - max_users (limit for plan)
+      - max_projects (limit for plan)
+      - is_verified (boolean)
+      - is_active (boolean)
+      - created_at, updated_at
+
+  [MISSING] 1.2 — Organization Foreign Keys on ALL Core Tables
+    The following tables need an "organization_id" column as FK:
+      - users
+      - departments
+      - projects
+      - teams
+      - tasks
+      - clients
+      - workspaces
+      - expenses
+      - timesheets
+      - support_requests
+    Without this, ALL data is shared globally — anyone who registers
+    can see everyone else's projects, tasks, users, etc.
+
+  [MISSING] 1.3 — Data Isolation / Tenant Filtering
+    Every API query must be scoped by the current user's organization_id.
+    Currently there is ZERO data isolation. This is a launch-blocker.
+
+  [MISSING] 1.4 — Organization Management Pages (Frontend)
+    - Create Organization page
+    - Edit Organization settings page
+    - Organization profile/branding page
+    - Organization admin dashboard
+
+
+================================================================================
+ MODULE 2: USER VERIFICATION & APPROVAL FLOW (MISSING — CRITICAL)
+================================================================================
+
+Status: NOT IMPLEMENTED
+
+Currently the registration flow (backend/app/routers/auth.py) immediately
+creates the user and returns a token. There is no verification of any kind.
+
+  [MISSING] 2.1 — Email Verification
+    - Add "email_verified" (boolean, default=False) column to users table
+    - Send verification email with unique token on registration
+    - Verification endpoint to mark email as verified
+    - Block login if email_verified is False
+
+  [MISSING] 2.2 — User Status / Admin Approval
+    - Add "user_status" column to users table:
+        Values: "pending" | "approved" | "rejected" | "suspended"
+    - New users register with status = "pending"
+    - Pending users CANNOT login (blocked at auth layer)
+    - Only organization admin can approve/reject users
+    - Email notification sent on approval/rejection
+
+  [MISSING] 2.3 — Admin Approval Dashboard Page (Frontend)
+    - Page for organization admins to see all pending registration requests
+    - Approve / Reject buttons with confirmation
+    - Filter by status (pending, approved, rejected, suspended)
+    - Bulk approve/reject functionality
+    - Email sent to user on status change
+
+  [MISSING] 2.4 — Organization Selection During Registration
+    - Registration form needs an "Organization" field
+    - User selects which organization they're joining
+    - OR enters an invite code / organization slug
+    - Registration request goes to that org's admin for approval
+
+
+================================================================================
+ MODULE 3: SUPER ADMIN / PLATFORM ADMIN (MISSING — IMPORTANT)
+================================================================================
+
+Status: NOT IMPLEMENTED
+
+There is a "system_admin" role defined in UserRole enum but it is not
+used or enforced anywhere in the codebase.
+
+  [MISSING] 3.1 — Super Admin Role & Privileges
+    - Dedicated super admin role (system_admin) with full platform control
+    - Can view ALL organizations, users, projects across the platform
+    - Can enable/disable any organization
+    - Can enable/disable any user login
+    - Can set limits (max users, max projects) per organization
+    - Cannot be deleted or demoted by organization admins
+
+  [MISSING] 3.2 — Super Admin Dashboard (Frontend)
+    - List all organizations with stats
+    - Enable/disable organizations
+    - View all users across all organizations
+    - Set plan limits (users, projects, storage)
+    - Platform-wide analytics and metrics
+    - Audit logs for platform actions
+
+  [MISSING] 3.3 — Package/Plan Management (for future monetization)
+    - Plans table: name, max_users, max_projects, features, price
+    - Assign plans to organizations
+    - Enforce limits based on plan
+    - Usage tracking per organization
+
+
+================================================================================
+ MODULE 4: TEAM CREATION ERROR (BUG)
+================================================================================
+
+Status: BUG — Error occurs when creating teams, even with empty teams
+
+  [BUG] 4.1 — Team Creation Fails
+    Location: Frontend — app/(protected)/teams/page.tsx
+              Backend — backend/app/routers/teams.py
+
+    Root cause analysis:
+    - Backend create_team() requires "manager" or "admin" role (line 194)
+    - The frontend sends empty string "" for department_id, lead_id,
+      parent_team_id when none is selected — the backend may reject
+      empty strings as invalid foreign keys
+    - Need to convert empty strings to null/None before sending
+    - The error from the screenshot shows "Not Found" on workspace
+      creation — check if teams page is calling workspace API by mistake
+      or if there's a routing conflict
+
+    Fix needed:
+    - Frontend: Convert empty strings to null for optional FK fields
+    - Backend: Handle empty string FK values gracefully or return
+      a clearer error message
+    - Verify the user has the correct role (manager/admin)
+
+
+================================================================================
+ MODULE 5: SIDEBAR THEME BUG (BUG — UI)
+================================================================================
+
+Status: BUG — Sidebar shows white on first load
+
+  [BUG] 5.1 — Sidebar Defaults to White Background
+    Location: frontend/components/layout/Sidebar.tsx
+              frontend/components/providers/ThemeProvider.tsx
+
+    Root cause:
+    - ThemeProvider uses defaultTheme="system" with enableSystem
+    - Sidebar uses: isDark ? "bg-[#191919]/90" : "bg-gray-200/70"
+    - On first load (before hydration), "mounted" is false so sidebar
+      returns null, BUT the parent container likely has no background set
+    - When mounted becomes true, theme reads from "system" which may
+      report "light" even if user expects dark
+
+    Fix needed:
+    - Change ThemeProvider to defaultTheme="dark" (since app is dark-themed)
+    - OR add suppressHydrationWarning and a CSS-based dark default
+    - The sidebar should use CSS variables or className-based theming
+      instead of conditional JS class to avoid the flash
+
+
+================================================================================
+ MODULE 6: WORKSPACE/TEAM CREATION "NOT FOUND" ERROR (BUG)
+================================================================================
+
+Status: BUG — Screenshot shows "Not Found" error on workspace creation modal
+
+  [BUG] 6.1 — Workspace Creation Returns "Not Found"
+    Location: frontend/app/(protected)/workspaces/page.tsx (likely)
+              backend/app/routers/workspaces.py
+
+    Root cause possibilities:
+    - API URL misconfiguration (NEXT_PUBLIC_API_URL not set or wrong)
+    - Endpoint path mismatch between frontend and backend
+    - The workspace router may not be mounted at the expected path
+    - Check backend/app/main.py for router mounting
+
+    Fix needed:
+    - Verify the workspace router is mounted at /api/workspaces
+    - Verify frontend API calls match the backend paths
+    - Check NEXT_PUBLIC_API_URL environment variable
+
+
+================================================================================
+ MODULE 7: SUBTASK DISPLAY ISSUES (BUG)
+================================================================================
+
+Status: BUG — Multiple subtask display issues
+
+  [BUG] 7.1 — Subtasks Don't Show Parent Task in Task List
+    Location: frontend/components/TaskListPage.tsx
+
+    The All Tasks list view shows subtasks as regular top-level tasks.
+    There is no indication of which parent task a subtask belongs to.
+
+    Fix needed:
+    - In the task list, show "Parent: [task name]" for subtasks
+    - OR indent subtasks under their parent
+    - OR add a "Parent Task" column to the task table
+    - The Task model HAS parent_task_id but it's not displayed
+
+  [BUG] 7.2 — Subtasks Not Showing After Creation Inside Task Detail
+    Location: frontend/components/TaskDetailPanel.tsx (lines 464-563)
+
+    Analysis of SubtasksSection:
+    - Fetches subtasks via: /api/tasks?parent_task_id=${taskId}
+    - Expects response format: { items: [...] }
+    - After creating a subtask, it appends the raw API response to state
+    - The issue may be that the backend /api/tasks endpoint does not
+      filter by parent_task_id, or returns a different response format
+
+    Fix needed:
+    - Verify backend /api/tasks supports parent_task_id query parameter
+    - Verify response format matches what frontend expects
+    - After creating subtask, refetch the subtasks list instead of
+      just appending (to ensure consistency)
+    - The toggle uses "done" status but the app uses "completed" — mismatch
+
+
+================================================================================
+ MODULE 8: DROPDOWN / SELECT TEXT HIDDEN (UI BUG)
+================================================================================
+
+Status: UI BUG — Dropdown sometimes hides text (highlight issue)
+
+  [UI] 8.1 — Dropdown Options Text Not Visible
+    Location: Various pages (Projects, Tasks, Teams)
+
+    From the screenshot showing project creation, dropdown options
+    like "Draft", "On Hold", "Completed", "Archived" appear greyed
+    out / barely visible. The "Active" option with highlight has
+    a light blue background that makes text hard to read.
+
+    Root cause:
+    - Native <select>/<option> elements with dark theme styling
+    - Option text color doesn't contrast well with selection highlight
+    - Disabled options (Draft, Completed, Archived) are too faded
+
+    Fix needed:
+    - Use custom dropdown component instead of native <select>
+    - OR explicitly set option background and text colors
+    - Ensure contrast ratio meets WCAG standards
+    - Add proper focus/hover states with visible text
+
+
+================================================================================
+ MODULE 9: DATA FETCHING ISSUES (BUG)
+================================================================================
+
+Status: BUG — Various fetching/loading issues reported
+
+  [BUG] 9.1 — General Fetching Issues
+    Multiple pages may have:
+    - Missing error handling for failed API calls
+    - No loading states shown while data is being fetched
+    - Stale data not refreshed after CRUD operations
+    - Token expiry not handled gracefully (silently fails)
+
+    Fix needed:
+    - Audit all API calls across frontend for error handling
+    - Add global error interceptor for 401 (redirect to login)
+    - Add retry logic for transient failures
+    - Ensure all CRUD operations refresh the relevant data
+
+
+================================================================================
+ MODULE 10: PRIVILEGE-BASED DELETE OPERATIONS (MISSING)
+================================================================================
+
+Status: NOT IMPLEMENTED
+
+  [MISSING] 10.1 — Organization-Based Delete Privileges
+    Currently anyone with the right role can delete tasks or projects.
+    Need organization-based permission checks.
+
+    Fix needed:
+    - Only org admins and project owners should be able to delete projects
+    - Only task owners, project managers, or admins can delete tasks
+    - Regular employees should not be able to delete others' tasks
+    - Add confirmation dialogs for all delete operations
+    - Add audit logging for delete operations
+
+
+================================================================================
+ MODULE 11: UI SIMPLIFICATION (IMPROVEMENT — NICE-TO-HAVE)
+================================================================================
+
+Status: SUGGESTION — Depends on timeframe
+
+  [MISSING] 11.1 — Simplified Mode for Non-Technical Users
+    The current UI may be overwhelming for non-technical organizations.
+
+    Suggestions:
+    - Add a "Simple Mode" toggle in settings that hides advanced features
+    - Hide features like: automation, Gantt chart, custom fields,
+      integrations, AI features, dependencies
+    - Show only: Tasks, Projects, Timesheets, Team, Reports
+    - Organization admin can configure which modules are visible
+    - Per-user setting to switch between simple and advanced mode
+
+
+================================================================================
+ MODULE 12: REGISTRATION OPEN TO ALL (SECURITY — CRITICAL)
+================================================================================
+
+Status: SECURITY ISSUE — Must fix before launch
+
+  [SECURITY] 12.1 — Anyone Can Register and Access All Data
+    Currently:
+    - Registration is fully open, no approval needed
+    - No organization scoping — all data is shared globally
+    - A new user can immediately see all projects, tasks, users
+    - No way to separate users by organization
+
+    This is the COMBINED effect of MODULE 1 + MODULE 2 not being
+    implemented. This is the single biggest launch-blocker.
+
+
+================================================================================
+ PRIORITY RANKING (What to do first)
+================================================================================
+
+HIGHEST PRIORITY (Must have before launch):
+  1. MODULE 1  — Organization / Multi-Tenancy
+  2. MODULE 2  — User Verification & Approval Flow
+  3. MODULE 12 — Fix Open Registration Security Issue (Fixed by 1 + 2)
+  4. MODULE 10 — Privilege-Based Delete Operations
+
+HIGH PRIORITY (Should have):
+  5. MODULE 3  — Super Admin / Platform Admin
+  6. MODULE 4  — Fix Team Creation Bug
+  7. MODULE 5  — Fix Sidebar Theme Bug
+  8. MODULE 6  — Fix Workspace "Not Found" Error
+  9. MODULE 7  — Fix Subtask Display Issues
+
+MEDIUM PRIORITY (Nice to have):
+  10. MODULE 8  — Fix Dropdown Text Visibility
+  11. MODULE 9  — Fix Data Fetching Issues
+  12. MODULE 11 — UI Simplification Mode
+
+
+================================================================================
+ SUMMARY
+================================================================================
+
+Total Modules Identified: 12
+
+  - MISSING Features/Modules: 7 (Modules 1, 2, 3, 10, 11, 12, parts of 7)
+  - BUGS to Fix:             5 (Modules 4, 5, 6, 7, 8, 9)
+
+Estimated Effort:
+  - MODULE 1 (Organization):     ~5-7 days (backend + frontend + migration)
+  - MODULE 2 (Verification):     ~3-4 days (backend + email + frontend)
+  - MODULE 3 (Super Admin):      ~3-4 days (backend + frontend dashboard)
+  - MODULE 4-9 (Bug Fixes):      ~2-3 days total
+  - MODULE 10 (Privileges):      ~2 days
+  - MODULE 11 (UI Simple Mode):  ~2-3 days
+  - MODULE 12 (Security):        Resolved by Module 1 + 2
+
+Total Estimated: ~17-24 days of development work
+
+================================================================================

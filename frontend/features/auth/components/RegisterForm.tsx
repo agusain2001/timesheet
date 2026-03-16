@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { register, loginWithGoogle, loginWithMicrosoft } from "@/lib/auth";
 import { showSuccess, showError } from "@/lib/toast";
@@ -21,17 +21,32 @@ function getPasswordStrength(password: string): { label: string; color: string; 
     return { label: "Strong", color: "bg-green-500", width: "100%" };
 }
 
+interface OrgOption { id: string; name: string; logo_url?: string | null; }
+
 export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     const router = useRouter();
     const [fullName, setFullName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [organizationId, setOrganizationId] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<"google" | "microsoft" | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [orgs, setOrgs] = useState<OrgOption[]>([]);
+    const [pendingApproval, setPendingApproval] = useState(false);
+
+    const API = process.env.NEXT_PUBLIC_API_URL || "";
+
+    // Fetch public org list for dropdown
+    useEffect(() => {
+        fetch(`${API}/api/organizations/public`)
+            .then(r => r.ok ? r.json() : [])
+            .then((data) => setOrgs(Array.isArray(data) ? data : []))
+            .catch(() => setOrgs([]));
+    }, [API]);
 
     const strength = getPasswordStrength(password);
     const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
@@ -50,8 +65,12 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         }
         setIsLoading(true);
         try {
-            const { user } = await register(fullName, email, password, confirmPassword);
-            showSuccess(`Account created! Welcome, ${user.full_name}!`);
+            const result = await register(fullName, email, password, confirmPassword, organizationId || undefined);
+            if (result.pending) {
+                setPendingApproval(true);
+                return;
+            }
+            showSuccess(`Account created! Welcome, ${result.user?.full_name ?? fullName}!`);
             router.push("/home");
             router.refresh();
         } catch (err) {
@@ -75,6 +94,38 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
     return (
         <div className="flex flex-col h-full justify-center px-8 py-10 lg:px-12 overflow-y-auto max-w-md mx-auto w-full">
+            {/* Pending Approval Screen */}
+            {pendingApproval && (
+                <div className="flex flex-col items-center justify-center text-center py-8">
+                    <div className="w-16 h-16 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mb-5">
+                        <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-2xl font-bold text-white mb-3">Registration Submitted!</h2>
+                    <p className="text-slate-400 text-sm leading-relaxed mb-6">
+                        Your account is <span className="text-amber-400 font-medium">pending approval</span>.
+                        Your organisation admin will review and approve your request.
+                        You&apos;ll receive an email once approved.
+                    </p>
+                    <div className="w-full p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-left mb-6">
+                        <p className="text-amber-300 text-xs font-semibold mb-1">What happens next?</p>
+                        <ul className="text-slate-400 text-xs space-y-1">
+                            <li>1. Verify your email (check your inbox)</li>
+                            <li>2. Wait for admin approval</li>
+                            <li>3. Sign in once approved</li>
+                        </ul>
+                    </div>
+                    <button
+                        onClick={onSwitchToLogin}
+                        className="w-full py-3 border border-white/15 hover:border-blue-500 text-white text-sm font-medium rounded-xl transition-all"
+                    >
+                        Back to Sign In
+                    </button>
+                </div>
+            )}
+
+            {!pendingApproval && (<>
             {/* Logo */}
             <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/30">
@@ -235,6 +286,26 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                     <p className="text-xs text-red-400 -mt-2">Passwords do not match</p>
                 )}
 
+                {/* Organisation */}
+                <div className="relative">
+                    <label htmlFor="reg-org"
+                        className="absolute -top-2.5 left-3 text-xs font-medium text-blue-400 bg-[#0d0f18] px-1 z-10 pointer-events-none">
+                        Organisation <span className="text-slate-500">(optional)</span>
+                    </label>
+                    <select
+                        id="reg-org"
+                        value={organizationId}
+                        onChange={(e) => setOrganizationId(e.target.value)}
+                        disabled={isLoading}
+                        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 hover:border-white/30 focus:border-blue-500 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all disabled:opacity-50 text-sm appearance-none"
+                    >
+                        <option value="" className="bg-[#0d0f18] text-slate-400">Select your organisation...</option>
+                        {orgs.map(org => (
+                            <option key={org.id} value={org.id} className="bg-[#0d0f18]">{org.name}</option>
+                        ))}
+                    </select>
+                </div>
+
                 {/* Create Account Button */}
                 <button
                     type="submit"
@@ -317,6 +388,8 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                     Sign in
                 </button>
             </p>
+            </>
+            )}
         </div>
     );
 }

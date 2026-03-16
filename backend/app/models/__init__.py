@@ -73,6 +73,14 @@ from app.models.chat_history import ChatHistory
 # Page Access
 from app.models.page_access import UserPageAccess, ALWAYS_ACCESSIBLE, RESTRICTED_PAGES, ALL_PAGE_KEYS, get_accessible_pages
 
+# Permission models — import UserRole model as UserRoleAssignment to avoid conflict with UserRole enum
+from app.models.permission import (
+    Permission, PermissionAction, ResourceType,
+    Role, RolePermission,
+    UserRole as UserRoleAssignment,
+    ResourcePermission, AuditLog,
+    DEFAULT_PERMISSIONS, DEFAULT_ROLES,
+)
 
 __all__ = [
     # Organization (multi-tenancy root)

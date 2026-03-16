@@ -39,6 +39,7 @@ async def websocket_notifications(
 
     # Authenticate
     user = await get_user_from_token(token, db)
+    user_id = None
     if not user:
         await websocket.close(code=4001, reason="Unauthorized")
         return
@@ -101,7 +102,8 @@ async def websocket_notifications(
         pass
     finally:
         # Always remove the connection from the manager on exit
-        manager.disconnect(websocket, user_id)
+        if user_id:
+            manager.disconnect(websocket, user_id)
 
 
 @router.get("/online-users")

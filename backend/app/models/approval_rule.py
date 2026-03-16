@@ -10,6 +10,7 @@ class ApprovalRule(Base):
     __tablename__ = "approval_rules"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(String(500), nullable=True)
     

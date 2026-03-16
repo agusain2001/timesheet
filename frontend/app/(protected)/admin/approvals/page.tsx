@@ -7,7 +7,8 @@ const API = process.env.NEXT_PUBLIC_API_URL || "";
 
 function getToken() {
     if (typeof window !== "undefined") {
-        return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+        const matches = document.cookie.match(/(?:^|; )access_token=([^;]*)/);
+        return matches ? decodeURIComponent(matches[1]) : "";
     }
     return "";
 }

@@ -76,6 +76,14 @@ def run_migration():
         "timesheets",
         "expenses",
         "workspaces",
+        # Newly added — previously missing tenant isolation
+        "tasks",
+        "time_logs",
+        "active_timers",
+        "capacities",
+        "cost_centers",
+        "expense_categories",
+        "approval_rules",
     ]
     print("\nAdding organization_id columns...")
     for table in tables_needing_org_id:

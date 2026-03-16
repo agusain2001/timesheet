@@ -127,7 +127,68 @@ def _generate_slug(name: str) -> str:
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
-@router.get("/", response_model=List[OrganizationResponse])
+@router.get("/public", response_model=List[dict])
+def list_organizations_public(db: Session = Depends(get_db)):
+    """Public endpoint — returns minimal org list for registration dropdown. No auth required."""
+    orgs = (
+        db.query(Organization)
+        .filter(Organization.is_active == True, Organization.is_verified == True)
+        .order_by(Organization.name)
+        .all()
+    )
+    return [{"id": o.id, "name": o.name, "logo_url": o.logo_url, "industry": o.industry} for o in orgs]
+
+
+@router.get("/{org_id}/stats")
+def get_organization_stats(
+    org_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get detailed stats for an org — used by Super Admin dashboard cards."""
+    from app.utils.tenant import is_super_admin as _is_super_admin
+    from app.models import User as UserModel, Project, Task
+    if not _is_super_admin(current_user) and current_user.organization_id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    user_count = db.query(UserModel).filter(UserModel.organization_id == org_id).count()
+    project_count = db.query(Project).filter(Project.organization_id == org_id).count()
+    active_project_count = db.query(Project).filter(
+        Project.organization_id == org_id, Project.status == "active"
+    ).count()
+    task_count = db.query(Task).filter(Task.organization_id == org_id).count()
+    pending_user_count = db.query(UserModel).filter(
+        UserModel.organization_id == org_id, UserModel.user_status == "pending"
+    ).count()
+
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+        "logo_url": org.logo_url,
+        "industry": org.industry,
+        "country": org.country,
+        "subscription_plan": org.subscription_plan,
+        "max_users": org.max_users,
+        "max_projects": org.max_projects,
+        "is_active": org.is_active,
+        "is_verified": org.is_verified,
+        "created_at": org.created_at,
+        "stats": {
+            "user_count": user_count,
+            "project_count": project_count,
+            "active_project_count": active_project_count,
+            "task_count": task_count,
+            "pending_user_count": pending_user_count,
+        },
+    }
+
+
+@router.get("", response_model=List[OrganizationResponse])
 def list_organizations(
     skip: int = 0,
     limit: int = 100,
@@ -152,7 +213,7 @@ def list_organizations(
         return [_build_response(org, db)] if org else []
 
 
-@router.post("/", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(
     data: OrganizationCreate,
     db: Session = Depends(get_db),

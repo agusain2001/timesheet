@@ -37,7 +37,8 @@ class AutomationRule(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    created_by = relationship("User", backref="created_automation_rules")
+    created_by = relationship("User", back_populates="created_automation_rules", foreign_keys=[created_by_id])
+    execution_logs = relationship("AutomationLog", back_populates="rule", cascade="all, delete-orphan")
 
 
 class AutomationLog(Base):
@@ -57,7 +58,7 @@ class AutomationLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    rule = relationship("AutomationRule", backref="execution_logs")
+    rule = relationship("AutomationRule", back_populates="execution_logs", foreign_keys=[rule_id])
 
 
 class TaskTemplate(Base):
@@ -94,7 +95,7 @@ class TaskTemplate(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    created_by = relationship("User", back_populates="task_templates")
+    created_by = relationship("User", back_populates="task_templates", foreign_keys=[created_by_id])
 
 
 class ProjectTemplate(Base):
@@ -121,4 +122,4 @@ class ProjectTemplate(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    created_by = relationship("User", back_populates="project_templates")
+    created_by = relationship("User", back_populates="project_templates", foreign_keys=[created_by_id])

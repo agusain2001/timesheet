@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import clsx from "clsx";
 import { useEffect, useState } from "react";
@@ -9,14 +9,23 @@ import { BOTTOM_NAV_ITEMS, NAV_ITEMS } from "@/lib/navigation";
 import { NavItem } from "@/types/constants";
 import { getCurrentUser } from "@/services/users";
 import { User } from "@/types/api";
+import { Crown, ChevronRight } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [openItem, setOpenItem] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [selectedOrgName, setSelectedOrgName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setSelectedOrgName(localStorage.getItem("superadmin_selected_org_name") || null);
+    }
+  }, []);
 
   useEffect(() => setMounted(true), []);
 
@@ -26,6 +35,17 @@ export function Sidebar() {
       .then(setCurrentUser)
       .catch(() => setCurrentUser(null));
   }, []);
+
+  // Auto-expand any nav group whose child route matches the current path
+  useEffect(() => {
+    const NAV_ITEMS_ALL = [...NAV_ITEMS];
+    for (const item of NAV_ITEMS_ALL) {
+      if (item.children?.some(child => child.href && pathname.startsWith(child.href))) {
+        setOpenItem(item.name);
+        break;
+      }
+    }
+  }, [pathname]);
 
   if (!mounted) return null; // prevents theme flicker
 
@@ -42,21 +62,24 @@ export function Sidebar() {
   const isVisible = (item: NavItem): boolean => {
     if (!currentUser) return true; // still loading → show all
 
-    // If this item specifies required roles, check first
+    const role = currentUser.role;
+
+    // If item has an explicit role allowlist, ONLY those roles can see it
+    // (this is the primary gate; everyone — even admins — must be in the list)
     if (item.roles && item.roles.length > 0) {
-      if (!item.roles.includes(currentUser.role)) return false;
+      return item.roles.includes(role);
     }
 
+    // No role restriction on the item: admins/managers see it, employees check accessible_pages
     if (
-      currentUser.role === "admin" ||
-      currentUser.role === "org_admin" ||
-      currentUser.role === "system_admin" ||
-      currentUser.role === "manager"
+      role === "admin" ||
+      role === "org_admin" ||
+      role === "system_admin" ||
+      role === "manager"
     ) return true;
 
-    // Employee: check accessible_pages
-    if (!item.pageKey) return true; // no key = always accessible
-    if (!currentUser.accessible_pages) return true; // not loaded yet
+    if (!item.pageKey) return true;
+    if (!currentUser.accessible_pages) return true;
     return currentUser.accessible_pages.includes(item.pageKey);
   };
 
@@ -168,6 +191,21 @@ export function Sidebar() {
         isDark ? "bg-[#191919]/90" : "bg-gray-200/70",
       )}
     >
+      {/* Super Admin org-switcher banner */}
+      {currentUser?.role === "system_admin" && (
+        <button
+          onClick={() => router.push("/super-admin")}
+          title="Switch Organisation"
+          className="w-full mb-4 flex flex-col items-center gap-1 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-all group"
+        >
+          <Crown size={16} className="text-amber-400" />
+          <span className="text-[9px] text-amber-400/80 text-center leading-tight font-medium truncate max-w-full">
+            {selectedOrgName ? selectedOrgName.slice(0, 8) : "All Orgs"}
+          </span>
+          <ChevronRight size={10} className="text-amber-400/50 group-hover:text-amber-400" />
+        </button>
+      )}
+
       {/* Top Section */}
       <nav className="flex flex-col gap-6 w-full items-center">
         {NAV_ITEMS.map(renderNavItem)}

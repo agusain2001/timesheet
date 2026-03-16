@@ -30,7 +30,7 @@ def _create_token_for_user(user: User) -> str:
     """Helper: create access token for a user."""
     expires = timedelta(minutes=settings.access_token_expire_minutes)
     return create_access_token(
-        data={"sub": user.id, "email": user.email, "role": user.role},
+        data={"sub": user.id, "email": user.email, "role": user.role, "organization_id": user.organization_id},
         expires_delta=expires,
     )
 

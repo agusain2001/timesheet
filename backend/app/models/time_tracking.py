@@ -14,6 +14,7 @@ class ActiveTimer(Base):
     __tablename__ = "active_timers"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, unique=True)
     task_id = Column(String(36), ForeignKey("tasks.id"), nullable=True)
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=True)
@@ -31,6 +32,7 @@ class TimeLog(Base):
     __tablename__ = "time_logs"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     task_id = Column(String(36), ForeignKey("tasks.id"), nullable=True)
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=True)
@@ -53,6 +55,7 @@ class Capacity(Base):
     __tablename__ = "capacities"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     week_starting = Column(DateTime, nullable=False)
     available_hours = Column(Float, default=40.0)

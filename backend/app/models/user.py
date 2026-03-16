@@ -102,6 +102,7 @@ class User(Base):
     sent_invites = relationship("UserInvite", back_populates="invited_by")
     scheduled_reports = relationship("ScheduledReport", back_populates="created_by")
     mfa_settings = relationship("MFASettings", back_populates="user", uselist=False)
-    task_templates = relationship("TaskTemplate", back_populates="created_by")
-    project_templates = relationship("ProjectTemplate", back_populates="created_by")
+    task_templates = relationship("TaskTemplate", back_populates="created_by", foreign_keys="TaskTemplate.created_by_id")
+    project_templates = relationship("ProjectTemplate", back_populates="created_by", foreign_keys="ProjectTemplate.created_by_id")
+    created_automation_rules = relationship("AutomationRule", back_populates="created_by", foreign_keys="AutomationRule.created_by_id")
 
