@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import { ViewSwitcher, ViewToolbar, type ViewType, type FilterState } from "@/components/views/ViewSwitcher";
@@ -82,9 +83,31 @@ function Toast({ message, type, onDismiss }: { message: string; type: "success" 
     );
 }
 
+// ─── Date Helpers ─────────────────────────────────────────────────────────────
+
+function buildDateFilterLabel(startDate: string, endDate: string): string {
+    if (startDate === endDate) {
+        const d = new Date(startDate + "T00:00:00");
+        if (d.toDateString() === new Date().toDateString()) return "Today";
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
+    const s = new Date(startDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const e = new Date(endDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${s} – ${e}`;
+}
+
 // ─── Multi-View Tasks Page ────────────────────────────────────────────────────
 
-export default function MyTasksPage() {
+function MyTasksContent() {
+    const searchParams = useSearchParams();
+    const urlStartDate = searchParams.get("start_date");
+    const urlEndDate = searchParams.get("end_date");
+
+    const dateFilter =
+        urlStartDate && urlEndDate
+            ? { startDate: urlStartDate, endDate: urlEndDate, label: buildDateFilterLabel(urlStartDate, urlEndDate) }
+            : undefined;
+
     const [view, setView] = useState<ViewType>("list");
 
     // Hydrate view from localStorage only on client after mount
@@ -471,7 +494,7 @@ export default function MyTasksPage() {
             {/* View Content */}
             <div className="flex-1 overflow-hidden">
                 {view === "list" && (
-                    <TaskListPage title="My Tasks" fetchUrl="/api/tasks/my" />
+                    <TaskListPage title="My Tasks" fetchUrl="/api/tasks/my" dateFilter={dateFilter} />
                 )}
 
                 {view === "kanban" && !loading && (
@@ -588,5 +611,13 @@ export default function MyTasksPage() {
                 />
             )}
         </div>
+    );
+}
+
+export default function MyTasksPage() {
+    return (
+        <Suspense>
+            <MyTasksContent />
+        </Suspense>
     );
 }

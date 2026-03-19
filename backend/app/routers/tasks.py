@@ -1,11 +1,12 @@
 """Tasks router — full CRUD with role-based access control and dependency enforcement."""
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 import os, uuid, shutil
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
 from app.database import get_db
 from app.models import Task, User, Project, Client, TaskStatus, TaskDependency
 from app.schemas import TaskCreate, TaskUpdate, TaskResponse, ProjectBrief, ClientBrief, UserBrief
@@ -182,16 +183,28 @@ def get_my_tasks(
     task_type: Optional[str] = None,
     status_filter: Optional[str] = None,
     active_only: bool = False,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    limit: int = Query(200, ge=1, le=500),
+    search: Optional[str] = None,
+    priority: Optional[str] = None,
+    assignee_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get current user's tasks."""
+    """Get current user's tasks, with optional date-range, status, and text filters."""
     query = db.query(Task).filter(Task.assignee_id == current_user.id)
 
     if task_type:
         query = query.filter(Task.task_type == task_type)
     if status_filter:
         query = query.filter(Task.status == status_filter)
+    if priority:
+        query = query.filter(Task.priority == priority)
+    if assignee_id:
+        query = query.filter(Task.assignee_id == assignee_id)
+    if search:
+        query = query.filter(Task.name.ilike(f"%{search}%"))
     if active_only:
         query = query.filter(
             Task.status.notin_([
@@ -201,8 +214,21 @@ def get_my_tasks(
             ])
         )
 
-    tasks = query.order_by(Task.due_date.asc().nullslast()).all()
+    # Date-range filter — include tasks whose due_date OR created_at falls within the window
+    if start_date:
+        effective_end = end_date or start_date
+        filter_start = datetime.combine(start_date, datetime.min.time())
+        filter_end = datetime.combine(effective_end, datetime.max.time())
+        query = query.filter(
+            or_(
+                and_(Task.due_date >= filter_start, Task.due_date <= filter_end),
+                and_(Task.created_at >= filter_start, Task.created_at <= filter_end),
+            )
+        )
+
+    tasks = query.order_by(Task.due_date.asc().nullslast()).limit(limit).all()
     return [build_task_response(t, db) for t in tasks]
+
 
 
 @router.get("/stats", response_model=dict)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { apiGet, apiDelete, apiPost } from "@/services/api";
 import AddTaskModal from "@/components/AddTaskModal";
@@ -40,6 +41,14 @@ export interface TaskListPageProps {
     title: string;
     fetchUrl: string;
     fetchParams?: Record<string, string>;
+    /** Optional date range filter inherited from the dashboard. When set,
+     *  start_date/end_date are added to the API call and a banner is shown. */
+    dateFilter?: {
+        startDate: string;
+        endDate: string;
+        /** Human-readable label shown in the banner, e.g. "Today" or "Mar 1 – Mar 19" */
+        label: string;
+    };
 }
 
 // ============ Config ============
@@ -79,7 +88,7 @@ type SortField = "type" | "project" | "priority" | "assignee" | "status";
 
 // ============ Main Component ============
 
-export default function TaskListPage({ title, fetchUrl, fetchParams }: TaskListPageProps) {
+export default function TaskListPage({ title, fetchUrl, fetchParams, dateFilter }: TaskListPageProps) {
     const [tasks, setTasks] = useState<TaskItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -103,6 +112,8 @@ export default function TaskListPage({ title, fetchUrl, fetchParams }: TaskListP
             setLoading(true);
             const params: Record<string, string | number | boolean | undefined> = { ...fetchParams };
             if (search.trim()) params.search = search.trim();
+            if (dateFilter?.startDate) params.start_date = dateFilter.startDate;
+            if (dateFilter?.endDate) params.end_date = dateFilter.endDate;
             const data = await apiGet<TaskItem[]>(fetchUrl, params);
             setTasks(data);
         } catch {
@@ -110,7 +121,7 @@ export default function TaskListPage({ title, fetchUrl, fetchParams }: TaskListP
         } finally {
             setLoading(false);
         }
-    }, [fetchUrl, fetchParams, search]);
+    }, [fetchUrl, fetchParams, search, dateFilter]);
 
     useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -167,6 +178,8 @@ export default function TaskListPage({ title, fetchUrl, fetchParams }: TaskListP
         { field: "assignee", label: "Sort By Assignee" },
     ];
 
+    const router = useRouter();
+
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto">
             {/* Header */}
@@ -184,6 +197,26 @@ export default function TaskListPage({ title, fetchUrl, fetchParams }: TaskListP
                     </button>
                 </div>
             </div>
+
+            {/* Active date filter banner */}
+            {dateFilter && (
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-blue-500/25 bg-blue-500/8 text-sm">
+                    <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-foreground/70">Showing tasks for:</span>
+                    <span className="font-semibold text-blue-400">{dateFilter.label}</span>
+                    <button
+                        onClick={() => router.push(window.location.pathname)}
+                        className="ml-auto flex items-center gap-1 text-xs text-foreground/40 hover:text-foreground/70 transition"
+                    >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Clear
+                    </button>
+                </div>
+            )}
 
             {/* Sort pills + Search */}
             <div className="flex flex-wrap items-center justify-between gap-3">

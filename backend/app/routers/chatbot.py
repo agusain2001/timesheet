@@ -227,14 +227,13 @@ def analyze_with_gemini(content_bytes: bytes, mime_type: str, prompt: str) -> st
     if not settings.gemini_api_key or len(settings.gemini_api_key) < 20:
         return ""
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        image_data = base64.b64encode(content_bytes).decode('utf-8')
-        response = model.generate_content([
-            prompt,
-            {"mime_type": mime_type, "data": image_data}
-        ])
+        from google import genai as _genai
+        from google.genai import types as _gtypes
+        client = _genai.Client(api_key=settings.gemini_api_key)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-exp',
+            contents=[prompt, _gtypes.Part.from_bytes(data=content_bytes, mime_type=mime_type)]
+        )
         return response.text.strip()
     except Exception as e:
         print(f"Gemini analysis error: {e}")
@@ -246,9 +245,8 @@ def extract_structured_data(raw_text: str) -> dict:
     if not raw_text or not settings.gemini_api_key or len(settings.gemini_api_key) < 20:
         return {}
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        from google import genai as _genai
+        client = _genai.Client(api_key=settings.gemini_api_key)
 
         prompt = f"""Extract structured financial/document data from this text.
 Return ONLY valid JSON with these keys (use null if not found):
@@ -262,7 +260,7 @@ Return ONLY valid JSON with these keys (use null if not found):
 Text:
 {raw_text[:3000]}"""
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-2.0-flash-exp', contents=prompt)
         json_match = re.search(r'\{[\s\S]*\}', response.text)
         if json_match:
             return json.loads(json_match.group())
@@ -309,12 +307,11 @@ def generate_ai_response(user_message: str, context_data: str, system_instructio
         print(f"[Chatbot] No valid API key")
         return ""
     try:
-        import google.generativeai as genai
+        from google import genai as _genai
         import time as time_mod
         import asyncio
 
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        client = _genai.Client(api_key=settings.gemini_api_key)
 
         # Sanitize user input before including in prompt
         safe_message = sanitize_user_input(user_message)
@@ -335,7 +332,7 @@ If the user asks follow-up questions, answer based on the data you have."""
         for attempt in range(3):
             try:
                 print(f"[Chatbot] Gemini attempt {attempt+1}/3...")
-                response = model.generate_content(prompt)
+                response = client.models.generate_content(model='gemini-2.0-flash-exp', contents=prompt)
                 print(f"[Chatbot] Gemini SUCCESS - response length: {len(response.text)}")
                 return response.text.strip()
             except Exception as retry_err:
@@ -831,14 +828,16 @@ async def analyze_file(
         ), file_type=file_type)
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        image_data = base64.b64encode(content).decode('utf-8')
-        response = model.generate_content([
-            "Analyze this receipt/document. Extract: vendor_name, date (YYYY-MM-DD), total_amount, currency, category, description. Return as JSON.",
-            {"mime_type": file.content_type, "data": image_data}
-        ])
+        from google import genai as _genai
+        from google.genai import types as _gtypes
+        client = _genai.Client(api_key=settings.gemini_api_key)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-exp',
+            contents=[
+                "Analyze this receipt/document. Extract: vendor_name, date (YYYY-MM-DD), total_amount, currency, category, description. Return as JSON.",
+                _gtypes.Part.from_bytes(data=content, mime_type=file.content_type or "image/jpeg")
+            ]
+        )
         json_match = re.search(r'\{[\s\S]*\}', response.text)
         if json_match:
             data = json.loads(json_match.group())
@@ -866,10 +865,12 @@ async def chat_with_file(
         pdf_text = extract_text_from_pdf(content)
         if pdf_text and settings.gemini_api_key and len(settings.gemini_api_key) >= 20:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.gemini_api_key)
-                model = genai.GenerativeModel('gemini-2.0-flash-exp')
-                response = model.generate_content(f"Based on this document text, respond to: {message}\n\nDocument:\n{pdf_text[:4000]}\n\nRespond clearly. No markdown.")
+                from google import genai as _genai
+                client = _genai.Client(api_key=settings.gemini_api_key)
+                response = client.models.generate_content(
+                    model='gemini-2.0-flash-exp',
+                    contents=f"Based on this document text, respond to: {message}\n\nDocument:\n{pdf_text[:4000]}\n\nRespond clearly. No markdown."
+                )
                 reply = clean_text(response.text)
                 save_chat_message(db, str(current_user.id), "user", message, attachments=[{"fileName": file.filename, "fileType": file.content_type}])
                 save_chat_message(db, str(current_user.id), "assistant", reply, metadata={"intent": "file_analysis"})
@@ -885,11 +886,16 @@ async def chat_with_file(
         return ChatResponse(response=f"Received {file.filename}. Configure GEMINI_API_KEY for AI analysis.", context_used="demo")
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        image_data = base64.b64encode(content).decode('utf-8')
-        response = model.generate_content([f"Analyze this and respond to: {message}\nNo markdown.", {"mime_type": file.content_type, "data": image_data}])
+        from google import genai as _genai
+        from google.genai import types as _gtypes
+        client = _genai.Client(api_key=settings.gemini_api_key)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-exp',
+            contents=[
+                f"Analyze this and respond to: {message}\nNo markdown.",
+                _gtypes.Part.from_bytes(data=content, mime_type=file.content_type or "image/jpeg")
+            ]
+        )
         reply = clean_text(response.text)
         save_chat_message(db, str(current_user.id), "user", message, attachments=[{"fileName": file.filename, "fileType": file.content_type}])
         save_chat_message(db, str(current_user.id), "assistant", reply, metadata={"intent": "file_analysis"})

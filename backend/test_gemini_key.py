@@ -1,12 +1,11 @@
-import google.generativeai as genai
+from google import genai
 
 api_key = "AIzaSyBoSNmSGPXxlPr91tRCihkIHeZ7IcqEJQU"
 print(f"Testing API key: {api_key[:10]}...")
 
 try:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    response = model.generate_content("Say 'Test successful!'")
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(model='gemini-2.5-flash', contents="Say 'Test successful!'")
     print("\nSUCCESS!")
     print(f"Response: {response.text}")
 except Exception as e:

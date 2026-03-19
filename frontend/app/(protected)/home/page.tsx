@@ -59,6 +59,16 @@ function statusColor(status: string): string {
 
 // ============ Cards ============
 
+// Build a card href that embeds the active date filter as query params so the
+// destination page can respect the same time window.
+function buildCardHref(base: string, filter: DateFilter): string {
+    const params = new URLSearchParams();
+    if (filter.startDate) params.set("start_date", filter.startDate);
+    if (filter.endDate) params.set("end_date", filter.endDate);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+}
+
 interface StatCardProps {
     label: string;
     value: number | string;
@@ -405,10 +415,10 @@ export default function HomePage() {
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="My Tasks" value={dashboard.my_tasks_count ?? "NA"} color="#3b82f6" href="/my-tasks" />
-                <StatCard label="Due Tasks" value={dashboard.due_tasks_count ?? "NA"} color="#6366f1" href="/tasks/due" />
-                <StatCard label="Completed Tasks" value={dashboard.completed_tasks_count ?? "NA"} color="#06b6d4" href="/tasks/completed" />
-                <StatCard label="Overdue" value={dashboard.overdue_tasks_count ?? "NA"} color="#ef4444" href="/tasks/overdue" />
+                <StatCard label="My Tasks" value={dashboard.my_tasks_count ?? "NA"} color="#3b82f6" href={buildCardHref("/my-tasks", dateFilter)} />
+                <StatCard label="Due Tasks" value={dashboard.due_tasks_count ?? "NA"} color="#6366f1" href={buildCardHref("/tasks/due", dateFilter)} />
+                <StatCard label="Completed Tasks" value={dashboard.completed_tasks_count ?? "NA"} color="#06b6d4" href={buildCardHref("/tasks/completed", dateFilter)} />
+                <StatCard label="Overdue" value={dashboard.overdue_tasks_count ?? "NA"} color="#ef4444" href={buildCardHref("/tasks/overdue", dateFilter)} />
             </div>
 
             {/* Upcoming Deadlines + Task Status */}
