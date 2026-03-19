@@ -42,7 +42,7 @@ export default function OrganisationsPage() {
         setLoading(true);
         setError("");
         try {
-            const data: any = await apiFetch("/organizations");
+            const data: any = await apiFetch("/api/organizations");
             const list = Array.isArray(data) ? data : (data.items ?? []);
             setOrgs(list);
             setFiltered(list);
@@ -66,7 +66,7 @@ export default function OrganisationsPage() {
     }, [search, orgs]);
 
     return (
-        <div className="min-h-screen bg-background text-foreground p-6 lg:p-8">
+        <div className="bg-background text-foreground">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>

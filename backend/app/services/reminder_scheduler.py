@@ -67,9 +67,9 @@ class ReminderScheduler:
             user_id=assignee.id,
             type="deadline_reminder",
             title=f"Reminder: {task.name}",
-            content=f"Task '{task.name}' is due {task.due_date.strftime('%Y-%m-%d')}",
+            message=f"Task '{task.name}' is due {task.due_date.strftime('%Y-%m-%d')}",
             data={"task_id": task.id, "reminder_type": reminder_type},
-            is_read="false"
+            is_read=False
         )
         db.add(notification)
         db.commit()
@@ -102,9 +102,9 @@ class ReminderScheduler:
             user_id=assignee.id,
             type="task_overdue",
             title=f"Overdue: {task.name}",
-            content=f"Task '{task.name}' is {days_overdue} days overdue!",
+            message=f"Task '{task.name}' is {days_overdue} days overdue!",
             data={"task_id": task.id, "days_overdue": days_overdue},
-            is_read="false"
+            is_read=False
         )
         db.add(notification)
         
@@ -131,13 +131,13 @@ class ReminderScheduler:
                         user_id=manager.user_id,
                         type="escalation",
                         title=f"Escalation: {task.name}",
-                        content=f"Task '{task.name}' has been overdue for {days_overdue} days and requires attention.",
+                        message=f"Task '{task.name}' has been overdue for {days_overdue} days and requires attention.",
                         data={
                             "task_id": task.id, 
                             "days_overdue": days_overdue,
                             "escalation_level": "project_manager"
                         },
-                        is_read="false"
+                        is_read=False
                     )
                     db.add(notification)
     
@@ -184,13 +184,14 @@ reminder_scheduler = ReminderScheduler()
 async def run_scheduled_reminders():
     """Background task to run reminders periodically."""
     while True:
+        db = SessionLocal()
         try:
-            db = SessionLocal()
             await reminder_scheduler.check_and_send_reminders(db)
-            db.close()
         except Exception as e:
             logger.error(f"Reminder scheduler error: {e}")
-        
+        finally:
+            db.close()
+
         # Run every hour
         await asyncio.sleep(3600)
 
@@ -206,13 +207,14 @@ async def run_daily_digest():
             next_run = now.replace(hour=target_hour, minute=0, second=0) + timedelta(days=1)
         else:
             next_run = now.replace(hour=target_hour, minute=0, second=0)
-        
+
         wait_seconds = (next_run - now).total_seconds()
         await asyncio.sleep(wait_seconds)
-        
+
+        db = SessionLocal()
         try:
-            db = SessionLocal()
             await reminder_scheduler.send_daily_digests(db)
-            db.close()
         except Exception as e:
             logger.error(f"Daily digest error: {e}")
+        finally:
+            db.close()

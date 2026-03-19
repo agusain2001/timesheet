@@ -199,7 +199,7 @@ def list_organizations(
     """List organizations — super admins see all, others see only their own."""
     from app.utils.tenant import is_super_admin as _is_super_admin
     if _is_super_admin(current_user):
-        query = db.query(Organization).filter(Organization.is_active == True)
+        query = db.query(Organization)
         if search:
             query = query.filter(Organization.name.ilike(f"%{search}%"))
         orgs = query.offset(skip).limit(limit).all()

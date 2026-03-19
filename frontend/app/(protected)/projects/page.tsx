@@ -128,6 +128,52 @@ function DeleteModal({ project, onClose, onDeleted }: { project: Project; onClos
     );
 }
 
+// ─── Bulk Selection Bar ──────────────────────────────────────────────────────
+function BulkSelectionBar({ count, onDelete, onClear }: { count: number; onDelete: () => void; onClear: () => void; }) {
+    return (
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">{count}</span>
+                <span className="text-xs font-medium text-foreground/80">
+                    {count} project{count > 1 ? "s" : ""} selected
+                </span>
+                <button onClick={onClear} className="text-[10px] text-foreground/40 hover:text-foreground/70 underline transition">Clear</button>
+            </div>
+            <div className="flex items-center gap-2">
+                <button onClick={onDelete}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/90 text-white hover:bg-red-500 transition">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" /></svg>
+                    Delete Selected
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ─── Bulk Delete Modal ────────────────────────────────────────────────────────
+function BulkDeleteModal({ count, onClose, onDeleted }: { count: number; onClose: () => void; onDeleted: () => void }) {
+    const [deleting, setDeleting] = useState(false);
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-[380px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 overflow-hidden p-6 text-center" onClick={(e) => e.stopPropagation()}>
+                <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-red-500">
+                        <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                </div>
+                <h2 className="text-base font-bold text-foreground mb-1">Delete {count} Projects</h2>
+                <p className="text-xs text-foreground/50 mb-6">Are you sure you want to delete these projects? This action is permanent and will remove all associated tasks and data.</p>
+                <div className="flex gap-2">
+                    <button onClick={onClose} className="flex-1 px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
+                    <button onClick={() => { setDeleting(true); onDeleted(); }} disabled={deleting} className="flex-1 px-4 py-2 text-xs rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 disabled:opacity-50 transition">
+                        {deleting ? "Deleting..." : "Confirm Delete"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Project Member type ──────────────────────────────────────────────────────
 interface ProjectMember {
     id: string;
@@ -558,8 +604,8 @@ function ProjectDetailsPanel({
 
 // ─── Row Action Menu ──────────────────────────────────────────────────────────
 function RowMenu({
-    project, onView, onEdit, onTeam, onDelete, onClose,
-}: { project: Project; onView: () => void; onEdit: () => void; onTeam: () => void; onDelete: () => void; onClose: () => void }) {
+    project, onView, onEdit, onTeam, onDelete, onClose, openAbove,
+}: { project: Project; onView: () => void; onEdit: () => void; onTeam: () => void; onDelete: () => void; onClose: () => void; openAbove?: boolean }) {
     const ref = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
@@ -568,7 +614,7 @@ function RowMenu({
     }, [onClose]);
 
     return (
-        <div ref={ref} className="absolute right-4 z-50 w-48 rounded-xl border border-foreground/10 bg-background shadow-2xl py-1 text-xs" style={{ top: "100%" }}>
+        <div ref={ref} className="absolute right-4 z-50 w-48 rounded-xl border border-foreground/10 bg-background shadow-2xl py-1 text-xs" style={openAbove ? { bottom: "100%" } : { top: "100%" }}>
             <button onClick={() => { onView(); onClose(); }} className="w-full text-left px-3 py-2 hover:bg-foreground/5 text-foreground/80 transition">View Project Details</button>
             <button onClick={() => { onEdit(); onClose(); }} className="w-full text-left px-3 py-2 hover:bg-foreground/5 text-foreground/80 transition">Edit Details</button>
             <button onClick={() => { onClose(); }} className="w-full text-left px-3 py-2 hover:bg-foreground/5 text-foreground/80 transition">View My Tasks</button>
@@ -648,6 +694,9 @@ export default function ProjectsPage() {
     const [teamProject, setTeamProject] = useState<Project | null>(null);
     const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
     const [menuRow, setMenuRow] = useState<string | null>(null);
+    const [bulkDeleteModal, setBulkDeleteModal] = useState(false);
+
+    const [menuOpenAbove, setMenuOpenAbove] = useState(false);
 
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -691,6 +740,31 @@ export default function ProjectsPage() {
         setSelected(s);
     };
 
+    const handleBulkDelete = async () => {
+        let success = 0;
+        let fail = 0;
+        const ids = Array.from(selected);
+        
+        for (const id of ids) {
+            try {
+                await deleteProject(id);
+                success++;
+            } catch {
+                fail++;
+            }
+        }
+        
+        if (success > 0) {
+            showToast(`Successfully deleted ${success} project${success > 1 ? "s" : ""}`, "success");
+            loadProjects();
+            setSelected(new Set());
+        }
+        if (fail > 0) {
+            showToast(`Failed to delete ${fail} project${fail > 1 ? "s" : ""}`, "error");
+        }
+        setBulkDeleteModal(false);
+    };
+
     const clientName = (id?: string) => clients.find((c) => c.id === id)?.name ?? "—";
     const managerName = (p: Project) => p.project_managers?.[0]?.employee_name ?? "—";
 
@@ -698,7 +772,7 @@ export default function ProjectsPage() {
     const STATUS_OPTIONS = ["Draft", "Active", "On Hold", "Completed", "Archived"];
 
     return (
-        <div className="p-6 space-y-5 min-h-full bg-background text-foreground">
+        <div className="space-y-5 min-h-full bg-background text-foreground">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-foreground">My Projects</h1>
@@ -724,6 +798,15 @@ export default function ProjectsPage() {
                     "Click Move to Tasks in the detail panel to jump straight to that project's tasks.",
                 ]}
             />
+
+            {/* Bulk Selection Bar — shown when 1+ selected */}
+            {selected.size > 0 && (
+                <BulkSelectionBar
+                    count={selected.size}
+                    onDelete={() => setBulkDeleteModal(true)}
+                    onClear={() => setSelected(new Set())}
+                />
+            )}
 
             {/* Filters row */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -790,7 +873,11 @@ export default function ProjectsPage() {
                                 {/* Row action button */}
                                 <div className="relative">
                                     <button
-                                        onClick={() => setMenuRow(menuRow === p.id ? null : p.id)}
+                                        onClick={(e) => {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setMenuOpenAbove(window.innerHeight - rect.bottom < 240);
+                                            setMenuRow(menuRow === p.id ? null : p.id);
+                                        }}
                                         className="p-1.5 rounded-md hover:bg-foreground/10 text-foreground/40 hover:text-foreground transition opacity-0 group-hover:opacity-100"
                                     >
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
@@ -803,6 +890,7 @@ export default function ProjectsPage() {
                                             onTeam={() => setTeamProject(p)}
                                             onDelete={() => setDeleteProject(p)}
                                             onClose={() => setMenuRow(null)}
+                                            openAbove={menuOpenAbove}
                                         />
                                     )}
                                 </div>
@@ -853,6 +941,14 @@ export default function ProjectsPage() {
                 <MemberDetailsPanel
                     member={selectedMember}
                     onClose={() => setSelectedMember(null)}
+                />
+            )}
+
+            {bulkDeleteModal && (
+                <BulkDeleteModal 
+                    count={selected.size} 
+                    onClose={() => setBulkDeleteModal(false)} 
+                    onDeleted={handleBulkDelete} 
                 />
             )}
 

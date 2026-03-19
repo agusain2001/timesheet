@@ -277,7 +277,7 @@ export default function ScheduledReportsPage() {
         REPORT_TYPES.find(r => r.value === type)?.description ?? "";
 
     return (
-        <div className="min-h-screen p-6 space-y-6 bg-background text-foreground">
+        <div className="space-y-6 bg-background text-foreground">
             {/* Toast */}
             {toast && (
                 <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-foreground/10 border border-foreground/15 text-sm text-foreground/80 shadow-2xl backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2">

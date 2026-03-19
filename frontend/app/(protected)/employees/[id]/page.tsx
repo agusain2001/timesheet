@@ -327,7 +327,7 @@ export default function EmployeeProfilePage() {
     const displayProjects = projectFilter === "active" ? data.projects.active : data.projects.past;
 
     return (
-        <div className="min-h-screen bg-background text-foreground">
+        <div className="-m-6 bg-background text-foreground" style={{ minHeight: 'calc(100vh - 64px)' }}>
 
             {/* ── Hero Header ── */}
             <div className="relative overflow-hidden">

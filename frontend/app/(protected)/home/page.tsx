@@ -3,10 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getPersonalDashboard, type PersonalDashboard } from "@/services/dashboard";
+import { getPersonalDashboard, type PersonalDashboard, type DateFilter } from "@/services/dashboard";
 import { getToken } from "@/lib/auth";
 import AddTaskModal from "@/components/AddTaskModal";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+import DateFilterDropdown, { type DateRange, type FilterPreset } from "@/components/DateFilterDropdown";
 
 // ============ Helper ============
 
@@ -298,28 +299,37 @@ function HomeSkeleton() {
 
 // ============ Main Page ============
 
+// Get the default date range for "this month"
+function getThisMonthDefault(): DateFilter {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const toISO = (d: Date) => d.toISOString().split("T")[0];
+    return { startDate: toISO(start), endDate: toISO(end) };
+}
+
 export default function HomePage() {
     const router = useRouter();
     const [data, setData] = useState<PersonalDashboard | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showAddTask, setShowAddTask] = useState(false);
+    const [dateFilter, setDateFilter] = useState<DateFilter>(getThisMonthDefault());
 
-    const fetchDashboard = useCallback(() => {
+    const fetchDashboard = useCallback((filter?: DateFilter) => {
         const token = getToken();
         if (!token) {
             router.push("/login?redirect=/home");
             return;
         }
 
-        getPersonalDashboard()
+        getPersonalDashboard(filter)
             .then((d) => {
                 setData(d);
                 setLoading(false);
             })
             .catch((err) => {
                 console.error("Dashboard fetch error:", err);
-                // Redirect to login on 401
                 if (err?.status === 401 || err?.message?.includes("Not authenticated")) {
                     router.push("/login?redirect=/home");
                     return;
@@ -329,9 +339,17 @@ export default function HomePage() {
             });
     }, [router]);
 
-    useEffect(() => {
-        fetchDashboard();
+    const handleFilterChange = useCallback((range: DateRange, _preset: FilterPreset) => {
+        const filter: DateFilter = { startDate: range.startDate, endDate: range.endDate };
+        setDateFilter(filter);
+        setLoading(true);
+        fetchDashboard(filter);
     }, [fetchDashboard]);
+
+    useEffect(() => {
+        fetchDashboard(dateFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     if (loading) return <HomeSkeleton />;
 
@@ -358,13 +376,11 @@ export default function HomePage() {
                     <h1 className="text-2xl font-bold text-foreground">Welcome!</h1>
                     <p className="text-sm text-foreground/50 mt-1">Here&apos;s what&apos;s happening with your work today.</p>
                 </div>
-                <div className="flex gap-3">
-                    <button className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition">
-                        This Month
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </button>
+                <div className="flex gap-3 items-center">
+                    <DateFilterDropdown
+                        initialPreset="this_month"
+                        onFilterChange={handleFilterChange}
+                    />
                     <button onClick={() => setShowAddTask(true)} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-foreground/15 text-foreground hover:bg-foreground/5 transition">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -389,7 +405,7 @@ export default function HomePage() {
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="My Tasks" value={dashboard.my_tasks_count ?? "NA"} color="#3b82f6" href="/tasks/all" />
+                <StatCard label="My Tasks" value={dashboard.my_tasks_count ?? "NA"} color="#3b82f6" href="/my-tasks" />
                 <StatCard label="Due Tasks" value={dashboard.due_tasks_count ?? "NA"} color="#6366f1" href="/tasks/due" />
                 <StatCard label="Completed Tasks" value={dashboard.completed_tasks_count ?? "NA"} color="#06b6d4" href="/tasks/completed" />
                 <StatCard label="Overdue" value={dashboard.overdue_tasks_count ?? "NA"} color="#ef4444" href="/tasks/overdue" />
@@ -416,7 +432,7 @@ export default function HomePage() {
             </div>
 
             {/* Add Task Modal */}
-            <AddTaskModal isOpen={showAddTask} onClose={() => setShowAddTask(false)} onTaskCreated={fetchDashboard} />
+            <AddTaskModal isOpen={showAddTask} onClose={() => setShowAddTask(false)} onTaskCreated={() => fetchDashboard(dateFilter)} />
         </div>
     );
 }

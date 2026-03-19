@@ -2,7 +2,7 @@
 import re
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, File, UploadFile
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -110,6 +110,18 @@ class PrivacyResponse(BaseModel):
 # Helpers
 # ============================================================
 
+def _get_user_settings(user: User) -> dict:
+    """Helper to get user.settings ensuring it is a dict."""
+    settings = user.settings or {}
+    if isinstance(settings, str):
+        import json
+        try:
+            settings = json.loads(settings)
+        except Exception:
+            settings = {}
+    return settings
+
+
 def _validate_password_strength(password: str) -> None:
     """Validate password meets minimum security requirements."""
     if len(password) < 8:
@@ -124,7 +136,7 @@ def _validate_password_strength(password: str) -> None:
 
 def _get_profile_response(user: User) -> ProfileResponse:
     """Build a ProfileResponse from a User object."""
-    settings = user.settings or {}
+    settings = _get_user_settings(user)
     dept_name = user.department.name if user.department else None
     return ProfileResponse(
         id=user.id,
@@ -148,7 +160,7 @@ def _get_profile_response(user: User) -> ProfileResponse:
 
 def _get_notification_response(user: User, db: Session) -> NotificationPrefsResponse:
     """Build notification prefs response from user settings."""
-    ts_prefs = (user.settings or {}).get("timesheet_notifications", {})
+    ts_prefs = _get_user_settings(user).get("timesheet_notifications", {})
     prefs_row = db.query(NotificationPreference).filter(
         NotificationPreference.user_id == user.id
     ).first()
@@ -191,11 +203,8 @@ def update_settings_profile(
         current_user.bio = data.bio.strip()
 
     # Extended fields stored in settings JSON
-    if not current_user.settings:
-        current_user.settings = {}
-
     import copy
-    settings_copy = copy.deepcopy(current_user.settings)
+    settings_copy = copy.deepcopy(_get_user_settings(current_user))
 
     extended_fields = [
         "employee_id_display", "emergency_contact_name",
@@ -212,6 +221,53 @@ def update_settings_profile(
     return _get_profile_response(current_user)
 
 
+@router.post("/profile/avatar", response_model=ProfileResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Upload user avatar."""
+
+    from pathlib import Path
+    import uuid
+
+    uploads_dir = Path("uploads/avatars")
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    MIME_TO_EXT = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+    }
+
+    ext = ""
+    if file.filename:
+        ext = Path(file.filename).suffix.lower()
+
+    # Fall back to content_type if extension is missing or not recognized
+    if ext not in ALLOWED_EXTS:
+        ext = MIME_TO_EXT.get((file.content_type or "").lower(), "")
+
+    if ext not in ALLOWED_EXTS:
+        raise HTTPException(status_code=400, detail=f"Unsupported image format. Got filename={file.filename!r}, content_type={file.content_type!r}")
+
+    unique_id = str(uuid.uuid4())[:8]
+    filename = f"user_{current_user.id}_{unique_id}{ext}"
+    file_path = uploads_dir / filename
+    
+    with open(file_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+        
+    current_user.avatar_url = f"/api/uploads/avatars/{filename}"
+    db.commit()
+    db.refresh(current_user)
+    
+    return _get_profile_response(current_user)
+
 # ============================================================
 # Security Endpoints
 # ============================================================
@@ -227,7 +283,7 @@ def get_security_settings(
     mfa_enabled = bool(mfa and mfa.is_enabled == "true")
 
     # Build sessions from settings JSON
-    settings = current_user.settings or {}
+    settings = _get_user_settings(current_user)
     raw_sessions = settings.get("active_sessions", [])
 
     # Ensure there's always at least one "current" session entry
@@ -284,10 +340,7 @@ def logout_device(
 ):
     """Remove a device/session from active sessions list by session_id."""
     import copy
-    if not current_user.settings:
-        current_user.settings = {}
-
-    settings_copy = copy.deepcopy(current_user.settings)
+    settings_copy = copy.deepcopy(_get_user_settings(current_user))
     sessions = settings_copy.get("active_sessions", [])
     updated = [s for s in sessions if s.get("session_id") != data.session_id]
     settings_copy["active_sessions"] = updated
@@ -334,10 +387,7 @@ def update_notification_preferences(
 ):
     """Update notification preferences."""
     import copy
-    if not current_user.settings:
-        current_user.settings = {}
-
-    settings_copy = copy.deepcopy(current_user.settings)
+    settings_copy = copy.deepcopy(_get_user_settings(current_user))
     existing = settings_copy.get("timesheet_notifications", {})
     update_dict = data.model_dump(exclude_unset=True)
     existing.update(update_dict)
@@ -367,7 +417,7 @@ def get_privacy_settings(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get privacy settings."""
-    prefs = (current_user.settings or {}).get("privacy", {})
+    prefs = _get_user_settings(current_user).get("privacy", {})
     return PrivacyResponse(
         show_online_status=prefs.get("show_online_status", True),
         display_last_active_time=prefs.get("display_last_active_time", True),
@@ -382,10 +432,7 @@ def update_privacy_settings(
 ):
     """Update privacy settings."""
     import copy
-    if not current_user.settings:
-        current_user.settings = {}
-
-    settings_copy = copy.deepcopy(current_user.settings)
+    settings_copy = copy.deepcopy(_get_user_settings(current_user))
     existing = settings_copy.get("privacy", {})
     update_dict = data.model_dump(exclude_unset=True)
     existing.update(update_dict)
@@ -395,7 +442,7 @@ def update_privacy_settings(
     db.commit()
     db.refresh(current_user)
 
-    prefs = (current_user.settings or {}).get("privacy", {})
+    prefs = _get_user_settings(current_user).get("privacy", {})
     return PrivacyResponse(
         show_online_status=prefs.get("show_online_status", True),
         display_last_active_time=prefs.get("display_last_active_time", True),

@@ -121,7 +121,16 @@ function ExpenseRow({
     useEffect(() => {
         if (isMenuOpen && btnRef.current) {
             const rect = btnRef.current.getBoundingClientRect();
-            setMenuPos({ top: rect.bottom + 4, left: rect.right - 200 });
+            // Estimate menu height (~180px for 4 buttons + padding)
+            const estimatedMenuHeight = 180;
+            let topPos = rect.bottom + 4;
+            
+            // If the menu would go off the bottom of the screen, render it above the button
+            if (topPos + estimatedMenuHeight > window.innerHeight) {
+                topPos = rect.top - estimatedMenuHeight - 4;
+            }
+            
+            setMenuPos({ top: topPos, left: rect.right - 200 });
         }
     }, [isMenuOpen]);
 
@@ -234,6 +243,7 @@ export default function MyExpensePage() {
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [showSearch, setShowSearch] = useState(false);
+    const [filterDate, setFilterDate] = useState<string>("");
 
     // Delete modal state
     const [deleteExpenseData, setDeleteExpenseData] = useState<Expense | null>(null);
@@ -272,8 +282,12 @@ export default function MyExpensePage() {
         try { await submitExpense(expense.id); fetchData(); } catch (err) { console.error("Submit error:", err); }
     };
 
-    // Filter by search query
+    // Filter by search query and date
     const filteredExpenses = expenses.filter((e) => {
+        if (filterDate) {
+            const expDate = e.created_at.split('T')[0];
+            if (expDate !== filterDate) return false;
+        }
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase();
         return e.title.toLowerCase().includes(q) || (e.description || "").toLowerCase().includes(q);
@@ -292,7 +306,7 @@ export default function MyExpensePage() {
     }
 
     return (
-        <div className="space-y-5 max-w-[1400px] mx-auto">
+        <div className="space-y-5 max-w-[1400px] mx-auto pb-24">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-foreground">My Expenses</h1>
@@ -332,12 +346,23 @@ export default function MyExpensePage() {
                 ))}
 
                 {/* Date Filter */}
-                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20 transition">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Date
-                </button>
+                <div className="relative flex items-center">
+                    <input
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => setFilterDate(e.target.value)}
+                        className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20 transition focus:outline-none focus:ring-1 focus:ring-cyan-500/50 cursor-pointer h-[30px]"
+                    />
+                    {filterDate && (
+                        <button
+                            onClick={() => setFilterDate("")}
+                            className="absolute -right-1 -top-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition shadow-sm border border-background"
+                            title="Clear date filter"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    )}
+                </div>
 
                 {/* Search */}
                 <div className="ml-auto flex items-center gap-2">
@@ -359,8 +384,8 @@ export default function MyExpensePage() {
             {filteredExpenses.length === 0 ? (
                 <EmptyState onAdd={() => setShowNewExpense(true)} />
             ) : (
-                <div className="rounded-xl border border-foreground/10 overflow-hidden">
-                    <table className="w-full text-left">
+                <div className="rounded-xl border border-foreground/10 overflow-x-auto">
+                    <table className="w-full text-left min-w-[1000px]">
                         <thead>
                             <tr className="text-xs uppercase tracking-wider text-foreground/40 border-b border-foreground/5">
                                 <th className="py-3 pl-4 w-10 font-medium"><input type="checkbox" className="rounded border-foreground/20 bg-transparent" /></th>
@@ -387,10 +412,20 @@ export default function MyExpensePage() {
                                     onEdit={() => setEditExpenseData(expense)}
                                     onViewReceipt={() => {
                                         // View receipt - check if any item has a receipt path
-                                        const receiptItem = expense.items?.find((i) => i.receipt_path || i.attachment_url);
-                                        if (receiptItem) {
-                                            const url = receiptItem.receipt_path || receiptItem.attachment_url;
-                                            if (url) window.open(`/api/uploads/${url}`, "_blank");
+                                        if (!expense.items || expense.items.length === 0) return;
+                                        
+                                        const receiptItems = expense.items.filter((i) => i.receipt_path || i.attachment_url);
+                                        
+                                        if (receiptItems.length > 0) {
+                                            receiptItems.forEach(item => {
+                                                let url = item.receipt_path || item.attachment_url;
+                                                if (url) {
+                                                    url = url.replace(/\\/g, '/');
+                                                    window.open(`/api/uploads/${url}`, "_blank");
+                                                }
+                                            });
+                                        } else {
+                                            alert("No receipts are attached to this expense.");
                                         }
                                     }}
                                 />

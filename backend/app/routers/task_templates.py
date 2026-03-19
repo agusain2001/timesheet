@@ -38,7 +38,7 @@ def _build_response(tpl: TaskTemplate) -> dict:
         "id": tpl.id,
         "name": tpl.name,
         "description": tpl.description,
-        "task_type": getattr(tpl, "default_status", None),
+        "task_type": getattr(tpl, "task_type", None),
         "priority": tpl.default_priority,
         "status": tpl.default_status,
         "estimated_hours": tpl.estimated_hours,

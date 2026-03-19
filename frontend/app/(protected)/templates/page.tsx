@@ -7,6 +7,7 @@ import {
 import { getToken } from "@/lib/auth";
 import { apiGet } from "@/services/api";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+import { validateSafeText } from "@/utils/validation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -182,7 +183,9 @@ function TemplateModal({ tpl, onSave, onClose }: {
     };
 
     const handleSave = async () => {
-        if (!form.name.trim()) { setError("Name is required"); return; }
+        const valErr = validateSafeText(form.name, "Name", 150);
+        if (valErr) { setError(valErr); return; }
+        
         setSaving(true); setError("");
         const payload = {
             name: form.name.trim(),
@@ -222,6 +225,7 @@ function TemplateModal({ tpl, onSave, onClose }: {
                         <label className="block text-sm text-foreground/60 mb-1">Name *</label>
                         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                             className={fieldCls} placeholder="e.g. Bug Investigation" />
+                        <p className="text-[10px] text-foreground/40 mt-1">Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed.</p>
                     </div>
 
                     <div>
@@ -374,7 +378,7 @@ export default function TemplatesPage() {
     );
 
     return (
-        <div className="min-h-screen p-6 space-y-6 bg-background text-foreground">
+        <div className="space-y-6 bg-background text-foreground">
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>

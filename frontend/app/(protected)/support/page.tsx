@@ -7,12 +7,62 @@ import {
     getSupportRequests,
     createSupportRequest,
     getSupportUsers,
+    deleteSupportRequest,
+    updateSupportRequest,
     type SupportRequest,
     type SupportUser,
     type SupportRequestCreate,
 } from "@/services/support";
 import { AddRequestModal } from "@/components/SupportModals";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+
+// ============ Confirm Dialog ============
+function ConfirmDialog({ message, subtext, onConfirm, onCancel, danger = true }: {
+    message: string;
+    subtext?: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    danger?: boolean;
+}) {
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
+            <div className="w-full max-w-[360px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="p-6 text-center">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${danger ? 'bg-red-500/10' : 'bg-blue-500/10'}`}>
+                        {danger ? (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
+                                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                            </svg>
+                        ) : (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
+                                <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" />
+                            </svg>
+                        )}
+                    </div>
+                    <h3 className="text-base font-bold text-foreground mb-1">{message}</h3>
+                    {subtext && <p className="text-xs text-foreground/50 mb-5">{subtext}</p>}
+                    {!subtext && <div className="mb-5" />}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onCancel}
+                            className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={onConfirm}
+                            className={`flex-1 px-4 py-2.5 text-sm rounded-xl font-semibold text-white transition ${
+                                danger ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'
+                            }`}
+                        >
+                            {danger ? 'Delete' : 'Confirm'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // ============ Helpers ============
 
@@ -103,6 +153,12 @@ export default function SupportPage() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [viewingRequest, setViewingRequest] = useState<SupportRequest | null>(null);
+    const [confirmDialog, setConfirmDialog] = useState<{ message: string; subtext?: string; onConfirm: () => void } | null>(null);
+
+    const showConfirm = (message: string, subtext: string, onConfirm: () => void) => {
+        setConfirmDialog({ message, subtext, onConfirm });
+    };
 
     // Filters
     const [filterPriority, setFilterPriority] = useState<string | null>(null);
@@ -271,13 +327,31 @@ export default function SupportPage() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
                         Search
                     </button>
+                    {selectedIds.size > 0 && (
+                        <button
+                            onClick={() => showConfirm(
+                                `Delete ${selectedIds.size} request(s)?`,
+                                'This action cannot be undone.',
+                                async () => {
+                                    setConfirmDialog(null);
+                                    await Promise.all(Array.from(selectedIds).map(id => deleteSupportRequest(id))).catch(console.error);
+                                    setSelectedIds(new Set());
+                                    fetchRequests();
+                                }
+                            )}
+                            className="text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg text-xs font-medium transition ml-2 flex items-center gap-1"
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                            Delete Selected ({selectedIds.size})
+                        </button>
+                    )}
                 </div>
             </div>
 
             {/* Table */}
             <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] overflow-hidden">
                 {/* Table Header */}
-                <div className="grid grid-cols-[40px_1fr_150px_160px] items-center px-4 py-3 border-b border-foreground/10 text-xs font-medium text-foreground/50 uppercase tracking-wider">
+                <div className="grid grid-cols-[40px_1fr_150px_160px_60px] items-center px-4 py-3 border-b border-foreground/10 text-xs font-medium text-foreground/50 uppercase tracking-wider">
                     <div>
                         <input
                             type="checkbox"
@@ -289,6 +363,7 @@ export default function SupportPage() {
                     <div>Activity</div>
                     <div>Source</div>
                     <div>Date</div>
+                    <div className="text-right">Action</div>
                 </div>
 
                 {/* Rows */}
@@ -304,9 +379,10 @@ export default function SupportPage() {
                     filteredRequests.map((req) => (
                         <div
                             key={req.id}
-                            className="grid grid-cols-[40px_1fr_150px_160px] items-center px-4 py-3.5 border-b border-foreground/5 hover:bg-foreground/[0.03] transition cursor-pointer"
+                            className="grid grid-cols-[40px_1fr_150px_160px_60px] items-center px-4 py-3.5 border-b border-foreground/5 last:border-0 hover:bg-foreground/[0.03] transition cursor-pointer"
+                            onClick={() => setViewingRequest(req)}
                         >
-                            <div>
+                            <div onClick={(e) => e.stopPropagation()}>
                                 <input
                                     type="checkbox"
                                     checked={selectedIds.has(req.id)}
@@ -324,25 +400,245 @@ export default function SupportPage() {
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
-                                {req.user && (
+                                {req.user ? (
                                     <span
                                         className="w-7 h-7 rounded-full text-[10px] flex items-center justify-center text-white font-bold shrink-0"
                                         style={{ background: avatarBg(req.user.full_name) }}
+                                        title={req.user.full_name}
                                     >
                                         {getInitials(req.user.full_name)}
                                     </span>
+                                ) : (
+                                    <span className="text-xs text-foreground/40">Unknown</span>
                                 )}
                             </div>
                             <div className="text-xs text-foreground/60">
                                 {formatTimestamp(req.created_at)}
+                            </div>
+                            <div className="flex items-center justify-end gap-2 pr-2">
+                                <button className="text-foreground/40 hover:text-red-500 transition p-1" onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    showConfirm(
+                                        'Delete this request?',
+                                        'This ticket will be permanently removed.',
+                                        async () => {
+                                            setConfirmDialog(null);
+                                            await deleteSupportRequest(req.id).catch(console.error);
+                                            const next = new Set(selectedIds);
+                                            next.delete(req.id);
+                                            setSelectedIds(next);
+                                            fetchRequests();
+                                        }
+                                    );
+                                }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                                </button>
                             </div>
                         </div>
                     ))
                 )}
             </div>
 
-            {/* Modal */}
+            {/* Add Modal */}
             <AddRequestModal isOpen={showModal} onClose={() => setShowModal(false)} onCreated={fetchRequests} />
+            
+            {/* View/Edit Modal */}
+            {viewingRequest && (
+                <ViewRequestModal 
+                    request={viewingRequest} 
+                    onClose={() => setViewingRequest(null)} 
+                    onUpdated={fetchRequests} 
+                    onDeleted={() => { 
+                        const next = new Set(selectedIds);
+                        next.delete(viewingRequest.id);
+                        setSelectedIds(next);
+                        setViewingRequest(null); 
+                        fetchRequests(); 
+                    }}
+                    onRequestConfirm={showConfirm}
+                />
+            )}
+
+            {/* Confirm Dialog */}
+            {confirmDialog && (
+                <ConfirmDialog
+                    message={confirmDialog.message}
+                    subtext={confirmDialog.subtext}
+                    onConfirm={confirmDialog.onConfirm}
+                    onCancel={() => setConfirmDialog(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+// ─── View/Edit Modal ────────────────────────────────────────────────────────
+function ViewRequestModal({ request, onClose, onUpdated, onDeleted, onRequestConfirm }: { 
+    request: SupportRequest;
+    onClose: () => void;
+    onUpdated: () => void;
+    onDeleted: () => void;
+    onRequestConfirm: (message: string, subtext: string, onConfirm: () => void) => void;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [subject, setSubject] = useState(request.subject || "");
+    const [message, setMessage] = useState(request.message || "");
+    const [priority, setPriority] = useState(request.priority);
+    const [status, setStatus] = useState(request.status);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+
+    const handleSave = async () => {
+        setSaving(true);
+        setSaveError(null);
+        try {
+            await updateSupportRequest(request.id, { subject, message, priority, status });
+            setEditing(false);
+            onUpdated();
+        } catch (e) {
+            console.error(e);
+            setSaveError('Failed to update request. Please try again.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = () => {
+        onRequestConfirm(
+            'Delete this support request?',
+            'This ticket will be permanently removed and cannot be recovered.',
+            async () => {
+                try {
+                    await deleteSupportRequest(request.id);
+                    onDeleted();
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+        );
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+            <div className="w-full max-w-[600px] rounded-2xl border border-foreground/10 bg-background shadow-xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="flex items-start justify-between p-6 border-b border-foreground/10 shrink-0">
+                    <div>
+                        <div className="flex items-center gap-3 mb-1">
+                            {editing ? (
+                                <input value={subject} onChange={e => setSubject(e.target.value)} className="font-bold text-lg bg-foreground/5 border border-foreground/10 rounded px-2" />
+                            ) : (
+                                <h2 className="text-xl font-bold text-foreground">{request.subject || "Support Request"}</h2>
+                            )}
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+                                status === "open" ? "bg-blue-500/10 text-blue-500" :
+                                status === "in_progress" ? "bg-orange-500/10 text-orange-500" :
+                                status === "resolved" ? "bg-green-500/10 text-green-500" : "bg-foreground/10 text-foreground/50"
+                            }`}>
+                                {status.replace("_", " ")}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-foreground/50">
+                            {request.user && (
+                                <span className="flex items-center gap-1.5">
+                                    <span className="w-4 h-4 rounded-full text-[8px] flex items-center justify-center text-white" style={{ background: avatarBg(request.user.full_name) }}>
+                                        {getInitials(request.user.full_name)}
+                                    </span>
+                                    {request.user.full_name}
+                                </span>
+                            )}
+                            <span>•</span>
+                            <span>{formatTimestamp(request.created_at)}</span>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-1 rounded-md text-foreground/40 hover:bg-foreground/10 transition">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                {/* Body */}
+                <div className="p-6 overflow-y-auto space-y-6">
+                    {/* Details Row */}
+                    <div className="flex gap-6 border-b border-foreground/10 pb-6">
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase text-foreground/40 tracking-wider mb-2">Priority</p>
+                            {editing ? (
+                                <select value={priority} onChange={e => setPriority(e.target.value as any)} className="bg-foreground/5 border border-foreground/10 rounded p-1 text-xs">
+                                    {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                                </select>
+                            ) : (
+                                <span className="flex items-center gap-1.5 text-sm">{priorityIcon(priority)} <span className="capitalize">{priority}</span></span>
+                            )}
+                        </div>
+                        {editing && (
+                            <div>
+                                <p className="text-[10px] font-semibold uppercase text-foreground/40 tracking-wider mb-2">Status</p>
+                                <select value={status} onChange={e => setStatus(e.target.value as any)} className="bg-foreground/5 border border-foreground/10 rounded p-1 text-xs">
+                                    <option value="open">Open</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="resolved">Resolved</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                            </div>
+                        )}
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase text-foreground/40 tracking-wider mb-2">Module</p>
+                            <span className="text-sm text-foreground/70">{request.related_module || "Untracked"}</span>
+                        </div>
+                    </div>
+
+                    {/* Message section */}
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase text-foreground/40 tracking-wider mb-2">Description</p>
+                        {editing ? (
+                            <textarea
+                                value={message}
+                                onChange={e => setMessage(e.target.value)}
+                                rows={6}
+                                className="w-full bg-foreground/5 border border-foreground/10 rounded-lg p-3 text-sm resize-none"
+                            />
+                        ) : (
+                            <div className="bg-foreground/[0.03] border border-foreground/10 rounded-xl p-4 text-sm whitespace-pre-wrap leading-relaxed">
+                                {request.message}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                    {/* Save Error */}
+                    {saveError && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm text-red-500">
+                            {saveError}
+                        </div>
+                    )}
+                {/* Footer Controls */}
+                <div className="flex items-center justify-between p-4 px-6 border-t border-foreground/10 bg-foreground/[0.02] shrink-0">
+                    {!editing ? (
+                        <>
+                            <button onClick={handleDelete} className="text-red-500 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5">
+                                Delete Ticket
+                            </button>
+                            <div className="flex gap-2">
+                                <button onClick={onClose} className="px-4 py-2 text-sm text-foreground/60 transition">Close</button>
+                                <button onClick={() => setEditing(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                                    Edit Ticket
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div></div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setEditing(false)} className="px-4 py-2 text-sm text-foreground/60 transition" disabled={saving}>Cancel</button>
+                                <button onClick={handleSave} disabled={saving} className="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                                    {saving ? "Saving..." : "Save Changes"}
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

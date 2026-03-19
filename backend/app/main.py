@@ -41,6 +41,10 @@ from app.routers import chat_integrations
 from app.routers import organizations
 # User Approvals
 from app.routers import user_approvals
+# Dynamic Dropdown Config
+from app.routers import dropdown_config
+# System Stats (Super Admin)
+from app.routers import system_stats
 # OpenAPI documentation enhancement
 from app.openapi_config import setup_custom_openapi
 from app.utils.error_handlers import register_error_handlers
@@ -211,6 +215,25 @@ app.include_router(organizations.router, prefix="/api/organizations", tags=["Org
 
 # ========== User Approvals (Org Admin) ==========
 app.include_router(user_approvals.router, prefix="/api", tags=["User Approvals"])
+
+# ========== Dynamic Dropdown Configuration ==========
+app.include_router(dropdown_config.router)
+
+# ========== System Stats (Super Admin) ==========
+app.include_router(system_stats.router)
+
+
+@app.on_event("startup")
+async def startup_event():
+    from app.services.scheduler_service import scheduler_service
+    from app.database import SessionLocal
+    scheduler_service.set_db_session_factory(SessionLocal)
+    scheduler_service.start()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    from app.services.scheduler_service import scheduler_service
+    scheduler_service.stop()
 
 
 @app.get("/")

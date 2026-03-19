@@ -71,21 +71,51 @@ class WeeklySummaryResponse(BaseModel):
 
 @router.get("/personal", response_model=PersonalDashboardResponse)
 def get_personal_dashboard(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get comprehensive personal dashboard data."""
+    """Get comprehensive personal dashboard data.
+    
+    Optional query parameters:
+    - start_date: Filter tasks starting from this date (YYYY-MM-DD)
+    - end_date: Filter tasks up to this date (YYYY-MM-DD). Defaults to start_date if not provided.
+    """
     try:
         today = datetime.utcnow().date()
         now = datetime.utcnow()
         week_start = today - timedelta(days=today.weekday())
-        
-        # My Tasks count (ALL tasks assigned to me)
-        my_tasks_count = db.query(Task).filter(
-            Task.assignee_id == current_user.id
-        ).count()
-        
-        # Tasks due today
+
+        # Resolve date window for filtering
+        filter_start: Optional[datetime] = None
+        filter_end: Optional[datetime] = None
+        if start_date:
+            effective_end = end_date if end_date else start_date
+            filter_start = datetime.combine(start_date, datetime.min.time())
+            filter_end = datetime.combine(effective_end, datetime.max.time())
+
+        def date_window_filters(query, date_field):
+            """Apply date window to a query on a given date column."""
+            if filter_start and filter_end:
+                query = query.filter(date_field >= filter_start, date_field <= filter_end)
+            return query
+
+        # Base task filter (always scoped to the current user)
+        base_q = db.query(Task).filter(Task.assignee_id == current_user.id)
+
+        # My Tasks count
+        if filter_start and filter_end:
+            my_tasks_count = base_q.filter(
+                or_(
+                    and_(Task.created_at >= filter_start, Task.created_at <= filter_end),
+                    and_(Task.due_date >= filter_start, Task.due_date <= filter_end)
+                )
+            ).count()
+        else:
+            my_tasks_count = base_q.count()
+
+        # Tasks due today (always today regardless of filter, for contextual info)
         today_start = datetime.combine(today, datetime.min.time())
         today_end = datetime.combine(today, datetime.max.time())
         today_tasks_count = db.query(Task).filter(
@@ -94,47 +124,71 @@ def get_personal_dashboard(
             Task.due_date <= today_end,
             Task.status != TaskStatus.COMPLETED.value
         ).count()
-        
-        # Due tasks (all non-completed, non-overdue tasks with a due date in the future)
-        due_tasks_count = db.query(Task).filter(
-            Task.assignee_id == current_user.id,
+
+        # Due tasks (non-completed, non-overdue, non-cancelled)
+        due_q = base_q.filter(
             Task.status != TaskStatus.COMPLETED.value,
             Task.status != TaskStatus.OVERDUE.value,
             Task.status != TaskStatus.CANCELLED.value
-        ).count()
-        
-        # Overdue tasks (only tasks with status "overdue")
-        overdue_tasks_count = db.query(Task).filter(
-            Task.assignee_id == current_user.id,
-            Task.status == TaskStatus.OVERDUE.value
-        ).count()
-        
-        # All completed tasks (total, not just today)
-        completed_tasks_count = db.query(Task).filter(
-            Task.assignee_id == current_user.id,
-            Task.status == TaskStatus.COMPLETED.value
-        ).count()
-        
-        # Completed today (for backward compatibility)
+        )
+        if filter_start and filter_end:
+            due_q = due_q.filter(
+                or_(
+                    and_(Task.created_at >= filter_start, Task.created_at <= filter_end),
+                    and_(Task.due_date >= filter_start, Task.due_date <= filter_end)
+                )
+            )
+        due_tasks_count = due_q.count()
+
+        # Overdue tasks
+        overdue_q = base_q.filter(Task.status == TaskStatus.OVERDUE.value)
+        if filter_start and filter_end:
+            overdue_q = overdue_q.filter(
+                or_(
+                    and_(Task.created_at >= filter_start, Task.created_at <= filter_end),
+                    and_(Task.due_date >= filter_start, Task.due_date <= filter_end)
+                )
+            )
+        overdue_tasks_count = overdue_q.count()
+
+        # Completed tasks
+        completed_q = base_q.filter(Task.status == TaskStatus.COMPLETED.value)
+        if filter_start and filter_end:
+            completed_q = completed_q.filter(
+                or_(
+                    and_(Task.completed_at >= filter_start, Task.completed_at <= filter_end),
+                    and_(Task.created_at >= filter_start, Task.created_at <= filter_end)
+                )
+            )
+        completed_tasks_count = completed_q.count()
+
+        # Completed today (for time status section, always "today")
         completed_today_count = db.query(Task).filter(
             Task.assignee_id == current_user.id,
             Task.status == TaskStatus.COMPLETED.value,
             func.date(Task.completed_at) == today
         ).count()
-        
-        # Upcoming deadlines (next 5 tasks due within 7 days)
+
+        # Upcoming deadlines (next 5 tasks due within 7 days — always shows near future)
         try:
             from sqlalchemy.orm import joinedload as _jl
-            upcoming_tasks = db.query(Task).options(
-                _jl(Task.project)
-            ).filter(
+            deadline_q = db.query(Task).options(_jl(Task.project)).filter(
                 Task.assignee_id == current_user.id,
                 Task.status != TaskStatus.COMPLETED.value,
                 Task.due_date != None,
-                Task.due_date >= now,
-                Task.due_date <= now + timedelta(days=7)
-            ).order_by(Task.due_date.asc()).limit(5).all()
-            
+            )
+            if filter_start and filter_end:
+                deadline_q = deadline_q.filter(
+                    Task.due_date >= filter_start,
+                    Task.due_date <= filter_end
+                )
+            else:
+                deadline_q = deadline_q.filter(
+                    Task.due_date >= now,
+                    Task.due_date <= now + timedelta(days=7)
+                )
+            upcoming_tasks = deadline_q.order_by(Task.due_date.asc()).limit(5).all()
+
             upcoming_deadlines = [
                 UpcomingDeadline(
                     task_id=str(t.id),
@@ -147,24 +201,23 @@ def get_personal_dashboard(
             ]
         except Exception:
             upcoming_deadlines = []
-        
-        # Hours logged today - from TimeLog table
+
+        # Hours logged today
         try:
             hours_logged_today = db.query(func.sum(TimeLog.hours)).filter(
                 TimeLog.user_id == current_user.id,
                 func.date(TimeLog.date) == today
             ).scalar() or 0.0
-            
-            # Also check TimeEntry for backward compatibility
+
             timeentry_today = db.query(func.sum(TimeEntry.hours)).join(Timesheet).filter(
                 Timesheet.user_id == current_user.id,
                 TimeEntry.day == today
             ).scalar() or 0.0
-            
+
             hours_logged_today = float(hours_logged_today) + float(timeentry_today)
         except Exception:
             hours_logged_today = 0.0
-        
+
         # Hours logged this week
         try:
             hours_logged_this_week = db.query(func.sum(TimeLog.hours)).filter(
@@ -172,25 +225,31 @@ def get_personal_dashboard(
                 func.date(TimeLog.date) >= week_start,
                 func.date(TimeLog.date) <= today
             ).scalar() or 0.0
-            
+
             timeentry_week = db.query(func.sum(TimeEntry.hours)).join(Timesheet).filter(
                 Timesheet.user_id == current_user.id,
                 TimeEntry.day >= week_start,
                 TimeEntry.day <= today
             ).scalar() or 0.0
-            
+
             hours_logged_this_week = float(hours_logged_this_week) + float(timeentry_week)
         except Exception:
             hours_logged_this_week = 0.0
-        
+
         # Tasks by status
         try:
-            status_counts = db.query(
-                Task.status, func.count(Task.id)
-            ).filter(
+            status_q = db.query(Task.status, func.count(Task.id)).filter(
                 Task.assignee_id == current_user.id
-            ).group_by(Task.status).all()
-            
+            )
+            if filter_start and filter_end:
+                status_q = status_q.filter(
+                    or_(
+                        and_(Task.created_at >= filter_start, Task.created_at <= filter_end),
+                        and_(Task.due_date >= filter_start, Task.due_date <= filter_end)
+                    )
+                )
+            status_counts = status_q.group_by(Task.status).all()
+
             tasks_by_status = {
                 "todo": 0,
                 "in_progress": 0,
@@ -205,18 +264,29 @@ def get_personal_dashboard(
                         tasks_by_status[status_key] = count
         except Exception:
             tasks_by_status = {"todo": 0, "in_progress": 0, "review": 0, "completed": 0, "blocked": 0}
-        
-        # Recent activity (last 10 activities)
+
+        # Recent activity
         try:
-            recent_completed = db.query(Task).filter(
+            completed_q2 = db.query(Task).filter(
                 Task.assignee_id == current_user.id,
                 Task.completed_at != None
-            ).order_by(Task.completed_at.desc()).limit(5).all()
-            
-            recent_created = db.query(Task).filter(
+            )
+            created_q2 = db.query(Task).filter(
                 Task.assignee_id == current_user.id
-            ).order_by(Task.created_at.desc()).limit(5).all()
-            
+            )
+            if filter_start and filter_end:
+                completed_q2 = completed_q2.filter(
+                    Task.completed_at >= filter_start,
+                    Task.completed_at <= filter_end
+                )
+                created_q2 = created_q2.filter(
+                    Task.created_at >= filter_start,
+                    Task.created_at <= filter_end
+                )
+
+            recent_completed = completed_q2.order_by(Task.completed_at.desc()).limit(5).all()
+            recent_created = created_q2.order_by(Task.created_at.desc()).limit(5).all()
+
             activities = []
             for task in recent_completed:
                 activities.append(RecentActivity(
@@ -225,7 +295,7 @@ def get_personal_dashboard(
                     message=f"Completed '{task.name}'",
                     timestamp=task.completed_at.isoformat() if task.completed_at else now.isoformat()
                 ))
-            
+
             for task in recent_created:
                 activities.append(RecentActivity(
                     id=f"created_{task.id}",
@@ -233,12 +303,12 @@ def get_personal_dashboard(
                     message=f"Created '{task.name}'",
                     timestamp=task.created_at.isoformat() if task.created_at else now.isoformat()
                 ))
-            
+
             activities.sort(key=lambda x: x.timestamp, reverse=True)
             recent_activity = activities[:5]
         except Exception:
             recent_activity = []
-        
+
         return PersonalDashboardResponse(
             my_tasks_count=my_tasks_count,
             today_tasks_count=today_tasks_count,
@@ -253,7 +323,6 @@ def get_personal_dashboard(
             recent_activity=recent_activity
         )
     except Exception as e:
-        # Return a safe default response if anything goes wrong
         import logging
         logging.error(f"Personal dashboard error: {e}", exc_info=True)
         return PersonalDashboardResponse(

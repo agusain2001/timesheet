@@ -1,9 +1,7 @@
 """
 Utility module for at-rest encryption of sensitive database fields.
-Uses Fernet symmetric encryption with a key from ENCRYPTION_KEY env variable.
+Uses Fernet symmetric encryption with a key from ENCRYPTION_KEY setting.
 """
-import os
-import base64
 import logging
 from typing import Optional
 
@@ -18,10 +16,11 @@ except ImportError:
 
 
 def _get_fernet() -> Optional["Fernet"]:
-    """Get Fernet instance from ENCRYPTION_KEY env variable."""
+    """Get Fernet instance from ENCRYPTION_KEY config setting."""
     if not _has_crypto:
         return None
-    key = os.environ.get("ENCRYPTION_KEY")
+    from app.config import get_settings
+    key = get_settings().encryption_key
     if not key:
         global _encryption_warned
         if not _encryption_warned:
@@ -36,6 +35,7 @@ def _get_fernet() -> Optional["Fernet"]:
     try:
         return Fernet(key.encode() if isinstance(key, str) else key)
     except Exception:
+        logger.error("[Encryption] Invalid ENCRYPTION_KEY format")
         return None
 
 

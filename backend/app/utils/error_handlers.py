@@ -53,11 +53,18 @@ class DependencyBlockedError(AppError):
         self.blocking_tasks = blocking_tasks
 
 
+def _is_websocket(request: Request) -> bool:
+    """Check if the request is a WebSocket connection."""
+    return request.scope.get("type") == "websocket"
+
+
 def register_error_handlers(app: FastAPI):
     """Register all error handlers on the FastAPI app."""
 
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError):
+        if _is_websocket(request):
+            raise exc
         content = {
             "detail": exc.message,
             "code": exc.code,
@@ -70,6 +77,8 @@ def register_error_handlers(app: FastAPI):
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
+        if _is_websocket(request):
+            raise exc
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail, "code": "HTTP_ERROR"}
@@ -77,6 +86,8 @@ def register_error_handlers(app: FastAPI):
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        if _is_websocket(request):
+            raise exc
         errors = []
         for error in exc.errors():
             field = ".".join(str(loc) for loc in error.get("loc", []) if loc != "body")
@@ -88,7 +99,9 @@ def register_error_handlers(app: FastAPI):
 
     @app.exception_handler(IntegrityError)
     async def integrity_error_handler(request: Request, exc: IntegrityError):
-        logger.error(f"DB integrity error: {exc}")
+        if _is_websocket(request):
+            raise exc
+        logger.error("DB integrity error occurred")
         return JSONResponse(
             status_code=409,
             content={"detail": "A record with this value already exists", "code": "CONFLICT"}
@@ -96,7 +109,9 @@ def register_error_handlers(app: FastAPI):
 
     @app.exception_handler(OperationalError)
     async def db_error_handler(request: Request, exc: OperationalError):
-        logger.error(f"DB operational error: {exc}")
+        if _is_websocket(request):
+            raise exc
+        logger.error("DB operational error occurred")
         return JSONResponse(
             status_code=503,
             content={"detail": "Database temporarily unavailable", "code": "DB_ERROR"}
@@ -104,6 +119,8 @@ def register_error_handlers(app: FastAPI):
 
     @app.exception_handler(Exception)
     async def generic_error_handler(request: Request, exc: Exception):
+        if _is_websocket(request):
+            raise exc
         logger.error(f"Unhandled error: {exc}", exc_info=True)
         return JSONResponse(
             status_code=500,

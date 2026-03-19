@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Building2, Plus, Settings, Trash2, Users, Loader2, Check, X, Edit2, Globe, Lock } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+import { validateSafeText } from "@/utils/validation";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -52,7 +53,9 @@ function WorkspaceModal({ workspace, onSave, onClose }: {
     const [error, setError] = useState("");
 
     const handleSave = async () => {
-        if (!form.name.trim()) { setError("Name is required"); return; }
+        const valErr = validateSafeText(form.name, "Workspace Name", 100);
+        if (valErr) { setError(valErr); return; }
+        
         setSaving(true); setError("");
         try {
             const data = workspace
@@ -77,6 +80,7 @@ function WorkspaceModal({ workspace, onSave, onClose }: {
                     <div>
                         <label className="block text-xs text-foreground/50 mb-1">Workspace Name *</label>
                         <input value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value, slug: e.target.value.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") }); }} className={fieldCls} placeholder="My Workspace" />
+                        <p className="text-[10px] text-foreground/40 mt-1">Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed.</p>
                     </div>
                     <div>
                         <label className="block text-xs text-foreground/50 mb-1">Slug</label>
@@ -279,11 +283,11 @@ export default function WorkspacesPage() {
     };
 
     return (
-        <div className="min-h-screen p-6 space-y-6 bg-background text-foreground">
+        <div className="space-y-6 bg-background text-foreground">
             {/* Toast */}
             {toast && (
-                <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white text-sm shadow-2xl">
-                    <Check size={14} /> {toast}
+                <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-blue-600 text-white text-sm shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <Check size={14} strokeWidth={3} /> {toast}
                 </div>
             )}
 

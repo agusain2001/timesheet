@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+import { validateSafeText } from "@/utils/validation";
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ message, type, onDone }: { message: string; type: "success" | "error"; onDone: () => void }) {
@@ -303,7 +304,9 @@ function TeamFormModal({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.name.trim()) { setError("Team name is required"); return; }
+        const valErr = validateSafeText(form.name, "Team Name", 100);
+        if (valErr) { setError(valErr); return; }
+        
         setSaving(true);
         setError("");
         try {
@@ -347,6 +350,7 @@ function TeamFormModal({
                             className="w-full px-3 py-2 rounded-lg bg-foreground/[0.02] border border-foreground/10 text-foreground/90 placeholder-foreground/60 focus:outline-none focus:border-blue-500/50 text-sm"
                             placeholder="e.g. Frontend Engineering"
                         />
+                        <p className="text-[10px] text-foreground/40 mt-1">Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed.</p>
                     </div>
 
                     <div>
@@ -951,7 +955,7 @@ export default function TeamsPage() {
     };
 
     return (
-        <div className="flex h-full min-h-screen bg-background text-foreground/90">
+        <div className="-m-6 flex h-full bg-background text-foreground/90" style={{ minHeight: 'calc(100vh - 64px)' }}>
             {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onDone={() => setToastMsg(null)} />}
             {/* Main content */}
             <div className="flex-1 flex flex-col p-6 gap-6">

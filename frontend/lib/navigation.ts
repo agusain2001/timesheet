@@ -89,13 +89,7 @@ export const NAV_ITEMS: NavItem[] = [
         href: "/admin/approvals",
         icon: UserCheck,
         roles: ["admin", "org_admin", "system_admin"],
-    },
-    {
-        name: "Super Admin",
-        href: "/super-admin",
-        icon: Crown,
-        roles: ["system_admin"],
-    },
+    }
 ];
 
 export const BOTTOM_NAV_ITEMS: NavItem[] = [

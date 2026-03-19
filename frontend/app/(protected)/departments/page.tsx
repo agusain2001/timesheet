@@ -38,6 +38,16 @@ function avatarBg(name: string): string {
     return `hsl(${hue}, 60%, 45%)`;
 }
 
+// Allowed: letters, numbers, spaces, hyphens, ampersands, apostrophes, dots, parentheses
+const DEPT_NAME_REGEX = /^[a-zA-Z0-9 \-&'().]+$/;
+function validateDeptName(name: string): string | null {
+    if (!name.trim()) return "Department name is required.";
+    if (name.trim().length < 2) return "Department name must be at least 2 characters.";
+    if (name.trim().length > 80) return "Department name must be 80 characters or fewer.";
+    if (!DEPT_NAME_REGEX.test(name.trim())) return "Department name can only contain letters, numbers, spaces, hyphens (-), ampersands (&), apostrophes (\'), periods (.), and parentheses.";
+    return null;
+}
+
 function StatusBadge({ status }: { status: string }) {
     const colors: Record<string, string> = {
         active: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
@@ -231,7 +241,9 @@ function RowMenu({
     onDelete: () => void;
 }) {
     const [open, setOpen] = useState(false);
+    const [openAbove, setOpenAbove] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
+    const btnRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
         function handleClick(e: MouseEvent) {
@@ -243,10 +255,20 @@ function RowMenu({
         return () => document.removeEventListener("mousedown", handleClick);
     }, [open]);
 
+    const handleToggle = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setOpenAbove(window.innerHeight - rect.bottom < 260);
+        }
+        setOpen(!open);
+    };
+
     return (
         <div ref={ref} className="relative">
             <button
-                onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+                ref={btnRef}
+                onClick={handleToggle}
                 className="w-7 h-7 flex items-center justify-center rounded-md text-foreground/40 hover:text-foreground hover:bg-foreground/10 transition"
             >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -254,7 +276,7 @@ function RowMenu({
                 </svg>
             </button>
             {open && (
-                <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-foreground/10 bg-background shadow-2xl z-50 py-1 overflow-hidden">
+                <div className={`absolute right-0 ${openAbove ? "bottom-full mb-1" : "top-full mt-1"} w-48 rounded-xl border border-foreground/10 bg-background shadow-2xl z-50 py-1 overflow-hidden`}>
                     <button
                         onClick={() => { setOpen(false); onViewDetails(); }}
                         className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs text-foreground/80 hover:bg-foreground/10 hover:text-foreground transition"
@@ -320,9 +342,18 @@ function AddDepartmentModal({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setName(val);
+        // Real-time validation feedback
+        if (val) setError(validateDeptName(val));
+        else setError(null);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim()) { setError("Department name is required."); return; }
+        const nameErr = validateDeptName(name);
+        if (nameErr) { setError(nameErr); return; }
         setSaving(true);
         setError(null);
         try {
@@ -357,16 +388,26 @@ function AddDepartmentModal({
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+                    {/* Error Banner — top of form like Workspace modal */}
+                    {error && (
+                        <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                            {error}
+                        </div>
+                    )}
                     <div className="space-y-1.5">
                         <label className="text-xs font-medium text-foreground/70">Department Name <span className="text-red-400">*</span></label>
                         <input
                             type="text"
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={handleNameChange}
                             placeholder="e.g. Engineering, Marketing..."
                             autoFocus
-                            className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition"
+                            maxLength={80}
+                            className={`w-full border rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 transition ${
+                                error && name ? "border-red-500/50 focus:border-red-500/70" : "border-foreground/15 focus:border-blue-500/50"
+                            }`}
                         />
+                        <p className="text-[10px] text-foreground/40">Only letters, numbers, spaces and basic punctuation (- &amp; &apos; . ) are allowed.</p>
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-xs font-medium text-foreground/70">Description <span className="text-foreground/30">(optional)</span></label>
@@ -378,15 +419,6 @@ function AddDepartmentModal({
                             className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition resize-none"
                         />
                     </div>
-
-                    {error && (
-                        <p className="text-xs text-red-400 flex items-center gap-1.5">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                            </svg>
-                            {error}
-                        </p>
-                    )}
 
                     <div className="flex items-center justify-end gap-2 pt-1">
                         <button
@@ -439,9 +471,17 @@ function EditDepartmentModal({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setName(val);
+        if (val) setError(validateDeptName(val));
+        else setError(null);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim()) { setError("Department name is required."); return; }
+        const nameErr = validateDeptName(name);
+        if (nameErr) { setError(nameErr); return; }
         setSaving(true);
         setError(null);
         try {
@@ -468,15 +508,25 @@ function EditDepartmentModal({
                     </button>
                 </div>
                 <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+                    {/* Error Banner */}
+                    {error && (
+                        <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                            {error}
+                        </div>
+                    )}
                     <div className="space-y-1.5">
                         <label className="text-xs font-medium text-foreground/70">Department Name <span className="text-red-400">*</span></label>
                         <input
                             type="text"
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={handleNameChange}
                             autoFocus
-                            className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition"
+                            maxLength={80}
+                            className={`w-full border rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 transition ${
+                                error && name ? "border-red-500/50 focus:border-red-500/70" : "border-foreground/15 focus:border-blue-500/50"
+                            }`}
                         />
+                        <p className="text-[10px] text-foreground/40">Only letters, numbers, spaces and basic punctuation (- &amp; &apos; . ) are allowed.</p>
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-xs font-medium text-foreground/70">Description <span className="text-foreground/30">(optional)</span></label>
@@ -487,12 +537,6 @@ function EditDepartmentModal({
                             className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition resize-none"
                         />
                     </div>
-                    {error && (
-                        <p className="text-xs text-red-400 flex items-center gap-1.5">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                            {error}
-                        </p>
-                    )}
                     <div className="flex items-center justify-end gap-2 pt-1">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
                         <button type="submit" disabled={saving} className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition flex items-center gap-1.5">
@@ -563,6 +607,74 @@ function DeleteDepartmentModal({
     );
 }
 
+// ============ Bulk Delete Department Modal ============
+function BulkDeleteDepartmentModal({
+    count,
+    onClose,
+    onConfirm,
+}: {
+    count: number;
+    onClose: () => void;
+    onConfirm: () => Promise<void>;
+}) {
+    const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleDelete = async () => {
+        setDeleting(true);
+        setError(null);
+        try {
+            await onConfirm();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to delete departments");
+            setDeleting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-[380px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 overflow-hidden p-6 text-center" onClick={(e) => e.stopPropagation()}>
+                <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-red-500">
+                        <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" />
+                    </svg>
+                </div>
+                <h2 className="text-base font-bold text-foreground mb-1">Delete {count} Departments</h2>
+                <p className="text-xs text-foreground/50 mb-5">This will permanently remove the selected departments and may affect linked members and projects. This action cannot be undone.</p>
+                {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+                <div className="flex gap-2">
+                    <button onClick={onClose} className="flex-1 px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
+                    <button onClick={handleDelete} disabled={deleting} className="flex-1 px-4 py-2 text-xs rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 disabled:opacity-50 transition">
+                        {deleting ? "Deleting..." : "Delete All"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ============ Bulk Selection Bar ============
+function BulkSelectionBar({ count, onDelete, onClear }: { count: number; onDelete: () => void; onClear: () => void; }) {
+    return (
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">{count}</span>
+                <span className="text-xs font-medium text-foreground/80">
+                    {count} department{count > 1 ? "s" : ""} selected
+                </span>
+                <button onClick={onClear} className="text-[10px] text-foreground/40 hover:text-foreground/70 underline transition">Clear</button>
+            </div>
+            <div className="flex items-center gap-2">
+                <button onClick={onDelete}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/90 text-white hover:bg-red-500 transition">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" /></svg>
+                    Delete Selected
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function DeptSkeleton() {
     return (
         <div className="space-y-5">
@@ -606,10 +718,20 @@ export default function DepartmentsPage() {
     const [addModal, setAddModal] = useState(false);
     const [editModal, setEditModal] = useState<Department | null>(null);
     const [deleteModal, setDeleteModal] = useState<Department | null>(null);
+    const [bulkDeleteModal, setBulkDeleteModal] = useState(false);
 
     // Toast
     const [toastMsg, setToastMsg] = useState<{ message: string; type: "success" | "error" } | null>(null);
     const showToast = useCallback((message: string, type: "success" | "error" = "success") => setToastMsg({ message, type }), []);
+
+    const handleBulkDelete = async () => {
+        const ids = Array.from(selectedIds);
+        await Promise.all(ids.map(id => deleteDepartment(id)));
+        setSelectedIds(new Set());
+        setBulkDeleteModal(false);
+        fetchDepartments();
+        showToast(`Successfully deleted ${ids.length} department${ids.length > 1 ? 's' : ''}`);
+    };
 
     const fetchDepartments = useCallback(() => {
         const token = getToken();
@@ -677,15 +799,17 @@ export default function DepartmentsPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-foreground">Departments</h1>
-                <button
-                    onClick={() => setAddModal(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 active:scale-95 transition"
-                >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                        <path d="M12 5v14M5 12h14" />
-                    </svg>
-                    Add Department
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setAddModal(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 active:scale-95 transition"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                            <path d="M12 5v14M5 12h14" />
+                        </svg>
+                        Add Department
+                    </button>
+                </div>
             </div>
 
             {/* How It Works */}
@@ -700,6 +824,15 @@ export default function DepartmentsPage() {
                     "Use the Sort By No. of Members button to order departments by headcount.",
                 ]}
             />
+            
+            {/* Bulk Selection Bar — shown when 1+ selected */}
+            {selectedIds.size > 0 && (
+                <BulkSelectionBar
+                    count={selectedIds.size}
+                    onDelete={() => setBulkDeleteModal(true)}
+                    onClear={() => setSelectedIds(new Set())}
+                />
+            )}
 
             {/* Toolbar */}
             <div className="flex items-center justify-between">
@@ -857,6 +990,13 @@ export default function DepartmentsPage() {
                     dept={deleteModal}
                     onClose={() => setDeleteModal(null)}
                     onDeleted={() => { fetchDepartments(); showToast("Department deleted successfully"); }}
+                />
+            )}
+            {bulkDeleteModal && (
+                <BulkDeleteDepartmentModal
+                    count={selectedIds.size}
+                    onClose={() => setBulkDeleteModal(false)}
+                    onConfirm={handleBulkDelete}
                 />
             )}
             {toastMsg && (

@@ -49,12 +49,6 @@ def get_all_support_requests(
     response_list = []
     for req in results:
         resp = SupportRequestResponse.model_validate(req)
-        # Parse recipient_ids from JSON string
-        if req.recipient_ids:
-            try:
-                resp.recipient_ids = json.loads(req.recipient_ids)
-            except (json.JSONDecodeError, TypeError):
-                resp.recipient_ids = []
         # Load user info
         if req.user:
             resp.user = UserBrief.model_validate(req.user)
@@ -76,11 +70,6 @@ def get_my_support_requests(
     response_list = []
     for req in results:
         resp = SupportRequestResponse.model_validate(req)
-        if req.recipient_ids:
-            try:
-                resp.recipient_ids = json.loads(req.recipient_ids)
-            except (json.JSONDecodeError, TypeError):
-                resp.recipient_ids = []
         if req.user:
             resp.user = UserBrief.model_validate(req.user)
         response_list.append(resp)
@@ -151,11 +140,6 @@ def create_support_request(
     
     # Build response
     resp = SupportRequestResponse.model_validate(db_request)
-    if db_request.recipient_ids:
-        try:
-            resp.recipient_ids = json.loads(db_request.recipient_ids)
-        except (json.JSONDecodeError, TypeError):
-            resp.recipient_ids = []
     if db_request.user:
         resp.user = UserBrief.model_validate(db_request.user)
     
@@ -178,11 +162,6 @@ def get_support_request(
         raise HTTPException(status_code=403, detail="Not authorized")
     
     resp = SupportRequestResponse.model_validate(request)
-    if request.recipient_ids:
-        try:
-            resp.recipient_ids = json.loads(request.recipient_ids)
-        except (json.JSONDecodeError, TypeError):
-            resp.recipient_ids = []
     if request.user:
         resp.user = UserBrief.model_validate(request.user)
     
@@ -235,11 +214,6 @@ def update_support_request(
         )
     
     resp = SupportRequestResponse.model_validate(request)
-    if request.recipient_ids:
-        try:
-            resp.recipient_ids = json.loads(request.recipient_ids)
-        except (json.JSONDecodeError, TypeError):
-            resp.recipient_ids = []
     if request.user:
         resp.user = UserBrief.model_validate(request.user)
     

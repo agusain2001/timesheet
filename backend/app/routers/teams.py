@@ -99,33 +99,38 @@ class TeamWorkloadResponse(BaseModel):
 
 # =============== Helper Functions ===============
 
+def _build_member_response(tm: TeamMember, user: Optional[User]) -> TeamMemberResponse:
+    """Build a TeamMemberResponse from a TeamMember and optional User."""
+    return TeamMemberResponse(
+        id=str(tm.id),
+        user_id=str(tm.user_id),
+        user_name=str(user.full_name) if user else None,
+        user_email=str(user.email) if user else None,
+        user_avatar=str(user.avatar_url) if user and getattr(user, "avatar_url", None) else None,
+        role=str(tm.role),
+        allocation_percentage=float(tm.allocation_percentage or 100),
+        start_date=tm.start_date,  # type: ignore[arg-type]
+        end_date=tm.end_date,  # type: ignore[arg-type]
+        is_active=bool(tm.is_active),
+    )
+
+
 def build_team_response(team: Team, db: Session, include_subtems: bool = False) -> dict:
     """Build team response with members and stats."""
     members = []
     for tm in team.members:
         user = db.query(User).filter(User.id == tm.user_id).first()
-        members.append(TeamMemberResponse(
-            id=tm.id,
-            user_id=tm.user_id,
-            user_name=user.full_name if user else None,
-            user_email=user.email if user else None,
-            user_avatar=user.avatar_url if user else None,
-            role=tm.role,
-            allocation_percentage=tm.allocation_percentage,
-            start_date=tm.start_date,
-            end_date=tm.end_date,
-            is_active=tm.is_active
-        ))
-    
+        members.append(_build_member_response(tm, user))
+
     lead_name = None
-    if team.lead_id:
+    if team.lead_id:  # type: ignore[truthy-bool]
         lead = db.query(User).filter(User.id == team.lead_id).first()
-        lead_name = lead.full_name if lead else None
+        lead_name = str(lead.full_name) if lead else None
 
     department_name = None
-    if team.department_id:
+    if team.department_id:  # type: ignore[truthy-bool]
         dept = db.query(Department).filter(Department.id == team.department_id).first()
-        department_name = dept.name if dept else None
+        department_name = str(dept.name) if dept else None
     
     sub_teams_list = []
     if include_subtems and team.sub_teams:
@@ -205,8 +210,8 @@ def create_team(
         icon=team_data.icon
     )
     # Stamp organization
-    if hasattr(current_user, 'organization_id') and current_user.organization_id:
-        db_team.organization_id = current_user.organization_id
+    if hasattr(current_user, 'organization_id') and current_user.organization_id:  # type: ignore[truthy-bool]
+        db_team.organization_id = current_user.organization_id  # type: ignore[assignment]
     db.add(db_team)
     db.flush()
     
@@ -348,19 +353,8 @@ def get_team_members(
         if not include_inactive and not tm.is_active:
             continue
         user = db.query(User).filter(User.id == tm.user_id).first()
-        members.append(TeamMemberResponse(
-            id=tm.id,
-            user_id=tm.user_id,
-            user_name=user.full_name if user else None,
-            user_email=user.email if user else None,
-            user_avatar=user.avatar_url if user else None,
-            role=tm.role,
-            allocation_percentage=tm.allocation_percentage,
-            start_date=tm.start_date,
-            end_date=tm.end_date,
-            is_active=tm.is_active
-        ))
-    
+        members.append(_build_member_response(tm, user))
+
     return members
 
 
@@ -389,27 +383,16 @@ def add_team_member(
     ).first()
     
     if existing:
-        if existing.is_active:
+        if bool(existing.is_active):
             raise HTTPException(status_code=400, detail="User is already a team member")
         # Reactivate
-        existing.is_active = True
-        existing.role = member_data.role
-        existing.allocation_percentage = member_data.allocation_percentage
+        existing.is_active = True  # type: ignore[assignment]
+        existing.role = member_data.role  # type: ignore[assignment]
+        existing.allocation_percentage = member_data.allocation_percentage  # type: ignore[assignment]
         db.commit()
         db.refresh(existing)
-        return TeamMemberResponse(
-            id=existing.id,
-            user_id=existing.user_id,
-            user_name=user.full_name,
-            user_email=user.email,
-            user_avatar=user.avatar_url,
-            role=existing.role,
-            allocation_percentage=existing.allocation_percentage,
-            start_date=existing.start_date,
-            end_date=existing.end_date,
-            is_active=existing.is_active
-        )
-    
+        return _build_member_response(existing, user)
+
     team_member = TeamMember(
         team_id=team_id,
         user_id=member_data.user_id,
@@ -421,19 +404,8 @@ def add_team_member(
     db.add(team_member)
     db.commit()
     db.refresh(team_member)
-    
-    return TeamMemberResponse(
-        id=team_member.id,
-        user_id=team_member.user_id,
-        user_name=user.full_name,
-        user_email=user.email,
-        user_avatar=user.avatar_url,
-        role=team_member.role,
-        allocation_percentage=team_member.allocation_percentage,
-        start_date=team_member.start_date,
-        end_date=team_member.end_date,
-        is_active=team_member.is_active
-    )
+
+    return _build_member_response(team_member, user)
 
 
 @router.delete("/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -454,8 +426,8 @@ def remove_team_member(
     if not member:
         raise HTTPException(status_code=404, detail="Team member not found")
     
-    member.is_active = False
-    member.end_date = date.today()
+    member.is_active = False  # type: ignore[assignment]
+    member.end_date = date.today()  # type: ignore[assignment]
     db.commit()
     return None
 
@@ -474,21 +446,21 @@ def get_team_workload(
     # Get active members
     active_members = [m for m in team.members if m.is_active]
     
-    # Calculate total capacity
-    total_capacity = sum(
-        (m.allocation_percentage / 100) * team.capacity_hours_week
+    # Calculate total capacity (cast to float for pyright compatibility)
+    total_capacity = float(sum(
+        float(m.allocation_percentage or 100) / 100 * float(team.capacity_hours_week or 40)
         for m in active_members
-    )
-    
+    ))
+
     # Get active tasks for the team
     active_tasks = db.query(Task).filter(
         Task.team_id == team_id,
         Task.status.in_(["todo", "in_progress", "waiting", "blocked", "review"])
     ).all()
-    
+
     # Calculate allocated hours
-    allocated_hours = sum(t.estimated_hours or 0 for t in active_tasks)
-    
+    allocated_hours = float(sum(float(t.estimated_hours or 0) for t in active_tasks))
+
     # Get completed tasks this week
     from datetime import timedelta
     week_start = datetime.utcnow().date() - timedelta(days=datetime.utcnow().weekday())
@@ -497,35 +469,35 @@ def get_team_workload(
         Task.status == "completed",
         Task.completed_at >= week_start
     ).count()
-    
+
     # Calculate utilization
-    utilization = (allocated_hours / total_capacity * 100) if total_capacity > 0 else 0
-    
+    utilization = (allocated_hours / total_capacity * 100) if total_capacity > 0 else 0.0
+
     # Find overloaded and underutilized members
     overloaded = []
     underutilized = []
-    
+
     for member in active_members:
-        member_capacity = (member.allocation_percentage / 100) * team.capacity_hours_week
+        member_capacity = float(member.allocation_percentage or 100) / 100 * float(team.capacity_hours_week or 40)
         member_tasks = db.query(Task).filter(
             Task.assignee_id == member.user_id,
             Task.status.in_(["todo", "in_progress"])
         ).all()
-        member_hours = sum(t.estimated_hours or 0 for t in member_tasks)
-        
+        member_hours = float(sum(float(t.estimated_hours or 0) for t in member_tasks))
+
         user = db.query(User).filter(User.id == member.user_id).first()
         if user:
             if member_hours > member_capacity * 1.1:  # >110% capacity
-                overloaded.append(user.full_name)
+                overloaded.append(str(user.full_name))
             elif member_hours < member_capacity * 0.5:  # <50% capacity
-                underutilized.append(user.full_name)
-    
+                underutilized.append(str(user.full_name))
+
     return TeamWorkloadResponse(
-        team_id=team.id,
-        team_name=team.name,
+        team_id=str(team.id),
+        team_name=str(team.name),
         total_capacity_hours=total_capacity,
         allocated_hours=allocated_hours,
-        available_hours=max(0, total_capacity - allocated_hours),
+        available_hours=max(0.0, total_capacity - allocated_hours),
         utilization_percentage=round(utilization, 1),
         overloaded_members=overloaded,
         underutilized_members=underutilized,

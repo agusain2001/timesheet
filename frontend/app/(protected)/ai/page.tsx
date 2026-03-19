@@ -662,7 +662,7 @@ export default function AIPage() {
     // ═══════════════════════════════════════════════════════════════════════════
 
     return (
-        <div className="flex flex-col h-[calc(100vh-64px)] bg-background text-foreground" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+        <div className="-m-6 flex flex-col bg-background text-foreground" style={{ height: 'calc(100vh - 64px)' }} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
 
             {/* How It Works */}
             <div className="px-6 pt-3">

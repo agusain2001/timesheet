@@ -360,7 +360,7 @@ export default function AllTasksPage() {
     };
 
     return (
-        <div className="flex flex-col h-full min-h-screen bg-background text-foreground p-4 gap-4">
+        <div className="flex flex-col h-full bg-background text-foreground gap-4">
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>

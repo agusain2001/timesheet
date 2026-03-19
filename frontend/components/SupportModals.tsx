@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createSupportRequest, getSupportUsers, type SupportUser, type SupportRequestCreate } from "@/services/support";
+import { validateSafeText } from "@/utils/validation";
 
 // ============ Helpers ============
 
@@ -52,6 +53,7 @@ export function AddRequestModal({
     const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
     const [showModuleDropdown, setShowModuleDropdown] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
     // Search users
@@ -84,10 +86,17 @@ export function AddRequestModal({
         setMessage("");
         setPriority("normal");
         setRelatedModule("");
+        setError(null);
     };
 
     const handleSubmit = async (isDraft: boolean) => {
         if (!message.trim()) return;
+        const valErr = validateSafeText(subject, "Subject", 150);
+        if (valErr && subject.trim().length > 0) { setError(valErr); return; } // Allow empty since it's an optional field based on the schema, wait it is actually used as title? I will enforce it or just check if provided.
+        // Actually earlier it says `subject.trim() || undefined`. So if empty, valid.
+        if (subject.trim().length > 0 && valErr) { setError(valErr); return; }
+        
+        setError(null);
         setSubmitting(true);
         try {
             const data: SupportRequestCreate = {
@@ -142,6 +151,13 @@ export function AddRequestModal({
                 </div>
 
                 <div className="space-y-4 mt-5">
+                    {/* Error Banner */}
+                    {error && (
+                        <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                            {error}
+                        </div>
+                    )}
+                    
                     {/* To - Recipient Picker */}
                     <div className="relative">
                         <div className="flex flex-wrap items-center gap-1.5 border border-foreground/15 rounded-lg px-3 py-2.5 min-h-[44px] bg-foreground/[0.03]">
@@ -199,13 +215,16 @@ export function AddRequestModal({
                     </div>
 
                     {/* Subject */}
-                    <input
-                        type="text"
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        placeholder="Subject:"
-                        className="w-full border border-foreground/15 rounded-lg px-3 py-2.5 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/40 focus:border-blue-500/40 transition"
-                    />
+                    <div>
+                        <input
+                            type="text"
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                            placeholder="Subject:"
+                            className="w-full border border-foreground/15 rounded-lg px-3 py-2.5 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/40 focus:border-blue-500/40 transition"
+                        />
+                        <p className="text-[10px] text-foreground/40 mt-1">Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed.</p>
+                    </div>
 
                     {/* Message */}
                     <textarea

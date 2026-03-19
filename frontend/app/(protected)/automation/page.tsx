@@ -15,6 +15,7 @@ import {
 } from "@/services/automation";
 import { HowItWorks } from "@/components/ui/HowItWorks";
 import { toast } from "sonner";
+import { validateSafeText } from "@/utils/validation";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -362,8 +363,10 @@ function RuleModal({ rule, onSave, onClose }: {
     };
 
     const handleSave = async () => {
-        if (!form.name.trim()) { setError("Name is required"); return; }
+        const valErr = validateSafeText(form.name, "Rule Name", 150);
+        if (valErr) { setError(valErr); return; }
         if (form.actions.length === 0) { setError("At least one action is required"); return; }
+        
         setSaving(true); setError("");
         try {
             if (rule?.id) await updateAutomationRule(rule.id, form);
@@ -412,6 +415,7 @@ function RuleModal({ rule, onSave, onClose }: {
                             className={inputCls}
                             placeholder="e.g. Notify manager on overdue task"
                         />
+                        <p className="text-[10px] text-foreground/40 mt-1">Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed.</p>
                     </div>
 
                     {/* Description */}
@@ -646,7 +650,7 @@ export default function AutomationPage() {
     };
 
     return (
-        <div className="min-h-screen p-6 space-y-6 bg-background text-foreground">
+        <div className="space-y-6 bg-background text-foreground">
 
             {/* ─── Header ─── */}
             <div className="flex items-center justify-between">

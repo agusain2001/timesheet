@@ -299,7 +299,7 @@ export default function IntegrationsPage() {
     ];
 
     return (
-        <div className="min-h-screen p-6 space-y-6 bg-background text-foreground">
+        <div className="space-y-6 bg-background text-foreground">
             {/* Toast */}
             {toast && (
                 <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white text-sm shadow-2xl">

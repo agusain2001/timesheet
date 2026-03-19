@@ -117,7 +117,7 @@ export default function ManagerDashboard() {
     } : { total: 0, in_progress: 0, blocked: 0, completed: 0 };
 
     return (
-        <div className="min-h-screen p-6 bg-background text-foreground space-y-6">
+        <div className="space-y-6 bg-background text-foreground">
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>

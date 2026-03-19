@@ -143,7 +143,7 @@ export default function SearchPage() {
     (response?.results ?? []).forEach((r) => { (grouped[r.entity_type] ??= []).push(r); });
 
     return (
-        <div className="min-h-screen p-6 bg-background text-foreground flex gap-6">
+        <div className="bg-background text-foreground flex gap-6">
             {/* Saved Filters Sidebar */}
             <aside className="w-56 shrink-0 space-y-4 pt-1">
                 <div>

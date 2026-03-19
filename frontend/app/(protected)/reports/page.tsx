@@ -607,7 +607,7 @@ export default function ReportsPage() {
     const yKey = isLineChart ? "completed" : (Object.keys(chartData[0] || {})[1] ?? "value");
 
     return (
-        <div className="min-h-screen flex bg-background text-foreground">
+        <div className="-m-6 flex h-full bg-background text-foreground" style={{ minHeight: 'calc(100vh - 64px)' }}>
             {/* Sidebar */}
             <aside className="w-56 border-r border-foreground/10 bg-foreground/[0.01] p-4 flex flex-col gap-1 shrink-0">
                 <h2 className="text-xs font-semibold text-foreground/50 uppercase tracking-wider mb-3">Reports</h2>

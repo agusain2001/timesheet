@@ -70,6 +70,9 @@ from app.models.custom_field import CustomFieldDefinition, CustomFieldValue, Fie
 # Chat History
 from app.models.chat_history import ChatHistory
 
+# Dropdown Config
+from app.models.dropdown_config import DropdownConfig
+
 # Page Access
 from app.models.page_access import UserPageAccess, ALWAYS_ACCESSIBLE, RESTRICTED_PAGES, ALL_PAGE_KEYS, get_accessible_pages
 
@@ -147,6 +150,9 @@ __all__ = [
 
     # Chat History
     "ChatHistory",
+
+    # Dropdown Config
+    "DropdownConfig",
 
     # Page Access
     "UserPageAccess", "ALWAYS_ACCESSIBLE", "RESTRICTED_PAGES", "ALL_PAGE_KEYS", "get_accessible_pages",

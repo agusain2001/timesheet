@@ -74,7 +74,7 @@ export default function ApprovalsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-background text-foreground p-6 lg:p-8">
+        <div className="bg-background text-foreground">
             {/* Toast */}
             {toast && (
                 <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium flex items-center gap-2 transition-all ${toast.type === "success" ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}>

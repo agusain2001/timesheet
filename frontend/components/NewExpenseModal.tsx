@@ -5,11 +5,13 @@ import { createPortal } from "react-dom";
 import {
     createExpense,
     updateExpense,
+    uploadReceipt,
     type Expense,
     type ExpenseCreate,
     type ExpenseItemCreate,
     type ExpenseType,
 } from "@/services/expenses";
+import { validateSafeText } from "@/utils/validation";
 interface ProjectOption {
     id: string;
     name: string;
@@ -184,7 +186,8 @@ export default function NewExpenseModal({ isOpen, onClose, onExpenseCreated, pro
     };
 
     const handleSave = async (asDraft: boolean) => {
-        if (!title.trim()) { setError("Title is required"); return; }
+        const valErr = validateSafeText(title, "Title", 100);
+        if (valErr) { setError(valErr); return; }
 
         setSaving(true);
         setError(null);
@@ -198,8 +201,9 @@ export default function NewExpenseModal({ isOpen, onClose, onExpenseCreated, pro
                     description: it.name,
                 }));
 
+            let expenseObj;
             if (editExpense) {
-                await updateExpense(editExpense.id, {
+                expenseObj = await updateExpense(editExpense.id, {
                     title,
                     project_id: projectId || undefined,
                     items: expenseItems.length > 0 ? expenseItems : undefined,
@@ -211,7 +215,15 @@ export default function NewExpenseModal({ isOpen, onClose, onExpenseCreated, pro
                     project_id: projectId || undefined,
                     items: expenseItems.length > 0 ? expenseItems : undefined,
                 };
-                await createExpense(data);
+                expenseObj = await createExpense(data);
+            }
+
+            if (receiptFiles.length > 0 && expenseObj && expenseObj.id && expenseObj.items) {
+                const items = expenseObj.items;
+                await Promise.all(receiptFiles.map((file, idx) => {
+                    const matchedItem = items[Math.min(idx, items.length - 1)];
+                    return uploadReceipt(expenseObj.id, file, matchedItem?.id);
+                }));
             }
 
             onExpenseCreated();
@@ -259,6 +271,7 @@ export default function NewExpenseModal({ isOpen, onClose, onExpenseCreated, pro
                                     placeholder="e.g. Hotel Expense"
                                     className="w-full px-3 py-2 text-sm rounded-lg bg-foreground/5 border border-foreground/10 text-foreground placeholder-foreground/30 outline-none focus:border-blue-500/50 transition"
                                 />
+                                <p className="text-[10px] text-foreground/40 mt-1">Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed.</p>
                             </div>
                             {/* Category */}
                             <div ref={categoryRef} className="relative">
@@ -379,7 +392,7 @@ export default function NewExpenseModal({ isOpen, onClose, onExpenseCreated, pro
                             <div className="flex justify-end">
                                 <button onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-foreground/15 text-foreground hover:bg-foreground/5 transition">
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                    + New Item
+                                    New Item
                                 </button>
                             </div>
                         </div>
@@ -396,21 +409,42 @@ export default function NewExpenseModal({ isOpen, onClose, onExpenseCreated, pro
                     {/* Receipt Upload */}
                     <div>
                         <h3 className="text-sm font-semibold text-foreground mb-3">Receipt Upload</h3>
-                        <div className="flex items-center gap-3">
-                            <label className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg bg-foreground/5 border border-foreground/10 cursor-pointer hover:border-foreground/20 transition">
-                                <span className="text-sm text-foreground/30 flex-1">
-                                    {receiptFiles.length > 0 ? `${receiptFiles.length} file(s) selected` : "Upload a File (.jpg, .png, .jpeg)"}
-                                </span>
-                                <svg className="w-4 h-4 text-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                </svg>
-                                <input type="file" accept=".jpg,.jpeg,.png" multiple className="hidden"
-                                    onChange={(e) => { if (e.target.files) setReceiptFiles(Array.from(e.target.files)); }}
-                                />
-                            </label>
-                            <button className="w-9 h-9 rounded-lg border border-foreground/10 flex items-center justify-center text-foreground/40 hover:bg-foreground/5 transition">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                            </button>
+                        <div className="flex flex-col gap-3">
+                            <div className="flex items-center gap-3">
+                                <label className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg bg-foreground/5 border border-foreground/10 cursor-pointer hover:border-foreground/20 transition">
+                                    <span className="text-sm text-foreground/30 flex-1">
+                                        Upload a File (.jpg, .png, .jpeg, .pdf)
+                                    </span>
+                                    <svg className="w-4 h-4 text-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                    </svg>
+                                    <input id="receipt-upload-input" type="file" accept=".jpg,.jpeg,.png,.pdf" multiple className="hidden"
+                                        onChange={(e) => { 
+                                            if (e.target.files) {
+                                                setReceiptFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                e.target.value = "";
+                                            } 
+                                        }}
+                                    />
+                                </label>
+                                <button type="button" onClick={() => document.getElementById('receipt-upload-input')?.click()} className="flex-shrink-0 w-9 h-9 rounded-lg border border-foreground/10 flex items-center justify-center text-foreground/40 hover:bg-foreground/5 transition">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                </button>
+                            </div>
+                            
+                            {/* Selected Files List */}
+                            {receiptFiles.length > 0 && (
+                                <div className="space-y-2 mt-1">
+                                    {receiptFiles.map((file, idx) => (
+                                        <div key={idx} className="flex items-center justify-between px-3 py-2 text-sm rounded-lg bg-foreground/5 border border-foreground/10">
+                                            <span className="text-foreground/80 truncate pr-4">{file.name}</span>
+                                            <button type="button" onClick={() => setReceiptFiles(prev => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-500 transition">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 

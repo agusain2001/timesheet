@@ -463,15 +463,24 @@ async def upload_receipt(
     # Save the file
     file_path = await save_receipt(file, expense_id, item_id)
     
-    # Update expense item if specified
+    # Update expense item if specified, else use the first item
+    item = None
     if item_id:
         item = db.query(ExpenseItem).filter(
             ExpenseItem.id == item_id,
             ExpenseItem.expense_id == expense_id
         ).first()
-        if item:
+    else:
+        item = db.query(ExpenseItem).filter(
+            ExpenseItem.expense_id == expense_id
+        ).first()
+        
+    if item:
+        if item.receipt_path:
+            item.receipt_path = f"{item.receipt_path},{file_path}"
+        else:
             item.receipt_path = file_path
-            db.commit()
+        db.commit()
     
     return {"message": "Receipt uploaded successfully", "path": file_path}
 

@@ -67,7 +67,7 @@ export async function getSupportRequests(params?: {
     skip?: number;
     limit?: number;
 }): Promise<SupportRequest[]> {
-    return apiGet<SupportRequest[]>(BASE_URL, params as Record<string, string | number | boolean | undefined>);
+    return apiGet<SupportRequest[]>(`${BASE_URL}/`, params as Record<string, string | number | boolean | undefined>);
 }
 
 /**
@@ -95,7 +95,7 @@ export async function getSupportRequest(id: string): Promise<SupportRequest> {
  * Create a new support request
  */
 export async function createSupportRequest(data: SupportRequestCreate): Promise<SupportRequest> {
-    return apiPost<SupportRequest>(BASE_URL, data);
+    return apiPost<SupportRequest>(`${BASE_URL}/`, data);
 }
 
 /**

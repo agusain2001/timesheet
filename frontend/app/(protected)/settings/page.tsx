@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import {
     User, Shield, Bell, Eye, Camera, Lock, Smartphone,
     EyeOff, Eye as EyeIcon, Save, AlertTriangle,
@@ -163,13 +163,15 @@ const TABS = [
 
 type TabId = typeof TABS[number]["id"];
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // PROFILE TAB
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function ProfileTab({ profile, onUpdate }: { profile: SettingsProfile | null; onUpdate: (p: SettingsProfile) => void }) {
     const [form, setForm] = useState({ full_name: "", phone: "", employee_id_display: "", emergency_contact_name: "", emergency_contact_no: "", bio: "", city: "", pincode: "", tax_address: "" });
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState<ToastState | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
     useEffect(() => {
         if (profile) setForm({ full_name: profile.full_name ?? "", phone: profile.phone ?? "", employee_id_display: profile.employee_id_display ?? "", emergency_contact_name: profile.emergency_contact_name ?? "", emergency_contact_no: profile.emergency_contact_no ?? "", bio: profile.bio ?? "", city: profile.city ?? "", pincode: profile.pincode ?? "", tax_address: profile.tax_address ?? "" });
@@ -192,6 +194,25 @@ function ProfileTab({ profile, onUpdate }: { profile: SettingsProfile | null; on
         } finally { setSaving(false); }
     };
 
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingAvatar(true);
+        showToast("Uploading avatar...", "loading");
+        try {
+            const { uploadSettingsAvatar } = await import("@/services/settings");
+            const updated = await uploadSettingsAvatar(file);
+            onUpdate(updated);
+            showToast("Avatar updated!", "success");
+        } catch (e: any) {
+            showToast(e?.message ?? "Failed to upload avatar", "error");
+        } finally {
+            setUploadingAvatar(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
     const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
         setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -201,11 +222,14 @@ function ProfileTab({ profile, onUpdate }: { profile: SettingsProfile | null; on
             <Section title="Basic Information" icon={User} accent="#3b82f6">
                 <div className="flex items-center gap-5 mb-6">
                     <div className="relative shrink-0">
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
-                            {profile ? avatar(profile.full_name) : "â€”"}
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleAvatarUpload} />
+                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl overflow-hidden shadow-sm border border-foreground/10">
+                            {profile?.avatar_url ? (
+                                <img src={profile.avatar_url.startsWith('http') ? profile.avatar_url : `${process.env.NEXT_PUBLIC_API_URL || ""}${profile.avatar_url}`} alt="Avatar" className="w-full h-full object-cover" />
+                            ) : profile ? avatar(profile.full_name) : "â€”"}
                         </div>
-                        <button className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white hover:bg-blue-700 transition" title="Change avatar">
-                            <Camera size={11} />
+                        <button disabled={uploadingAvatar} onClick={() => fileInputRef.current?.click()} className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-600 border-2 border-background flex items-center justify-center text-white hover:bg-blue-700 transition disabled:opacity-50" title="Change avatar">
+                            {uploadingAvatar ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
                         </button>
                     </div>
                     <div>

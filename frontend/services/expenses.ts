@@ -1,8 +1,8 @@
 /**
  * Expenses API Service - Complete expense management operations
  */
-
 import { apiGet, apiPost, apiPut, apiDelete } from "./api";
+import { getToken } from "@/lib/auth";
 
 // ============================================
 // Types
@@ -288,9 +288,16 @@ export async function uploadReceipt(expenseId: string, file: File, itemId?: stri
         formData.append("item_id", itemId);
     }
 
-    const response = await fetch(`${BASE_URL}/${expenseId}/receipt`, {
+    const token = getToken();
+    const headers: HeadersInit = {};
+    if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${BASE_URL}/${expenseId}/upload-receipt`, {
         method: "POST",
         body: formData,
+        headers,
         credentials: "include",
     });
 

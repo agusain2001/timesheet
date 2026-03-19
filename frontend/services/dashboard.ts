@@ -36,8 +36,18 @@ export interface PersonalDashboard {
     recent_activity: RecentActivity[];
 }
 
+export interface DateFilter {
+    startDate?: string; // YYYY-MM-DD
+    endDate?: string;   // YYYY-MM-DD
+}
+
 // ============ API Functions ============
 
-export async function getPersonalDashboard(): Promise<PersonalDashboard> {
-    return apiGet<PersonalDashboard>("/api/dashboard/personal");
+export async function getPersonalDashboard(filter?: DateFilter): Promise<PersonalDashboard> {
+    const params = new URLSearchParams();
+    if (filter?.startDate) params.set("start_date", filter.startDate);
+    if (filter?.endDate) params.set("end_date", filter.endDate);
+    const qs = params.toString();
+    return apiGet<PersonalDashboard>(`/api/dashboard/personal${qs ? `?${qs}` : ""}`);
 }
+

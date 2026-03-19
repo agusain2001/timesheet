@@ -120,7 +120,7 @@ export default function OrganizationSettingsPage() {
         setLoading(true);
         setError("");
         try {
-            const data = await apiFetch<OrgData>("/organizations/my");
+            const data = await apiFetch<OrgData>("/api/organizations/my");
             setOrg(data);
         } catch (e: any) {
             setError(e.message || "Failed to load organization");
@@ -135,7 +135,7 @@ export default function OrganizationSettingsPage() {
         if (!org) return;
         setSaving(true);
         try {
-            const updated = await apiFetch<OrgData>(`/organizations/${org.id}`, {
+            const updated = await apiFetch<OrgData>(`/api/organizations/${org.id}`, {
                 method: "PUT",
                 body: JSON.stringify({ [field]: value || null }),
             });
@@ -167,7 +167,7 @@ export default function OrganizationSettingsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-background text-foreground p-6 lg:p-8 max-w-4xl mx-auto">
+        <div className="bg-background text-foreground max-w-4xl mx-auto">
             {/* Toast */}
             {toast && (
                 <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium flex items-center gap-2 ${toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}>

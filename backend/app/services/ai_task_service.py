@@ -24,7 +24,7 @@ class AITaskService:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=settings.gemini_api_key)
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
+                self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
             except Exception as e:
                 print(f"Failed to init AI model: {e}")
     

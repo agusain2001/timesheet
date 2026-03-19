@@ -524,13 +524,24 @@ function RowMenu({ onViewDetails, onEdit, onProjects, onDelete }: {
     onViewDetails: () => void; onEdit: () => void; onProjects: () => void; onDelete: () => void;
 }) {
     const [open, setOpen] = useState(false);
+    const [openAbove, setOpenAbove] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
+    const btnRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
         const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
         if (open) document.addEventListener("mousedown", handler);
         return () => document.removeEventListener("mousedown", handler);
     }, [open]);
+
+    const handleToggle = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setOpenAbove(window.innerHeight - rect.bottom < 220);
+        }
+        setOpen(!open);
+    };
 
     const item = (label: string, icon: React.ReactNode, action: () => void, danger = false) => (
         <button onClick={() => { setOpen(false); action(); }}
@@ -541,12 +552,12 @@ function RowMenu({ onViewDetails, onEdit, onProjects, onDelete }: {
 
     return (
         <div ref={ref} className="relative">
-            <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+            <button ref={btnRef} onClick={handleToggle}
                 className="w-7 h-7 flex items-center justify-center rounded-md text-foreground/40 hover:text-foreground hover:bg-foreground/10 transition">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
             </button>
             {open && (
-                <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-foreground/10 bg-background shadow-2xl z-50 py-1 overflow-hidden">
+                <div className={`absolute right-0 ${openAbove ? "bottom-full mb-1" : "top-full mt-1"} w-44 rounded-xl border border-foreground/10 bg-background shadow-2xl z-50 py-1 overflow-hidden`}>
                     {item("View Details", <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>, onViewDetails)}
                     {item("Edit Client", <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>, onEdit)}
                     {item("Related Project", <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>, onProjects)}
@@ -710,7 +721,7 @@ export default function ClientsPage() {
             </div>
 
             {/* Table */}
-            <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] overflow-hidden">
+            <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] overflow-visible">
                 {/* Header */}
                 <div className="grid grid-cols-[40px_1fr_160px_160px_160px_160px_48px] items-center px-4 py-3 border-b border-foreground/10 text-xs font-semibold text-foreground/40 uppercase tracking-wider">
                     <div>

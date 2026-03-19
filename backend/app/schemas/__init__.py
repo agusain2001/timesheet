@@ -1,6 +1,7 @@
+import json
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 # =============== User Schemas ===============
@@ -788,6 +789,15 @@ class SupportRequestResponse(SupportRequestBase):
     updated_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     user: Optional[UserBrief] = None
+    
+    @field_validator('recipient_ids', mode='before')
+    def parse_recipient_ids(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
     
     class Config:
         from_attributes = True

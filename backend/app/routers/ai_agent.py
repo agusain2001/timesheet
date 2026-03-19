@@ -620,7 +620,7 @@ Rules:
         )
 
         tool_calls_made: List[ToolCall] = []
-        chat = client.chats.create(model="gemini-2.5-flash", history=history, config=config)
+        chat = client.chats.create(model="gemini-2.0-flash-exp", history=history, config=config)
         response = chat.send_message(message)
 
         # Agentic loop

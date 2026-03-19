@@ -1,5 +1,6 @@
 import { apiGet, apiPut, apiPost } from "@/services/api";
 import { ApiError } from "@/lib/fetcher";
+import { getToken } from "@/lib/auth";
 
 // ---- Types ----
 
@@ -79,6 +80,35 @@ export const updateSettingsProfile = (data: ProfileUpdatePayload) =>
 
 export const getSecuritySettings = () =>
     apiGet<SecuritySettings>("/api/settings/security");
+
+export const uploadSettingsAvatar = async (file: File): Promise<SettingsProfile> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    try {
+        const token = getToken() || "";
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const response = await fetch(`${apiUrl}/api/settings/profile/avatar`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.detail || "Failed to upload avatar");
+        }
+        
+        return await response.json();
+    } catch (err) {
+        if (err instanceof Error) {
+            throw err;
+        }
+        throw new Error("Failed to upload avatar");
+    }
+};
 
 export const changePassword = async (data: PasswordChangePayload): Promise<{ message: string }> => {
     try {

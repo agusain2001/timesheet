@@ -1,7 +1,7 @@
 """Reports API router - Task aging, trends, and analytics reports."""
 from typing import List, Optional
 from datetime import datetime, date, timedelta
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, case
@@ -289,43 +289,6 @@ def get_team_velocity(
     )
 
 
-@router.get("/export/{report_type}")
-def export_report(
-    report_type: str,
-    format: str = Query("json", description="Export format: json, csv"),
-    project_id: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Export a report in JSON or CSV format."""
-    if report_type == "task-aging":
-        data = get_task_aging_report(project_id=project_id, db=db, current_user=current_user)
-    elif report_type == "completion-trends":
-        data = get_completion_trends(project_id=project_id, db=db, current_user=current_user)
-    else:
-        raise HTTPException(status_code=400, detail="Unknown report type")
-    
-    if format == "csv":
-        import csv
-        output = BytesIO()
-        
-        if report_type == "task-aging":
-            # Write CSV
-            csv_content = "id,name,status,priority,age_days,overdue_days,assignee,project\n"
-            for item in data.items:
-                csv_content += f"{item.id},{item.name},{item.status},{item.priority},{item.age_days},{item.overdue_days},{item.assignee_name or ''},{item.project_name or ''}\n"
-            output.write(csv_content.encode())
-        
-        output.seek(0)
-        return StreamingResponse(
-            output,
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={report_type}.csv"}
-        )
-    
-    return data
-
-
 # ==================== Project Variance Reports ====================
 
 @router.get("/project/{project_id}/variance")
@@ -433,10 +396,30 @@ async def list_scheduled_reports(
     jobs = scheduler_service.list_jobs()
     
     # Filter to only show report jobs for this user
-    user_reports = [
-        job for job in jobs
-        if job['id'].startswith('report_') and str(current_user.id) in str(job.get('args', []))
-    ]
+    user_reports = []
+    
+    for job in jobs:
+        if not job['id'].startswith('report_'):
+            continue
+            
+        args_str = str(job.get('args', []))
+        # Ensure the job belongs to this user or contains their ID
+        if str(current_user.id) not in args_str and job.get('user_id') != str(current_user.id):
+            continue
+            
+        # Clean the ID so the frontend can use it directly without double prefixing
+        clean_id = job['id'].replace('report_', '', 1)
+        
+        user_reports.append({
+            'id': clean_id,
+            'name': job.get('name', 'Scheduled Report'),
+            'report_type': job.get('report_type', 'unknown'),
+            'frequency': job.get('frequency', 'unknown'),
+            'hour': job.get('hour'),
+            'minute': job.get('minute'),
+            'next_run': job.get('next_run'),
+            'status': 'active'
+        })
     
     return {"reports": user_reports}
 
@@ -459,6 +442,38 @@ async def cancel_scheduled_report(
         raise HTTPException(status_code=404, detail="Report not found")
 
 
+@router.post("/scheduled/{report_id}/run")
+async def run_scheduled_report_now(
+    report_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Run a scheduled report immediately without disrupting its schedule."""
+    from app.services.scheduler_service import scheduler_service
+    
+    job_id = f"report_{report_id}"
+    job_info = scheduler_service.get_job_info(job_id)
+    
+    if not job_info:
+        raise HTTPException(status_code=404, detail="Report not found")
+        
+    report_type = job_info.get('report_type')
+    if not report_type:
+        args = job_info.get('args', [])
+        report_type = args[1] if len(args) > 1 else 'unknown'
+        
+    # Run it in background task so UI doesn't hang
+    background_tasks.add_task(
+        scheduler_service._generate_and_send_report,
+        report_id=report_id,
+        report_type=report_type,
+        user_id=str(current_user.id)
+    )
+    
+    return {"success": True, "message": "Report is generating and will be emailed shortly"}
+
+
 # ─── Report Export (CSV / Excel) ──────────────────────────────────────────────
 
 @router.get("/export/{report_type}")
@@ -477,7 +492,9 @@ def export_report(
 
     if report_type == "task-aging":
         headers = ["ID", "Title", "Status", "Priority", "Age (days)", "Due Date", "Assignee", "Project"]
-        query = db.query(Task).filter(Task.is_deleted == False if hasattr(Task, "is_deleted") else True)
+        query = db.query(Task)
+        if hasattr(Task, "is_deleted"):
+            query = query.filter(Task.is_deleted == False)  # noqa: E712
         if project_id:
             query = query.filter(Task.project_id == project_id)
         tasks = query.all()
@@ -486,8 +503,9 @@ def export_report(
             age = (now - t.created_at).days if t.created_at else 0
             assignee = db.query(User).filter(User.id == t.assignee_id).first() if t.assignee_id else None
             project = db.query(Project).filter(Project.id == t.project_id).first() if t.project_id else None
+            title = getattr(t, "title", None) or t.name
             rows.append([
-                t.id, t.name or t.title if hasattr(t, "title") else t.name,
+                t.id, title,
                 t.status, t.priority, age,
                 str(t.due_date) if t.due_date else "",
                 assignee.full_name if assignee else "",
@@ -593,7 +611,7 @@ def get_analytics_summary(
     from app.models import TimeEntry
     try:
         hours_result = db.query(func.sum(TimeEntry.hours)).filter(
-            TimeEntry.date >= thirty_days_ago.date()
+            TimeEntry.day >= thirty_days_ago.date()
         ).scalar()
         total_hours_logged = round(float(hours_result or 0), 1)
     except Exception:
@@ -721,7 +739,7 @@ def get_workload_distribution(
         try:
             hours = db.query(func.sum(TimeEntry.hours)).filter(
                 TimeEntry.user_id == u.id,
-                TimeEntry.date >= thirty_ago.date()
+                TimeEntry.day >= thirty_ago.date()
             ).scalar() or 0
         except Exception:
             hours = 0

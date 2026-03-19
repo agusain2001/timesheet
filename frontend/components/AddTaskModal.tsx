@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { apiGet, apiPost } from "@/services/api";
 import RichTextEditor from "@/components/RichTextEditor";
+import { validateSafeText } from "@/utils/validation";
 
 // ============ Types ============
 
@@ -374,7 +375,9 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
     };
 
     const handleSubmit = async (asDraft: boolean) => {
-        if (!form.name.trim()) { setError("Task name is required."); return; }
+        const valErr = validateSafeText(form.name, "Task Name", 150);
+        if (valErr) { setError(valErr); return; }
+        
         setSubmitting(true);
         setError(null);
         try {
@@ -464,7 +467,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
                     {/* ---- Task Details ---- */}
                     <Section title="Task Details">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InputField label="Task Name" placeholder="e.g. Create Dashboard UI" value={form.name} onChange={(v) => updateField("name", v)} />
+                            <InputField label="Task Name" placeholder="e.g. Create Dashboard UI" value={form.name} onChange={(v) => updateField("name", v)} hint="Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed." />
                             <CustomDropdown
                                 label="Project"
                                 placeholder="Select Project"
@@ -665,7 +668,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     );
 }
 
-function InputField({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (v: string) => void }) {
+function InputField({ label, placeholder, value, onChange, hint }: { label: string; placeholder: string; value: string; onChange: (v: string) => void; hint?: string; }) {
     return (
         <div>
             <label className="block text-xs font-medium text-foreground/60 mb-1.5">{label}</label>
@@ -676,6 +679,7 @@ function InputField({ label, placeholder, value, onChange }: { label: string; pl
                 placeholder={placeholder}
                 className="w-full px-3 py-2.5 text-sm bg-foreground/[0.04] border border-foreground/10 rounded-lg text-foreground placeholder-foreground/25 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition"
             />
+            {hint && <p className="text-[10px] text-foreground/40 mt-1">{hint}</p>}
         </div>
     );
 }

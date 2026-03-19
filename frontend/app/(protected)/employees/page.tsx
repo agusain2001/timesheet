@@ -6,6 +6,7 @@ import { getUsers, getUserProjects, exportUsers, updateUser, deleteUser, createU
 import { getDepartments } from "@/services/departments";
 import type { User, Department } from "@/types/api";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+import { validateSafeText } from "@/utils/validation";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getInitials(name: string) {
@@ -415,7 +416,8 @@ function AddEmployeeModal({
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.full_name.trim()) { setError("Full name is required."); return; }
+        const valErr = validateSafeText(form.full_name, "Full Name", 100);
+        if (valErr) { setError(valErr); return; }
         if (!form.email.trim()) { setError("Email is required."); return; }
         if (!form.password || form.password.length < 6) { setError("Password must be at least 6 characters."); return; }
         setSaving(true); setError(null);
@@ -451,10 +453,17 @@ function AddEmployeeModal({
                     </button>
                 </div>
                 <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
+                    {/* Error Banner */}
+                    {error && (
+                        <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                            {error}
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5 col-span-2">
                             <label className="text-xs font-medium text-foreground/70">Full Name <span className="text-red-400">*</span></label>
                             <input type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} autoFocus className={inp} placeholder="e.g. John Doe" />
+                            <p className="text-[10px] text-foreground/40 mt-1">Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed.</p>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-medium text-foreground/70">Email <span className="text-red-400">*</span></label>
@@ -484,12 +493,6 @@ function AddEmployeeModal({
                             </select>
                         </div>
                     </div>
-                    {error && (
-                        <p className="text-xs text-red-400 flex items-center gap-1.5">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                            {error}
-                        </p>
-                    )}
                     <div className="flex items-center justify-end gap-2 pt-1">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
                         <button type="submit" disabled={saving} className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition flex items-center gap-1.5">
@@ -525,7 +528,9 @@ function EditEmployeeModal({
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.full_name.trim()) { setError("Full name is required."); return; }
+        const valErr = validateSafeText(form.full_name, "Full Name", 100);
+        if (valErr) { setError(valErr); return; }
+        
         setSaving(true); setError(null);
         try {
             await updateUser(employee.id, {
@@ -556,9 +561,16 @@ function EditEmployeeModal({
                     </button>
                 </div>
                 <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
+                    {/* Error Banner */}
+                    {error && (
+                        <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                            {error}
+                        </div>
+                    )}
                     <div className="space-y-1.5">
                         <label className="text-xs font-medium text-foreground/70">Full Name <span className="text-red-400">*</span></label>
                         <input type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} autoFocus className={inp} placeholder="Employee full name" />
+                        <p className="text-[10px] text-foreground/40 mt-1">Only letters, numbers, spaces and basic punctuation (- &apos; . ) are allowed.</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
@@ -573,12 +585,6 @@ function EditEmployeeModal({
                             </select>
                         </div>
                     </div>
-                    {error && (
-                        <p className="text-xs text-red-400 flex items-center gap-1.5">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                            {error}
-                        </p>
-                    )}
                     <div className="flex items-center justify-end gap-2 pt-1">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
                         <button type="submit" disabled={saving} className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition flex items-center gap-1.5">
@@ -636,7 +642,11 @@ function DeleteEmployeeModal({
                         <span className="text-foreground/90 font-medium">{employee.email}</span>
                     </div>
                 </div>
-                {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+                {error && (
+                    <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3 text-left">
+                        {error}
+                    </div>
+                )}
                 <div className="flex gap-2">
                     <button onClick={onClose} className="flex-1 px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
                     <button onClick={handleDelete} disabled={deleting} className="flex-1 px-4 py-2 text-xs rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 disabled:opacity-50 transition">
@@ -736,6 +746,7 @@ export default function EmployeesPage() {
     };
 
     const menuRef = useRef<HTMLDivElement>(null);
+    const [menuOpenAbove, setMenuOpenAbove] = useState(false);
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(null);
@@ -745,7 +756,7 @@ export default function EmployeesPage() {
     }, []);
 
     return (
-        <div className="p-6 space-y-5 min-h-full bg-background text-foreground">
+        <div className="space-y-5 min-h-full bg-background text-foreground">
             {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
 
             {/* Header */}
@@ -870,13 +881,17 @@ export default function EmployeesPage() {
 
                                     {/* Action Menu Trigger */}
                                     <div className="relative">
-                                        <button onClick={() => setMenuOpen(menuOpen === user.id ? null : user.id)} className="text-foreground/40 hover:text-foreground transition p-1 rounded-md hover:bg-foreground/10">
+                                        <button onClick={(e) => {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setMenuOpenAbove(window.innerHeight - rect.bottom < 220);
+                                            setMenuOpen(menuOpen === user.id ? null : user.id);
+                                        }} className="text-foreground/40 hover:text-foreground transition p-1 rounded-md hover:bg-foreground/10">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
                                         </button>
 
                                         {/* Dropdown Menu */}
                                         {menuOpen === user.id && (
-                                            <div ref={menuRef} className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-foreground/10 bg-background shadow-2xl py-1 z-20">
+                                            <div ref={menuRef} className={`absolute right-0 ${menuOpenAbove ? "bottom-full mb-1" : "top-full mt-1"} w-44 rounded-xl border border-foreground/10 bg-background shadow-2xl py-1 z-20`}>
                                                 <button onClick={() => { setSelectedUser(user); setMenuOpen(null); }} className="w-full text-left px-4 py-2 text-xs hover:bg-foreground/5 text-foreground/80 transition">View Details</button>
                                                 <button onClick={() => { setRelatedProjectsUser(user); setMenuOpen(null); }} className="w-full text-left px-4 py-2 text-xs hover:bg-foreground/5 text-foreground/80 transition">Related Projects</button>
                                                 <div className="border-t border-foreground/8 my-1" />

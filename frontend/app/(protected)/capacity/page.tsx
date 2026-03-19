@@ -144,7 +144,7 @@ export default function CapacityPage() {
     const totalAlloc = capacityData ? Math.round(capacityData.total_allocated) : 0;
 
     return (
-        <div className="min-h-screen p-6 bg-background text-foreground space-y-6">
+        <div className="space-y-6 bg-background text-foreground">
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>

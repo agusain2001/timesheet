@@ -229,7 +229,7 @@ def analyze_with_gemini(content_bytes: bytes, mime_type: str, prompt: str) -> st
     try:
         import google.generativeai as genai
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
         image_data = base64.b64encode(content_bytes).decode('utf-8')
         response = model.generate_content([
             prompt,
@@ -248,7 +248,7 @@ def extract_structured_data(raw_text: str) -> dict:
     try:
         import google.generativeai as genai
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
         prompt = f"""Extract structured financial/document data from this text.
 Return ONLY valid JSON with these keys (use null if not found):
@@ -314,7 +314,7 @@ def generate_ai_response(user_message: str, context_data: str, system_instructio
         import asyncio
 
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
         # Sanitize user input before including in prompt
         safe_message = sanitize_user_input(user_message)
@@ -833,7 +833,7 @@ async def analyze_file(
     try:
         import google.generativeai as genai
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
         image_data = base64.b64encode(content).decode('utf-8')
         response = model.generate_content([
             "Analyze this receipt/document. Extract: vendor_name, date (YYYY-MM-DD), total_amount, currency, category, description. Return as JSON.",
@@ -868,7 +868,7 @@ async def chat_with_file(
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=settings.gemini_api_key)
-                model = genai.GenerativeModel('gemini-2.5-flash')
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
                 response = model.generate_content(f"Based on this document text, respond to: {message}\n\nDocument:\n{pdf_text[:4000]}\n\nRespond clearly. No markdown.")
                 reply = clean_text(response.text)
                 save_chat_message(db, str(current_user.id), "user", message, attachments=[{"fileName": file.filename, "fileType": file.content_type}])
@@ -887,7 +887,7 @@ async def chat_with_file(
     try:
         import google.generativeai as genai
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
         image_data = base64.b64encode(content).decode('utf-8')
         response = model.generate_content([f"Analyze this and respond to: {message}\nNo markdown.", {"mime_type": file.content_type, "data": image_data}])
         reply = clean_text(response.text)
