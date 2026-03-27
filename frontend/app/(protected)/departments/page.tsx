@@ -852,7 +852,7 @@ function BulkDeleteDepartmentModal({
 }
 
 // ============ Bulk Selection Bar ============
-function BulkSelectionBar({ count, onDelete, onClear, onExport }: { count: number; onDelete: () => void; onClear: () => void; onExport: () => void; }) {
+function BulkSelectionBar({ count, onDelete, onClear, onExport }: { count: number; onDelete: () => void; onClear: () => void; onExport?: () => void; }) {
     return (
         <div className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex items-center gap-2.5">
