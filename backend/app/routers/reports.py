@@ -168,6 +168,31 @@ def get_task_aging_report(
     )
 
 
+@router.get("/task-aging-report")
+def get_task_aging_report_compat(
+    project_id: Optional[str] = None,
+    min_age_days: int = 0,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Compat endpoint – returns task aging in ReportResult format (array in 'data' field)."""
+    report = get_task_aging_report(project_id=project_id, min_age_days=min_age_days, status=status, db=db, current_user=current_user)
+    from datetime import datetime as _dt
+    data = [item.dict() for item in report.items]
+    return {
+        "report_type": "task_aging",
+        "generated_at": _dt.utcnow().isoformat(),
+        "filters_applied": {"project_id": project_id, "min_age_days": min_age_days, "status": status},
+        "summary": {
+            "total_tasks": report.total_tasks,
+            "avg_age_days": report.avg_age_days,
+            "overdue_count": report.overdue_count,
+        },
+        "data": data,
+    }
+
+
 @router.get("/completion-trends", response_model=CompletionTrendReport)
 def get_completion_trends(
     period: str = Query("30d", description="Period: 7d, 30d, 90d, 1y"),

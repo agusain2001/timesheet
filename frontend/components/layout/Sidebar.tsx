@@ -128,7 +128,6 @@ export function Sidebar() {
         ) : (
           <Link
             href={item.href!}
-            prefetch={false}
             className={clsx(
               baseClasses,
               isActive && "text-blue-400",
@@ -161,7 +160,6 @@ export function Sidebar() {
                 <Link
                   key={child.name}
                   href={child.href!}
-                  prefetch={false}
                   className={clsx(
                     "flex flex-col items-center justify-center p-2 rounded-lg transition text-xs",
                     "hover:scale-110",

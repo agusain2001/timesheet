@@ -680,9 +680,23 @@ export default function MyTimePage() {
         try {
             const params: MyTimeTasksParams = { ...filters };
             if (searchQuery.trim()) params.search = searchQuery.trim();
-            const [tasksData, summaryData] = await Promise.all([getMyTimeTasks(params), getMyTimeSummary()]);
-            setTasks(tasksData);
-            setSummary(summaryData);
+            const [tasksResult, summaryResult] = await Promise.allSettled([
+                getMyTimeTasks(params),
+                getMyTimeSummary(),
+            ]);
+            if (tasksResult.status === "fulfilled") {
+                setTasks(tasksResult.value);
+            } else {
+                const e = tasksResult.reason as { status?: number; message?: string };
+                if (e?.status === 401 || e?.message?.includes("Not authenticated")) { router.push("/login?redirect=/my-time"); return; }
+                setError("Failed to load My Time tasks");
+            }
+            if (summaryResult.status === "fulfilled") {
+                setSummary(summaryResult.value);
+            } else {
+                // Use default empty summary so the page still renders
+                setSummary({ total_hours: 0, expected_hours: 40, remaining_hours: 40, daily_hours: {}, current_task: null });
+            }
             setLoading(false);
         } catch (err: unknown) {
             const e = err as { status?: number; message?: string };

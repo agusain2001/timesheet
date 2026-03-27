@@ -38,6 +38,8 @@ def build_department_response(dept: Department, db: Session) -> dict:
         "id": dept.id,
         "name": dept.name,
         "notes": dept.notes,
+        "status": dept.status,
+        "budget": float(dept.budget) if dept.budget is not None else 0.0,
         "managers": managers,
         "member_count": member_count,
         "team_count": team_count,
@@ -71,7 +73,12 @@ def create_department(
     """Create a new department."""
     if not is_manager(current_user):
         raise HTTPException(status_code=403, detail="Not authorized")
-    db_dept = Department(name=dept_data.name, notes=dept_data.notes)
+    db_dept = Department(
+        name=dept_data.name, 
+        notes=dept_data.notes,
+        status=dept_data.status,
+        budget=dept_data.budget
+    )
     set_org_id(db_dept, current_user)
     db.add(db_dept)
     db.flush()  # Get the ID before adding managers
@@ -127,6 +134,10 @@ def update_department(
         dept.name = dept_data.name
     if dept_data.notes is not None:
         dept.notes = dept_data.notes
+    if dept_data.status is not None:
+        dept.status = dept_data.status
+    if dept_data.budget is not None:
+        dept.budget = dept_data.budget
     
     # Update managers if provided
     if dept_data.managers is not None:

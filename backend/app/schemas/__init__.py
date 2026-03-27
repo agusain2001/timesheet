@@ -192,6 +192,8 @@ class DepartmentManagerResponse(BaseModel):
 class DepartmentBase(BaseModel):
     name: str
     notes: Optional[str] = None
+    status: Optional[str] = "active"
+    budget: Optional[float] = 0.0
 
 class DepartmentCreate(DepartmentBase):
     managers: Optional[List[DepartmentManagerInput]] = None
@@ -199,6 +201,8 @@ class DepartmentCreate(DepartmentBase):
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = None
     notes: Optional[str] = None
+    status: Optional[str] = None
+    budget: Optional[float] = None
     managers: Optional[List[DepartmentManagerInput]] = None
 
 class DepartmentResponse(DepartmentBase):

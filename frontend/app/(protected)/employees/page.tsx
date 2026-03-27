@@ -410,6 +410,9 @@ function AddEmployeeModal({
         position: "",
         department_id: "",
         role: "employee",
+        phone: "",
+        employment_type: "full_time",
+        work_location: "office",
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -429,7 +432,8 @@ function AddEmployeeModal({
                 position: form.position.trim() || undefined,
                 department_id: form.department_id || undefined,
                 role: form.role || "employee",
-            });
+                phone: form.phone.trim() || undefined,
+            } as any);
             onCreated();
             onClose();
         } catch (err: unknown) {
@@ -476,6 +480,28 @@ function AddEmployeeModal({
                         <div className="space-y-1.5">
                             <label className="text-xs font-medium text-foreground/70">Position</label>
                             <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className={inp} placeholder="e.g. Software Engineer" />
+                        </div>
+                        {/* #39 — Additional employee fields */}
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Phone Number</label>
+                            <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inp} placeholder="e.g. +1 555 123 4567" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Employment Type</label>
+                            <select value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value })} className={inp + " cursor-pointer"}>
+                                <option value="full_time">Full-Time</option>
+                                <option value="part_time">Part-Time</option>
+                                <option value="contract">Contract</option>
+                                <option value="intern">Intern</option>
+                            </select>
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-xs font-medium text-foreground/70">Work Location</label>
+                            <select value={form.work_location} onChange={(e) => setForm({ ...form, work_location: e.target.value })} className={inp + " cursor-pointer"}>
+                                <option value="office">Office</option>
+                                <option value="remote">Remote</option>
+                                <option value="hybrid">Hybrid</option>
+                            </select>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-medium text-foreground/70">Role</label>
@@ -665,6 +691,8 @@ export default function EmployeesPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [sortBy, setSortBy] = useState<string>("created_at");
+    const [roleFilter, setRoleFilter] = useState("");
+    const [deptFilter, setDeptFilter] = useState("");
 
     // UI States
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -708,11 +736,17 @@ export default function EmployeesPage() {
     }, [loadData]);
 
 
+    const filteredUsers = users.filter(u => {
+        if (roleFilter && u.role !== roleFilter) return false;
+        if (deptFilter && u.department_id !== deptFilter) return false;
+        return true;
+    });
+
     const toggleAll = () => {
-        if (selectedIds.size === users.length && users.length > 0) {
+        if (selectedIds.size === filteredUsers.length && filteredUsers.length > 0) {
             setSelectedIds(new Set());
         } else {
-            setSelectedIds(new Set(users.map(u => u.id)));
+            setSelectedIds(new Set(filteredUsers.map(u => u.id)));
         }
     };
 
@@ -825,6 +859,30 @@ export default function EmployeesPage() {
                         </div>
                     </div>
                 </div>
+                {/* #41 — Role and Department filter chips */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                        className="text-xs border border-foreground/15 rounded-lg px-2.5 py-1.5 bg-foreground/[0.03] text-foreground outline-none focus:border-blue-500/50 cursor-pointer"
+                    >
+                        <option value="">All Roles</option>
+                        <option value="employee">Employee</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                    <select
+                        value={deptFilter}
+                        onChange={(e) => setDeptFilter(e.target.value)}
+                        className="text-xs border border-foreground/15 rounded-lg px-2.5 py-1.5 bg-foreground/[0.03] text-foreground outline-none focus:border-blue-500/50 cursor-pointer"
+                    >
+                        <option value="">All Departments</option>
+                        {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                    {(roleFilter || deptFilter) && (
+                        <button onClick={() => { setRoleFilter(""); setDeptFilter(""); }} className="text-xs text-foreground/40 hover:text-foreground/70 underline transition">Clear filters</button>
+                    )}
+                </div>
 
                 {/* Search */}
                 <div className="relative">
@@ -853,7 +911,7 @@ export default function EmployeesPage() {
                     </div>
 
                     {/* Table Body */}
-                    {users.length === 0 ? (
+                    {filteredUsers.length === 0 ? (
                         <div className="py-20 flex flex-col items-center gap-4">
                             <div className="w-16 h-16 rounded-full bg-foreground/5 flex items-center justify-center">
                                 <svg className="text-foreground/20" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx="12" cy="12" r="10" /><path d="M16 16s-1.5-2-4-2-4 2-4 2" /><line x1="9" y1="9" x2="9.01" y2="9" /><line x1="15" y1="9" x2="15.01" y2="9" /></svg>
@@ -864,7 +922,7 @@ export default function EmployeesPage() {
                             </div>
                         </div>
                     ) : (
-                        users.map((user) => {
+                        filteredUsers.map((user) => {
                             const dept = departments.find(d => d.id === user.department_id);
                             return (
                                 <div key={user.id} className="grid grid-cols-[40px_60px_1.5fr_1.5fr_1.5fr_1.5fr_40px] px-4 py-3 border-b border-foreground/5 last:border-0 hover:bg-foreground/[0.02] transition items-center relative group">

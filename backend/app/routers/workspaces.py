@@ -258,9 +258,14 @@ def add_member(
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    user = db.query(User).filter(User.id == data.user_id).first()
+    # Support lookup by ID, email, or partial name
+    user = db.query(User).filter(
+        (User.id == data.user_id) |
+        (User.email == data.user_id) |
+        (User.full_name.ilike(f"%{data.user_id}%"))
+    ).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found (try entering exact email)")
 
     # Check if already a member
     existing = db.query(WorkspaceMember).filter(

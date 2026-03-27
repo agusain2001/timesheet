@@ -109,6 +109,7 @@ export interface Department {
     id: string;
     name: string;
     notes?: string;
+    status?: string;
     managers: DepartmentManager[];
     member_count?: number;
 }
@@ -116,12 +117,14 @@ export interface Department {
 export interface DepartmentCreate {
     name: string;
     notes?: string;
+    status?: string;
     managers?: DepartmentManagerInput[];
 }
 
 export interface DepartmentUpdate {
     name?: string;
     notes?: string;
+    status?: string;
     managers?: DepartmentManagerInput[];
 }
 

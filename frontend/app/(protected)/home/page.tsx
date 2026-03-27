@@ -8,6 +8,7 @@ import { getToken } from "@/lib/auth";
 import AddTaskModal from "@/components/AddTaskModal";
 import { HowItWorks } from "@/components/ui/HowItWorks";
 import DateFilterDropdown, { type DateRange, type FilterPreset } from "@/components/DateFilterDropdown";
+import { Search } from "lucide-react";
 
 // ============ Helper ============
 
@@ -53,14 +54,14 @@ function statusColor(status: string): string {
         on_hold: "#f97316",
         draft: "#6b7280",
         archived: "#9ca3af",
+        open: "#3b82f6",
+        done: "#22c55e",
     };
     return m[status] || "#6b7280";
 }
 
 // ============ Cards ============
 
-// Build a card href that embeds the active date filter as query params so the
-// destination page can respect the same time window.
 function buildCardHref(base: string, filter: DateFilter): string {
     const params = new URLSearchParams();
     if (filter.startDate) params.set("start_date", filter.startDate);
@@ -99,12 +100,98 @@ function StatCard({ label, value, color, href }: StatCardProps) {
     );
 }
 
+// ============ Activity Overlay ============
+
+interface ActivityOverlayProps {
+    activity: PersonalDashboard["recent_activity"][0] | null;
+    onClose: () => void;
+}
+
+function ActivityOverlay({ activity, onClose }: ActivityOverlayProps) {
+    if (!activity) return null;
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={onClose}
+        >
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div
+                className="relative w-full max-w-md rounded-2xl border border-foreground/10 bg-background p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-foreground">Activity Detail</h3>
+                    <button onClick={onClose} className="w-7 h-7 rounded-full hover:bg-foreground/10 flex items-center justify-center text-foreground/60 transition">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <p className="text-foreground font-medium text-sm">
+                    {activity.type === "task_completed" ? "Task Completed" : activity.type === "task_created" ? "Task Created" : activity.type}
+                </p>
+                <p className="text-foreground/60 text-sm mt-2">{activity.message}</p>
+                <p className="text-foreground/40 text-xs mt-4">{formatTimestamp(activity.timestamp)}</p>
+            </div>
+        </div>
+    );
+}
+
+// ============ Time Entry Modal ============
+
+function TimeEntryModal({ onClose }: { onClose: () => void }) {
+    const [hours, setHours] = useState("");
+    const [note, setNote] = useState("");
+
+    const handleSave = () => {
+        // TODO: POST to /api/time-tracking with hours + note
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div className="relative w-full max-w-sm rounded-2xl border border-foreground/10 bg-background p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-foreground">Log Time</h3>
+                    <button onClick={onClose} className="w-7 h-7 rounded-full hover:bg-foreground/10 flex items-center justify-center text-foreground/60 transition">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <label className="block text-xs text-foreground/60 mb-1">Hours worked</label>
+                <input
+                    type="number"
+                    min="0.25"
+                    max="24"
+                    step="0.25"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    placeholder="e.g. 2.5"
+                    className="w-full rounded-lg border border-foreground/15 bg-foreground/5 px-3 py-2 text-sm text-foreground placeholder-foreground/30 focus:outline-none focus:ring-2 focus:ring-blue-500/40 mb-3"
+                />
+                <label className="block text-xs text-foreground/60 mb-1">Note (optional)</label>
+                <input
+                    type="text"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="What did you work on?"
+                    className="w-full rounded-lg border border-foreground/15 bg-foreground/5 px-3 py-2 text-sm text-foreground placeholder-foreground/30 focus:outline-none focus:ring-2 focus:ring-blue-500/40 mb-4"
+                />
+                <div className="flex gap-2">
+                    <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-foreground/15 text-xs text-foreground/60 hover:bg-foreground/5 transition">Cancel</button>
+                    <button onClick={handleSave} disabled={!hours} className="flex-1 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 disabled:opacity-40 transition">Log Time</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ============ Sections ============
 
 function UpcomingDeadlinesSection({ deadlines }: { deadlines: PersonalDashboard["upcoming_deadlines"] }) {
     const empty = deadlines.length === 0;
     return (
-        <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-5 flex flex-col">
+        <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-5 flex flex-col h-full">
             <h3 className="text-sm font-semibold text-foreground mb-4">Upcoming Deadlines</h3>
             {empty ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
@@ -112,29 +199,31 @@ function UpcomingDeadlinesSection({ deadlines }: { deadlines: PersonalDashboard[
                     <p className="text-xs text-foreground/50 mt-1">Tasks with due dates will appear here automatically.</p>
                 </div>
             ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto flex-1">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="text-foreground/50 text-xs uppercase tracking-wider">
                                 <th className="text-left pb-3 font-medium">Task</th>
-                                <th className="text-left pb-3 font-medium">Project Name</th>
+                                <th className="text-left pb-3 font-medium">Project</th>
                                 <th className="text-left pb-3 font-medium">Due Date</th>
-                                <th className="text-left pb-3 font-medium">Status</th>
+                                <th className="text-left pb-3 font-medium">Priority</th>
                             </tr>
                         </thead>
                         <tbody>
                             {deadlines.map((d) => (
                                 <tr key={d.task_id} className="border-t border-foreground/5">
-                                    <td className="py-3 text-foreground/90">{d.task_name}</td>
+                                    <td className="py-3 text-foreground/90 font-medium">{d.task_name}</td>
                                     <td className="py-3 text-foreground/70">{d.project_name || "—"}</td>
                                     <td className="py-3 text-foreground/70">{formatDate(d.due_date)}</td>
                                     <td className="py-3">
-                                        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-400">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                                            In Progress
-                                            <svg className="w-3 h-3 ml-1 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01" />
-                                            </svg>
+                                        <span
+                                            className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
+                                            style={{
+                                                background: `${statusColor(d.priority === "high" ? "blocked" : d.priority === "low" ? "archived" : "in_progress")}20`,
+                                                color: statusColor(d.priority === "high" ? "blocked" : d.priority === "low" ? "archived" : "in_progress"),
+                                            }}
+                                        >
+                                            {d.priority || "medium"}
                                         </span>
                                     </td>
                                 </tr>
@@ -151,13 +240,15 @@ function TaskStatusSection({ tasksByStatus }: { tasksByStatus: Record<string, nu
     const total = Object.values(tasksByStatus).reduce((a, b) => a + b, 0);
     const empty = total === 0;
 
-    const statusOrder = ["in_progress", "on_hold", "draft", "completed", "archived", "todo", "review", "blocked"];
-    const sortedEntries = Object.entries(tasksByStatus).sort(
-        ([a], [b]) => (statusOrder.indexOf(a) === -1 ? 99 : statusOrder.indexOf(a)) - (statusOrder.indexOf(b) === -1 ? 99 : statusOrder.indexOf(b))
-    );
+    const statusOrder = ["in_progress", "on_hold", "draft", "completed", "archived", "todo", "review", "blocked", "open", "done"];
+    const sortedEntries = Object.entries(tasksByStatus)
+        .filter(([, count]) => count > 0)  // only show statuses with tasks
+        .sort(
+            ([a], [b]) => (statusOrder.indexOf(a) === -1 ? 99 : statusOrder.indexOf(a)) - (statusOrder.indexOf(b) === -1 ? 99 : statusOrder.indexOf(b))
+        );
 
     return (
-        <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-5 flex flex-col">
+        <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-5 flex flex-col h-full">
             <h3 className="text-sm font-semibold text-foreground mb-4">My Task&apos;s Status</h3>
             {empty ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
@@ -165,7 +256,7 @@ function TaskStatusSection({ tasksByStatus }: { tasksByStatus: Record<string, nu
                     <p className="text-xs text-foreground/50 mt-1">Task status distribution will appear once tasks are assigned.</p>
                 </div>
             ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 flex-1">
                     {sortedEntries.map(([status, count]) => {
                         const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                         return (
@@ -174,10 +265,11 @@ function TaskStatusSection({ tasksByStatus }: { tasksByStatus: Record<string, nu
                                 <div className="flex-1 h-2 rounded-full bg-foreground/10 overflow-hidden">
                                     <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: statusColor(status) }} />
                                 </div>
-                                <span className="text-xs text-foreground/50 w-10 text-right">{pct}%</span>
+                                <span className="text-xs text-foreground/50 w-16 text-right">{count} ({pct}%)</span>
                             </div>
                         );
                     })}
+                    <p className="text-xs text-foreground/40 pt-2 border-t border-foreground/5">Total: {total} tasks</p>
                 </div>
             )}
         </div>
@@ -185,91 +277,111 @@ function TaskStatusSection({ tasksByStatus }: { tasksByStatus: Record<string, nu
 }
 
 function RecentActivitySection({ activities }: { activities: PersonalDashboard["recent_activity"] }) {
+    const [selectedActivity, setSelectedActivity] = useState<PersonalDashboard["recent_activity"][0] | null>(null);
     const empty = activities.length === 0;
     return (
-        <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-5 flex flex-col">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h3>
-            {empty ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
-                    <p className="font-semibold text-foreground/80">No activity to show</p>
-                    <p className="text-xs text-foreground/50 mt-1">Project updates, task changes, and notifications will appear here.</p>
-                </div>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="text-foreground/50 text-xs uppercase tracking-wider">
-                                <th className="text-left pb-3 font-medium">Activity</th>
-                                <th className="text-left pb-3 font-medium">Source</th>
-                                <th className="text-left pb-3 font-medium">Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {activities.map((a) => (
-                                <tr key={a.id} className="border-t border-foreground/5">
-                                    <td className="py-3">
-                                        <p className="text-foreground/90 font-medium text-xs">{a.type === "task_completed" ? "Task completed" : a.type === "task_created" ? "Task created" : a.type}</p>
-                                        <p className="text-foreground/50 text-xs mt-0.5">{a.message}</p>
-                                    </td>
-                                    <td className="py-3">
-                                        <span className="text-xs text-foreground/50">System</span>
-                                    </td>
-                                    <td className="py-3 text-xs text-foreground/50 whitespace-nowrap">
-                                        {formatTimestamp(a.timestamp)}
-                                    </td>
+        <>
+            <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-5 flex flex-col h-full">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h3>
+                {empty ? (
+                    <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
+                        <p className="font-semibold text-foreground/80">No activity to show</p>
+                        <p className="text-xs text-foreground/50 mt-1">Project updates, task changes, and notifications will appear here.</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto flex-1">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-foreground/50 text-xs uppercase tracking-wider">
+                                    <th className="text-left pb-3 font-medium">Activity</th>
+                                    <th className="text-left pb-3 font-medium">Source</th>
+                                    <th className="text-left pb-3 font-medium">Time</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
+                            </thead>
+                            <tbody>
+                                {activities.map((a) => (
+                                    <tr
+                                        key={a.id}
+                                        className="border-t border-foreground/5 hover:bg-foreground/5 cursor-pointer transition-colors"
+                                        onClick={() => setSelectedActivity(a)}
+                                        title="Click to view full message"
+                                    >
+                                        <td className="py-3">
+                                            <p className="text-foreground/90 font-medium text-xs">{a.type === "task_completed" ? "Task completed" : a.type === "task_created" ? "Task created" : a.type}</p>
+                                            <p className="text-foreground/50 text-xs mt-0.5 max-w-[200px] truncate">{a.message}</p>
+                                        </td>
+                                        <td className="py-3">
+                                            <span className="text-xs text-foreground/50">System</span>
+                                        </td>
+                                        <td className="py-3 text-xs text-foreground/50 whitespace-nowrap">
+                                            {formatTimestamp(a.timestamp)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+            {/* #12 — Activity detail overlay */}
+            <ActivityOverlay activity={selectedActivity} onClose={() => setSelectedActivity(null)} />
+        </>
     );
 }
 
 function TimeStatusSection({ hoursToday, hoursWeek }: { hoursToday: number; hoursWeek: number }) {
+    const [showTimeEntry, setShowTimeEntry] = useState(false);
     const todayDisplay = hoursToday > 0 ? formatHours(hoursToday) : "NA";
     const weekDisplay = hoursWeek > 0 ? formatHours(hoursWeek) : "NA";
 
     return (
-        <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-5 flex flex-col">
-            <h3 className="text-sm font-semibold text-foreground mb-4">My Task&apos;s Status</h3>
-            <div className="space-y-3">
-                {/* Today */}
-                <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] p-4">
-                    <span className="text-xs text-foreground/50">Today</span>
-                    <div className="flex items-center justify-between mt-1">
-                        <div>
-                            <p className="text-2xl font-bold text-foreground">{todayDisplay}</p>
-                            <p className="text-[11px] text-foreground/40 mt-0.5">of 8 hour daily</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Link href="/my-time" className="text-xs text-foreground/60 border border-foreground/15 rounded-full px-3 py-1 hover:bg-foreground/5 transition">
-                                View My Time &gt;
-                            </Link>
-                            <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center cursor-pointer hover:bg-blue-500 transition">
-                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                </svg>
+        <>
+            <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-5 flex flex-col h-full">
+                <h3 className="text-sm font-semibold text-foreground mb-4">My Time</h3>
+                <div className="space-y-3 flex-1">
+                    {/* Today */}
+                    <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] p-4">
+                        <span className="text-xs text-foreground/50">Today</span>
+                        <div className="flex items-center justify-between mt-1">
+                            <div>
+                                <p className="text-2xl font-bold text-foreground">{todayDisplay}</p>
+                                <p className="text-[11px] text-foreground/40 mt-0.5">of 8 hour daily</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {/* #16 — View My Time link fixed */}
+                                <Link href="/my-time" className="text-xs text-foreground/60 border border-foreground/15 rounded-full px-3 py-1 hover:bg-foreground/5 transition">
+                                    View My Time &gt;
+                                </Link>
+                                {/* #26 — Play button now opens time-entry modal */}
+                                <button
+                                    onClick={() => setShowTimeEntry(true)}
+                                    title="Log time"
+                                    className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center cursor-pointer hover:bg-blue-500 transition"
+                                >
+                                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                     </div>
-                </div>
-                {/* This Week */}
-                <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] p-4">
-                    <span className="text-xs text-foreground/50">This Week</span>
-                    <div className="flex items-center justify-between mt-1">
-                        <div>
-                            <p className="text-2xl font-bold text-foreground">{weekDisplay}</p>
-                            <p className="text-[11px] text-foreground/40 mt-0.5">of 40 hour weekly work</p>
+                    {/* This Week */}
+                    <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] p-4">
+                        <span className="text-xs text-foreground/50">This Week</span>
+                        <div className="flex items-center justify-between mt-1">
+                            <div>
+                                <p className="text-2xl font-bold text-foreground">{weekDisplay}</p>
+                                <p className="text-[11px] text-foreground/40 mt-0.5">of 40 hour weekly work</p>
+                            </div>
+                            <Link href="/my-time" className="text-xs text-foreground/60 border border-foreground/15 rounded-full px-3 py-1 hover:bg-foreground/5 transition">
+                                View My Time &gt;
+                            </Link>
                         </div>
-                        <Link href="/my-time" className="text-xs text-foreground/60 border border-foreground/15 rounded-full px-3 py-1 hover:bg-foreground/5 transition">
-                            View My Time &gt;
-                        </Link>
                     </div>
                 </div>
             </div>
-        </div>
+            {showTimeEntry && <TimeEntryModal onClose={() => setShowTimeEntry(false)} />}
+        </>
     );
 }
 
@@ -309,7 +421,6 @@ function HomeSkeleton() {
 
 // ============ Main Page ============
 
-// Get the default date range for "this month"
 function getThisMonthDefault(): DateFilter {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -325,15 +436,26 @@ export default function HomePage() {
     const [error, setError] = useState<string | null>(null);
     const [showAddTask, setShowAddTask] = useState(false);
     const [dateFilter, setDateFilter] = useState<DateFilter>(getThisMonthDefault());
+    const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
 
-    const fetchDashboard = useCallback((filter?: DateFilter) => {
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchQuery), 350);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const fetchDashboard = useCallback((filter?: DateFilter, searchStr?: string) => {
         const token = getToken();
         if (!token) {
             router.push("/login?redirect=/home");
             return;
         }
 
-        getPersonalDashboard(filter)
+        const effectiveFilter = { ...filter };
+        if (searchStr) effectiveFilter.search = searchStr;
+
+        getPersonalDashboard(effectiveFilter)
             .then((d) => {
                 setData(d);
                 setLoading(false);
@@ -353,11 +475,18 @@ export default function HomePage() {
         const filter: DateFilter = { startDate: range.startDate, endDate: range.endDate };
         setDateFilter(filter);
         setLoading(true);
-        fetchDashboard(filter);
-    }, [fetchDashboard]);
+        fetchDashboard(filter, debouncedSearch);
+    }, [fetchDashboard, debouncedSearch]);
+
+    // Refetch when search changes
+    useEffect(() => {
+        setLoading(true);
+        fetchDashboard(dateFilter, debouncedSearch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedSearch]);
 
     useEffect(() => {
-        fetchDashboard(dateFilter);
+        fetchDashboard(dateFilter, debouncedSearch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -386,7 +515,17 @@ export default function HomePage() {
                     <h1 className="text-2xl font-bold text-foreground">Welcome!</h1>
                     <p className="text-sm text-foreground/50 mt-1">Here&apos;s what&apos;s happening with your work today.</p>
                 </div>
-                <div className="flex gap-3 items-center">
+                <div className="flex flex-wrap gap-3 items-center">
+                    <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground/40 pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Search tasks..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full rounded-lg pl-9 pr-4 py-2 text-sm bg-foreground/5 border border-foreground/15 text-foreground placeholder-foreground/40 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-colors"
+                        />
+                    </div>
                     <DateFilterDropdown
                         initialPreset="this_month"
                         onFilterChange={handleFilterChange}
@@ -406,9 +545,9 @@ export default function HomePage() {
                 description="Your personal dashboard shows tasks assigned to you, upcoming deadlines, and your logged hours — all in one place."
                 bullets={[
                     "Stat cards at the top are clickable — they filter your tasks by status.",
-                    "Upcoming Deadlines shows tasks due within the next 7 days, sorted by due date.",
-                    "Recent Activity logs the latest changes to your tasks and projects.",
-                    "The time tracker shows hours logged today and this week vs your target.",
+                    "Upcoming Deadlines shows tasks due within the next 30 days, sorted by due date.",
+                    "Recent Activity logs the latest changes to your tasks — click any row for full details.",
+                    "The time tracker shows hours logged today/this week. Click ▶ to log time.",
                     "Click Add Task to quickly create a new task from this dashboard.",
                 ]}
             />
@@ -421,8 +560,9 @@ export default function HomePage() {
                 <StatCard label="Overdue" value={dashboard.overdue_tasks_count ?? "NA"} color="#ef4444" href={buildCardHref("/tasks/overdue", dateFilter)} />
             </div>
 
+            {/* #1 — Fixed height: both columns use items-stretch so boxes have equal height */}
             {/* Upcoming Deadlines + Task Status */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
                 <div className="lg:col-span-3">
                     <UpcomingDeadlinesSection deadlines={dashboard.upcoming_deadlines} />
                 </div>
@@ -432,7 +572,7 @@ export default function HomePage() {
             </div>
 
             {/* Recent Activity + Time Status */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
                 <div className="lg:col-span-3">
                     <RecentActivitySection activities={dashboard.recent_activity} />
                 </div>

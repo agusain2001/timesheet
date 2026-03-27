@@ -175,15 +175,23 @@ function ScheduleModal({ onSave, onClose }: { onSave: () => void; onClose: () =>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs text-foreground/60 mb-1.5 font-medium">Hour (0–23)</label>
+                            <label className="block text-xs text-foreground/60 mb-1.5 font-medium">Hour (0–23) <span className="text-foreground/40 font-normal ml-1">e.g. 9 for 9 AM</span></label>
                             <input type="number" min={0} max={23} value={form.hour}
                                 onChange={e => setForm({ ...form, hour: e.target.value })} className={inputCls} />
                         </div>
                         <div>
                             <label className="block text-xs text-foreground/60 mb-1.5 font-medium">Minute</label>
-                            <input type="number" min={0} max={59} step={15} value={form.minute}
-                                onChange={e => setForm({ ...form, minute: e.target.value })} className={inputCls} />
+                            <select value={form.minute} onChange={e => setForm({ ...form, minute: e.target.value })} className={selectCls}>
+                                <option value="0">00</option>
+                                <option value="15">15</option>
+                                <option value="30">30</option>
+                                <option value="45">45</option>
+                            </select>
                         </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs text-foreground/60 mb-1.5 mt-4 font-medium">Recipients <span className="text-foreground/40 font-normal ml-1">(comma separated emails)</span></label>
+                        <input type="text" placeholder="team@company.com, manager@company.com" className={inputCls} />
                     </div>
 
                     {/* Preview */}
@@ -250,13 +258,15 @@ export default function ScheduledReportsPage() {
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
+    const [deleteModalId, setDeleteModalId] = useState<string | null>(null);
+
     const handleCancel = async (id: string) => {
         setCancelling(id);
         try {
             await apiFetch(`/reports/scheduled/${id}`, { method: "DELETE" });
             showToast("Scheduled report removed");
             fetchAll();
-        } catch { } finally { setCancelling(null); }
+        } catch { } finally { setCancelling(null); setDeleteModalId(null); }
     };
 
     const handleRunNow = async (id: string) => {
@@ -265,6 +275,7 @@ export default function ScheduledReportsPage() {
             // Trigger immediate generation using the schedule endpoint with a now-run flag
             await apiFetch(`/reports/scheduled/${id}/run`, { method: "POST" });
             showToast("Report triggered successfully");
+            setReports(prev => prev.map(r => r.id === id ? { ...r, last_run: new Date().toISOString() } : r));
         } catch {
             showToast("Run now not available — report will run on next schedule");
         } finally { setRunningNow(null); }
@@ -390,7 +401,7 @@ export default function ScheduledReportsPage() {
                                                 Run
                                             </button>
                                             <button
-                                                onClick={() => handleCancel(r.id)}
+                                                onClick={() => setDeleteModalId(r.id)}
                                                 disabled={cancelling === r.id}
                                                 title="Delete"
                                                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium transition-colors disabled:opacity-50">
@@ -403,6 +414,25 @@ export default function ScheduledReportsPage() {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {deleteModalId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-background border border-foreground/15 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden p-6 text-center">
+                        <div className="mx-auto w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                            <AlertCircle size={24} className="text-red-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-foreground mb-2">Delete Scheduled Report</h3>
+                        <p className="text-sm text-foreground/60 mb-6">Are you sure you want to delete this scheduled report? It will no longer run automatically.</p>
+                        <div className="flex justify-center gap-3">
+                            <button onClick={() => setDeleteModalId(null)} className="px-5 py-2 rounded-xl border border-foreground/10 text-foreground/70 hover:bg-foreground/5 transition font-medium text-sm">Cancel</button>
+                            <button onClick={() => handleCancel(deleteModalId)} disabled={cancelling === deleteModalId} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium text-sm transition shadow-lg shadow-red-500/20 disabled:opacity-70">
+                                {cancelling === deleteModalId ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                Delete Report
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

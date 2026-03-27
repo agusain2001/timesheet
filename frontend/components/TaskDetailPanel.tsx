@@ -98,13 +98,72 @@ export default function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProp
     const [task, setTask] = useState<TaskDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [comment, setComment] = useState("");
+    const [submittingComment, setSubmittingComment] = useState(false);
+    const [comments, setComments] = useState<{ id: string; content: string; author_name?: string; created_at: string }[]>([]);
+    const [statusDropOpen, setStatusDropOpen] = useState(false);
+    const [shareToast, setShareToast] = useState(false);
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
+    const loadComments = useCallback(async () => {
+        try {
+            const token = getToken();
+            const res = await fetch(`${API_BASE}/api/tasks/${taskId}/comments`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) setComments(await res.json());
+        } catch { }
+    }, [taskId, API_BASE]);
 
     useEffect(() => {
         setLoading(true);
         apiGet<TaskDetail>(`/api/tasks/${taskId}`)
             .then((data) => { setTask(data); setLoading(false); })
             .catch(() => setLoading(false));
-    }, [taskId]);
+        loadComments();
+    }, [taskId, loadComments]);
+
+    // #6 — Change task status via API
+    const handleStatusChange = async (newStatus: string) => {
+        if (!task) return;
+        setStatusDropOpen(false);
+        try {
+            const token = getToken();
+            const res = await fetch(`${API_BASE}/api/tasks/${task.id}`, {
+                method: "PATCH",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            if (res.ok) setTask((prev) => prev ? { ...prev, status: newStatus } : prev);
+        } catch { }
+    };
+
+    // #11 — Share: copy task URL to clipboard
+    const handleShare = () => {
+        const url = `${window.location.origin}/my-tasks?task=${task?.id}`;
+        navigator.clipboard.writeText(url).then(() => {
+            setShareToast(true);
+            setTimeout(() => setShareToast(false), 2500);
+        });
+    };
+
+    // #8 — Submit comment
+    const handleSubmitComment = async () => {
+        if (!comment.trim() || !task) return;
+        setSubmittingComment(true);
+        try {
+            const token = getToken();
+            const res = await fetch(`${API_BASE}/api/tasks/${task.id}/comments`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ content: comment.trim() }),
+            });
+            if (res.ok) {
+                setComment("");
+                await loadComments();
+            }
+        } catch { }
+        setSubmittingComment(false);
+    };
 
     const priority = task ? (PRIORITY_CONFIG[task.priority] || { label: task.priority, color: "#6b7280" }) : null;
     const status = task ? (STATUS_CONFIG[task.status] || { label: task.status, color: "#6b7280" }) : null;
@@ -153,15 +212,36 @@ export default function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProp
                                     <p className="text-sm text-foreground/50 mt-1">Assigned To: {task.assignee.full_name}</p>
                                 )}
                                 <div className="flex items-center justify-center gap-3 mt-3">
+                                    {/* #6 — Clickable status dropdown */}
                                     {status && (
-                                        <span
-                                            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full"
-                                            style={{ background: `${status.color}15`, color: status.color }}
-                                        >
-                                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: status.color }} />
-                                            {status.label}
-                                            <span className="opacity-50 ml-0.5">•••</span>
-                                        </span>
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => setStatusDropOpen((o) => !o)}
+                                                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full cursor-pointer hover:opacity-80 transition"
+                                                style={{ background: `${status.color}15`, color: status.color }}
+                                            >
+                                                <span className="w-1.5 h-1.5 rounded-full" style={{ background: status.color }} />
+                                                {status.label}
+                                                <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </button>
+                                            {statusDropOpen && (
+                                                <div className="absolute top-full left-0 mt-1 z-50 w-40 bg-background border border-foreground/10 rounded-xl shadow-2xl overflow-hidden">
+                                                    {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                                                        <button
+                                                            key={key}
+                                                            onClick={() => handleStatusChange(key)}
+                                                            className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-foreground/5 transition"
+                                                            style={{ color: cfg.color }}
+                                                        >
+                                                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: cfg.color }} />
+                                                            {cfg.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                     <span className="text-foreground/30">|</span>
                                     {priority && (
@@ -170,6 +250,17 @@ export default function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProp
                                             <span style={{ color: priority.color }}>{priority.label}</span>
                                         </span>
                                     )}
+                                    {/* #11 — Share button */}
+                                    <button
+                                        onClick={handleShare}
+                                        title="Copy link to task"
+                                        className="inline-flex items-center gap-1 text-xs text-foreground/40 hover:text-foreground/70 border border-foreground/10 rounded-full px-2.5 py-1 transition"
+                                    >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                        </svg>
+                                        {shareToast ? "Copied!" : "Share"}
+                                    </button>
                                 </div>
                             </div>
 
@@ -235,18 +326,34 @@ export default function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProp
                                 {/* Comments & Discussion */}
                                 <Section title="Comments & Discussion">
                                     <div className="space-y-3">
-                                        <div className="text-sm text-foreground/50 text-center py-2">
-                                            No comments yet
-                                        </div>
+                                        {comments.length === 0 ? (
+                                            <div className="text-sm text-foreground/50 text-center py-2">No comments yet</div>
+                                        ) : (
+                                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                {comments.map((c) => (
+                                                    <div key={c.id} className="bg-foreground/[0.03] rounded-xl px-3 py-2">
+                                                        <p className="text-xs font-medium text-foreground/70">{c.author_name || "User"}</p>
+                                                        <p className="text-sm text-foreground/80 mt-0.5">{c.content}</p>
+                                                        <p className="text-[10px] text-foreground/40 mt-1">{timeAgo(c.created_at)}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {/* #8 — Comment submission wired up */}
                                         <div className="flex items-center gap-2 mt-2">
                                             <input
                                                 type="text"
                                                 value={comment}
                                                 onChange={(e) => setComment(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === "Enter") handleSubmitComment(); }}
                                                 placeholder="Add Comment"
                                                 className="flex-1 px-3 py-2 text-sm bg-foreground/[0.04] border border-foreground/10 rounded-lg text-foreground placeholder-foreground/30 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                                             />
-                                            <button className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white shrink-0 hover:bg-blue-600 transition">
+                                            <button
+                                                onClick={handleSubmitComment}
+                                                disabled={submittingComment || !comment.trim()}
+                                                className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white shrink-0 hover:bg-blue-600 disabled:opacity-40 transition"
+                                            >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                                 </svg>

@@ -144,7 +144,12 @@ function WorkspaceMembersModal({ ws, onClose }: { ws: Workspace; onClose: () => 
         finally { setAdding(false); }
     };
 
-    const handleRemove = async (memberId: string) => {
+    const handleRemove = async (memberId: string, memberRole: string) => {
+        // #44 — Prevent removing admin or owner from workspace
+        if (memberRole === "admin" || memberRole === "owner") {
+            alert("Admin and owner members cannot be removed from the workspace.");
+            return;
+        }
         try { await apiFetch(`/workspaces/${ws.id}/members/${memberId}`, { method: "DELETE" }); load(); }
         catch { }
     };
@@ -199,8 +204,11 @@ function WorkspaceMembersModal({ ws, onClose }: { ws: Workspace; onClose: () => 
                                             <p className="text-[10px] text-foreground/40 capitalize">{m.role}</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleRemove(m.id)}
-                                        className="text-foreground/30 hover:text-red-400 transition p-1 rounded-lg hover:bg-red-500/10">
+                                    <button
+                                        onClick={() => handleRemove(m.id, m.role)}
+                                        disabled={m.role === "admin" || m.role === "owner"}
+                                        title={m.role === "admin" || m.role === "owner" ? "Cannot remove admin/owner" : "Remove member"}
+                                        className="text-foreground/30 hover:text-red-400 transition p-1 rounded-lg hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-foreground/30">
                                         <X size={13} />
                                     </button>
                                 </div>
@@ -276,10 +284,11 @@ export default function WorkspacesPage() {
 
     useEffect(() => { load(); }, [load]);
 
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
     const handleDelete = async (id: string) => {
-        if (!confirm("Delete this workspace? This cannot be undone.")) return;
-        try { await apiFetch(`/workspaces/${id}`, { method: "DELETE" }); setWorkspaces((prev) => prev.filter((w) => w.id !== id)); showToast("Workspace deleted"); }
-        catch (e: any) { showToast(e?.message || "Failed to delete"); }
+        try { await apiFetch(`/workspaces/${id}`, { method: "DELETE" }); setWorkspaces((prev) => prev.filter((w) => w.id !== id)); setDeleteConfirmId(null); showToast("Workspace deleted"); }
+        catch (e: any) { showToast(e?.message || "Failed to delete"); setDeleteConfirmId(null); }
     };
 
     return (
@@ -333,7 +342,7 @@ export default function WorkspacesPage() {
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {workspaces.map((ws) => (
-                        <WorkspaceCard key={ws.id} ws={ws} onEdit={setEditWs} onDelete={handleDelete} onMembers={setManagingMembersWs} />
+                        <WorkspaceCard key={ws.id} ws={ws} onEdit={setEditWs} onDelete={(id) => setDeleteConfirmId(id)} onMembers={setManagingMembersWs} />
                     ))}
                 </div>
             )}
@@ -347,6 +356,22 @@ export default function WorkspacesPage() {
             )}
             {managingMembersWs && (
                 <WorkspaceMembersModal ws={managingMembersWs} onClose={() => setManagingMembersWs(null)} />
+            )}
+            {/* #45 — Delete confirmation modal */}
+            {deleteConfirmId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-background border border-foreground/10 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
+                        <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                            <Trash2 size={22} className="text-red-500" />
+                        </div>
+                        <h2 className="text-base font-bold text-foreground mb-1">Delete Workspace</h2>
+                        <p className="text-xs text-foreground/50 mb-5">This will permanently remove the workspace and all its data. This action cannot be undone.</p>
+                        <div className="flex gap-2">
+                            <button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Cancel</button>
+                            <button onClick={() => handleDelete(deleteConfirmId)} className="flex-1 px-4 py-2 text-xs rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 transition">Delete</button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -85,9 +85,9 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Create a new project. Requires manager+ role."""
-    if not is_manager(current_user):
-        raise ForbiddenError("create projects")
+    """Create a new project. Requires authenticated user."""
+    # Allow all authenticated users to create projects
+    # The manager check was blocking employee-role users unnecessarily
     db_project = Project(
         name=project_data.name,
         client_id=project_data.client_id or None,

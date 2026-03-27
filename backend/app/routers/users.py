@@ -25,9 +25,9 @@ def create_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Create a new user (admin only)."""
-    if not is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """Create a new user (manager+ access required)."""
+    if not is_manager(current_user):
+        raise HTTPException(status_code=403, detail="Manager or admin access required")
     
     # Check if email exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()

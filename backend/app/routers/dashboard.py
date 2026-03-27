@@ -73,6 +73,7 @@ class WeeklySummaryResponse(BaseModel):
 def get_personal_dashboard(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -103,6 +104,14 @@ def get_personal_dashboard(
 
         # Base task filter (always scoped to the current user)
         base_q = db.query(Task).filter(Task.assignee_id == current_user.id)
+        if search:
+            search_term = f"%{search.lower()}%"
+            base_q = base_q.filter(
+                or_(
+                    func.lower(Task.name).like(search_term),
+                    func.lower(Task.description).like(search_term)
+                )
+            )
 
         # My Tasks count
         if filter_start and filter_end:
@@ -169,12 +178,13 @@ def get_personal_dashboard(
             func.date(Task.completed_at) == today
         ).count()
 
-        # Upcoming deadlines (next 5 tasks due within 7 days — always shows near future)
+        # Upcoming deadlines (next 5 tasks due — show within 30 days by default)
         try:
             from sqlalchemy.orm import joinedload as _jl
             deadline_q = db.query(Task).options(_jl(Task.project)).filter(
                 Task.assignee_id == current_user.id,
                 Task.status != TaskStatus.COMPLETED.value,
+                Task.status != TaskStatus.CANCELLED.value if hasattr(TaskStatus, 'CANCELLED') else True,
                 Task.due_date != None,
             )
             if filter_start and filter_end:
@@ -183,11 +193,13 @@ def get_personal_dashboard(
                     Task.due_date <= filter_end
                 )
             else:
+                # Widen window to 30 days to show more upcoming items
+                look_back = now - timedelta(days=1)  # include today's tasks
                 deadline_q = deadline_q.filter(
-                    Task.due_date >= now,
-                    Task.due_date <= now + timedelta(days=7)
+                    Task.due_date >= look_back,
+                    Task.due_date <= now + timedelta(days=30)
                 )
-            upcoming_tasks = deadline_q.order_by(Task.due_date.asc()).limit(5).all()
+            upcoming_tasks = deadline_q.order_by(Task.due_date.asc()).limit(10).all()
 
             upcoming_deadlines = [
                 UpcomingDeadline(
@@ -199,7 +211,9 @@ def get_personal_dashboard(
                 )
                 for t in upcoming_tasks
             ]
-        except Exception:
+        except Exception as deadline_err:
+            import logging
+            logging.warning(f"Upcoming deadlines error: {deadline_err}")
             upcoming_deadlines = []
 
         # Hours logged today
@@ -250,18 +264,16 @@ def get_personal_dashboard(
                 )
             status_counts = status_q.group_by(Task.status).all()
 
-            tasks_by_status = {
-                "todo": 0,
-                "in_progress": 0,
-                "review": 0,
-                "completed": 0,
-                "blocked": 0
-            }
+            # Collect ALL statuses dynamically — don't restrict to a fixed list
+            tasks_by_status: dict = {}
             for status, count in status_counts:
                 if status:
                     status_key = status.lower().replace(" ", "_")
-                    if status_key in tasks_by_status:
-                        tasks_by_status[status_key] = count
+                    tasks_by_status[status_key] = tasks_by_status.get(status_key, 0) + count
+
+            # Ensure at least canonical keys exist with 0 so the frontend doesn't break
+            for key in ("todo", "in_progress", "review", "completed", "blocked"):
+                tasks_by_status.setdefault(key, 0)
         except Exception:
             tasks_by_status = {"todo": 0, "in_progress": 0, "review": 0, "completed": 0, "blocked": 0}
 

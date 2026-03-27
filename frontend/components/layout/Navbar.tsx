@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { logout, getToken } from "@/lib/auth";
 import { getProjects } from "@/services/projects";
+import { getNotifications, getUnreadCount } from "@/services/notifications";
+import NotificationsPanel from "@/components/NotificationsPanel";
 
 import AddTaskModal from "@/components/AddTaskModal";
 import NewExpenseModal from "@/components/NewExpenseModal";
@@ -23,6 +25,7 @@ export function Navbar() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAllNotifications, setShowAllNotifications] = useState(false); // New state for NotificationsPanel
   const [notifications, setNotifications] = useState<any[]>([]);
   const [modal, setModal] = useState<"task" | "client" | "project" | "expense" | "support" | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
@@ -313,7 +316,7 @@ export function Navbar() {
             }}
             onDoubleClick={() => {
               setShowNotifications(false);
-              router.push("/notifications");
+              setShowAllNotifications(true);
             }}
             className="relative text-foreground/70 hover:text-foreground transition flex items-center"
           >
@@ -378,7 +381,7 @@ export function Navbar() {
                 <button
                   onClick={() => {
                     setShowNotifications(false);
-                    router.push("/notifications");
+                    setShowAllNotifications(true);
                   }}
                   className="w-full py-2 text-xs font-medium text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition"
                 >
@@ -390,13 +393,17 @@ export function Navbar() {
         </div>
 
         {/* User Avatar + Dropdown */}
-        <div ref={menuRef} className="relative">
-          <button
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-semibold text-white cursor-pointer hover:ring-2 hover:ring-blue-400/50 transition"
+        <div 
+          ref={menuRef} 
+          className="relative py-2" // Add py-2 to create a larger hover area and prevent gap closing
+          onMouseEnter={() => setShowUserMenu(true)}
+          onMouseLeave={() => setShowUserMenu(false)}
+        >
+          <div
+            className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-semibold text-white cursor-pointer ring-2 ring-transparent hover:ring-blue-400/50 transition"
           >
             AS
-          </button>
+          </div>
 
           {showUserMenu && (
             <div className="absolute right-0 top-10 z-50 w-48 bg-background border border-foreground/10 rounded-lg shadow-2xl overflow-hidden">
@@ -405,7 +412,7 @@ export function Navbar() {
                 <p className="text-xs text-foreground/50 truncate">test@example.com</p>
               </div>
               <button
-                onClick={() => { setShowUserMenu(false); router.push("/home"); }}
+                onClick={() => { setShowUserMenu(false); router.push("/settings/profile"); }}
                 className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground/70 hover:bg-foreground/[0.06] hover:text-foreground transition"
               >
                 <User className="w-4 h-4" />
@@ -437,6 +444,7 @@ export function Navbar() {
       {modal === "project" && <AddProjectModal onClose={() => setModal(null)} onCreated={() => { setModal(null); window.location.reload(); }} />}
       <NewExpenseModal isOpen={modal === "expense"} onClose={() => setModal(null)} onExpenseCreated={() => { setModal(null); window.location.reload(); }} projects={projects} />
       <AddRequestModal isOpen={modal === "support"} onClose={() => setModal(null)} onCreated={() => { setModal(null); window.location.reload(); }} />
+      <NotificationsPanel isOpen={showAllNotifications} onClose={() => setShowAllNotifications(false)} />
     </header>
   );
 }

@@ -478,23 +478,32 @@ function MyTasksContent() {
                 />
             )}
 
-            {/* Toolbar (not shown for list view) */}
-            {view !== "list" && (
-                <ViewToolbar
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                    sortBy={sortBy}
-                    onSortChange={setSortBy}
-                    groupBy={groupBy}
-                    onGroupChange={setGroupBy}
-                    users={users}
-                />
-            )}
+            {/* Toolbar */}
+            <ViewToolbar
+                filters={filters}
+                onFiltersChange={setFilters}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                groupBy={groupBy}
+                onGroupChange={setGroupBy}
+                users={users}
+            />
 
             {/* View Content */}
             <div className="flex-1 overflow-hidden">
                 {view === "list" && (
-                    <TaskListPage title="My Tasks" fetchUrl="/api/tasks/my" dateFilter={dateFilter} />
+                    <TaskListPage
+                        title="My Tasks"
+                        fetchUrl="/api/tasks/my"
+                        dateFilter={dateFilter}
+                        hideHeader={true}
+                        fetchParams={{
+                            ...(filters.status ? { status_filter: filters.status } : {}),
+                            ...(filters.priority ? { priority: filters.priority } : {}),
+                            ...(filters.assignee ? { assignee_id: filters.assignee } : {}),
+                            ...(filters.search ? { search: filters.search } : {}),
+                        }}
+                    />
                 )}
 
                 {view === "kanban" && !loading && (

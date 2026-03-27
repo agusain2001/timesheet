@@ -41,6 +41,9 @@ export interface TaskListPageProps {
     title: string;
     fetchUrl: string;
     fetchParams?: Record<string, string>;
+    /** When true, hides the built-in header (title + Add Task button).
+     *  Use this when the parent page already renders its own header. */
+    hideHeader?: boolean;
     /** Optional date range filter inherited from the dashboard. When set,
      *  start_date/end_date are added to the API call and a banner is shown. */
     dateFilter?: {
@@ -88,7 +91,7 @@ type SortField = "type" | "project" | "priority" | "assignee" | "status";
 
 // ============ Main Component ============
 
-export default function TaskListPage({ title, fetchUrl, fetchParams, dateFilter }: TaskListPageProps) {
+export default function TaskListPage({ title, fetchUrl, fetchParams, dateFilter, hideHeader }: TaskListPageProps) {
     const [tasks, setTasks] = useState<TaskItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -182,7 +185,8 @@ export default function TaskListPage({ title, fetchUrl, fetchParams, dateFilter 
 
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto">
-            {/* Header */}
+            {/* Header — hidden when parent page already shows one */}
+            {!hideHeader && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <h1 className="text-2xl font-bold text-foreground">{title}</h1>
                 <div className="flex items-center gap-3">
@@ -197,6 +201,7 @@ export default function TaskListPage({ title, fetchUrl, fetchParams, dateFilter 
                     </button>
                 </div>
             </div>
+            )}
 
             {/* Active date filter banner */}
             {dateFilter && (

@@ -263,7 +263,7 @@ export function AddClientModal({ onClose, onCreated }: { onClose: () => void; on
                 <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-foreground/10">
                     <button onClick={onClose} className="px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">Draft</button>
                     <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition flex items-center gap-1.5">
-                        {saving ? <><svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>Saving...</> : "Send To Manager For Approval"}
+                        {saving ? <><svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>Saving...</> : "Add Client"}
                     </button>
                 </div>
             </div>

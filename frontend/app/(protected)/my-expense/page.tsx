@@ -12,6 +12,7 @@ import {
     type ExpenseStatus,
     type ExpensesParams,
 } from "@/services/expenses";
+import { getProjects } from "@/services/projects";
 
 import NewExpenseModal from "@/components/NewExpenseModal";
 import { HowItWorks } from "@/components/ui/HowItWorks";
@@ -57,18 +58,78 @@ function getCategoryLabel(expense: Expense): string {
 
 // ============ Sub-components ============
 
-function StatusPill({ status }: { status: string }) {
+// #56 — Clickable status pill with dropdown to change expense status
+function StatusPill({status, expenseId, onStatusChanged}: {status: string; expenseId: string; onStatusChanged: () => void}) {
+    const [open, setOpen] = useState(false);
+    const [updating, setUpdating] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [open]);
+
+    const changeStatus = async (newStatus: string) => {
+        setOpen(false);
+        if (newStatus === status) return;
+        setUpdating(true);
+        try {
+            const token = typeof window !== "undefined" ? localStorage.getItem("token") ?? "" : "";
+            const API = process.env.NEXT_PUBLIC_API_URL || "";
+            await fetch(`${API}/api/expenses/${expenseId}`, {
+                method: "PATCH",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            onStatusChanged();
+        } catch { /* silent */ }
+        setUpdating(false);
+    };
+
     const cfg = STATUS_FILTERS.find((s) => s.key === status);
     const color = cfg?.color || "#6b7280";
     const label = cfg?.label || status.charAt(0).toUpperCase() + status.slice(1);
+    // only draft and returned can be changed by the user
+    const canChange = status === "draft" || status === "returned";
+
     return (
-        <span
-            className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap"
-            style={{ background: `${color}20`, color }}
-        >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-            {label}
-        </span>
+        <div ref={ref} className="relative inline-block">
+            <button
+                onClick={() => canChange && setOpen((o) => !o)}
+                disabled={updating}
+                title={canChange ? "Click to change status" : "Status managed by approval flow"}
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap transition ${canChange ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+                style={{ background: `${color}20`, color }}
+            >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+                {updating ? "..." : label}
+                {canChange && (
+                    <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                )}
+            </button>
+            {open && (
+                <div className="absolute top-full left-0 mt-1 z-50 w-44 bg-background border border-foreground/10 rounded-xl shadow-2xl overflow-hidden">
+                    {["draft", "pending"].map(s => {
+                        const scfg = STATUS_FILTERS.find(f => f.key === s);
+                        return (
+                            <button key={s} onClick={() => changeStatus(s)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-foreground/5 transition"
+                                style={{ color: scfg?.color || "#6b7280" }}
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: scfg?.color || "#6b7280" }} />
+                                {scfg?.label || s}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -103,7 +164,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 // ============ Expense Row ============
 
 function ExpenseRow({
-    expense, isMenuOpen, onMenuToggle, onCloseMenu, onDelete, onSubmit, onEdit, onViewReceipt,
+    expense, isMenuOpen, onMenuToggle, onCloseMenu, onDelete, onSubmit, onEdit, onViewReceipt, onStatusChanged,
 }: {
     expense: Expense;
     isMenuOpen: boolean;
@@ -113,6 +174,7 @@ function ExpenseRow({
     onSubmit: () => void;
     onEdit: () => void;
     onViewReceipt: () => void;
+    onStatusChanged: () => void;
 }) {
     const btnRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -171,7 +233,7 @@ function ExpenseRow({
                 {expense.project_name || "—"}
             </td>
             <td className="py-3 pr-3">
-                <StatusPill status={expense.status} />
+                <StatusPill status={expense.status} expenseId={expense.id} onStatusChanged={onStatusChanged} />
             </td>
             <td className="py-3 pr-4 w-10">
                 <button ref={btnRef} onClick={onMenuToggle} className="p-1 rounded hover:bg-foreground/10 text-foreground/40 hover:text-foreground transition">
@@ -244,6 +306,8 @@ export default function MyExpensePage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [showSearch, setShowSearch] = useState(false);
     const [filterDate, setFilterDate] = useState<string>("");
+    // #57 — real projects list for NewExpenseModal
+    const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
     // Delete modal state
     const [deleteExpenseData, setDeleteExpenseData] = useState<Expense | null>(null);
@@ -270,7 +334,11 @@ export default function MyExpensePage() {
         }
     }, [router, activeStatus]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        fetchData();
+        // #57 — load real projects
+        getProjects({ limit: 100 }).then((r: any) => setProjects(r?.items ?? r ?? [])).catch(() => {});
+    }, [fetchData]);
 
     const handleDeleteConfirm = async () => {
         if (!deleteExpenseData) return;
@@ -410,6 +478,7 @@ export default function MyExpensePage() {
                                     onDelete={() => setDeleteExpenseData(expense)}
                                     onSubmit={() => handleSubmitForApproval(expense)}
                                     onEdit={() => setEditExpenseData(expense)}
+                                    onStatusChanged={fetchData}
                                     onViewReceipt={() => {
                                         // View receipt - check if any item has a receipt path
                                         if (!expense.items || expense.items.length === 0) return;
@@ -440,7 +509,7 @@ export default function MyExpensePage() {
                 isOpen={showNewExpense || !!editExpenseData}
                 onClose={() => { setShowNewExpense(false); setEditExpenseData(null); }}
                 onExpenseCreated={fetchData}
-                projects={[]}
+                projects={projects}
                 editExpense={editExpenseData}
             />
             <DeleteExpenseModal

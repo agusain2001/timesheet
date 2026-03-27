@@ -165,6 +165,21 @@ export default function SupportPage() {
     const [showPriorityFilter, setShowPriorityFilter] = useState(false);
     const [filterSource, setFilterSource] = useState<string | null>(null);
     const [showSourceFilter, setShowSourceFilter] = useState(false);
+    const [filterReadStatus, setFilterReadStatus] = useState<string | null>(null);
+    const [showReadFilter, setShowReadFilter] = useState(false);
+    const [filterDate, setFilterDate] = useState<string | null>(null);
+    const [showDateFilter, setShowDateFilter] = useState(false);
+
+    const DATE_RANGES = [
+        { label: "Today", value: "today" },
+        { label: "This Week", value: "week" },
+        { label: "This Month", value: "month" },
+    ];
+    const READ_STATUS_OPTIONS = [
+        { label: "Unread (Open)", value: "open" },
+        { label: "Read (Resolved)", value: "resolved" },
+    ];
+
 
     const fetchRequests = useCallback(() => {
         const token = getToken();
@@ -219,8 +234,25 @@ export default function SupportPage() {
             if (!matchSubject && !matchMessage) return false;
         }
         if (filterSource && r.user?.full_name !== filterSource) return false;
+        // Read status filter: map "open" to unread, "resolved" to read
+        if (filterReadStatus && r.status !== filterReadStatus) return false;
+        // Date range filter
+        if (filterDate) {
+            const created = new Date(r.created_at);
+            const now = new Date();
+            if (filterDate === "today") {
+                if (created.toDateString() !== now.toDateString()) return false;
+            } else if (filterDate === "week") {
+                const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+                if (created < weekAgo) return false;
+            } else if (filterDate === "month") {
+                const monthAgo = new Date(now); monthAgo.setMonth(now.getMonth() - 1);
+                if (created < monthAgo) return false;
+            }
+        }
         return true;
     });
+
 
     const uniqueSources = Array.from(new Set(requests.map(r => r.user?.full_name).filter(Boolean))) as string[];
 
@@ -307,8 +339,35 @@ export default function SupportPage() {
                         )}
                     </div>
 
-                    <FilterChip label="Read Status" icon={<span className="w-2 h-2 rounded-full bg-green-400" />} />
-                    <FilterChip label="Date" icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>} />
+                    <div className="relative">
+                        <FilterChip label="Read Status" active={!!filterReadStatus}
+                            onClick={() => { setShowReadFilter(!showReadFilter); setShowPriorityFilter(false); setShowSourceFilter(false); setShowDateFilter(false); }}
+                            icon={<span className={`w-2 h-2 rounded-full ${filterReadStatus ? 'bg-blue-400' : 'bg-green-400'}`} />}
+                        />
+                        {showReadFilter && (
+                            <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-foreground/10 bg-background shadow-xl z-20 py-1">
+                                <button onClick={() => { setFilterReadStatus(null); setShowReadFilter(false); }} className="w-full text-left px-3 py-2 text-xs text-foreground/60 hover:bg-foreground/10 transition">All</button>
+                                {READ_STATUS_OPTIONS.map(opt => (
+                                    <button key={opt.value} onClick={() => { setFilterReadStatus(opt.value); setShowReadFilter(false); }} className={`w-full text-left px-3 py-2 text-xs hover:bg-foreground/10 transition ${filterReadStatus === opt.value ? 'text-blue-400' : 'text-foreground/80'}`}>{opt.label}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className="relative">
+                        <FilterChip label={filterDate ? DATE_RANGES.find(d => d.value === filterDate)?.label || "Date" : "Date"} active={!!filterDate}
+                            onClick={() => { setShowDateFilter(!showDateFilter); setShowPriorityFilter(false); setShowSourceFilter(false); setShowReadFilter(false); }}
+                            icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>}
+                        />
+                        {showDateFilter && (
+                            <div className="absolute left-0 top-full mt-1 w-40 rounded-lg border border-foreground/10 bg-background shadow-xl z-20 py-1">
+                                <button onClick={() => { setFilterDate(null); setShowDateFilter(false); }} className="w-full text-left px-3 py-2 text-xs text-foreground/60 hover:bg-foreground/10 transition">All Time</button>
+                                {DATE_RANGES.map(dr => (
+                                    <button key={dr.value} onClick={() => { setFilterDate(dr.value); setShowDateFilter(false); }} className={`w-full text-left px-3 py-2 text-xs hover:bg-foreground/10 transition ${filterDate === dr.value ? 'text-blue-400' : 'text-foreground/80'}`}>{dr.label}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                 </div>
 
                 {/* Search */}

@@ -79,7 +79,7 @@ const BASE_URL = "/api/reports";
  * Get task aging report
  */
 export async function getTaskAgingReport(filters?: ReportFilters): Promise<ReportResult> {
-    return apiGet<ReportResult>(`${BASE_URL}/task-aging`, filters as Record<string, string | number | boolean | undefined>);
+    return apiGet<ReportResult>(`${BASE_URL}/task-aging-report`, filters as Record<string, string | number | boolean | undefined>);
 }
 
 /**

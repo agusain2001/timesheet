@@ -557,6 +557,13 @@ async def chat(
     current_user: User = Depends(get_current_active_user)
 ):
     """Main chat endpoint — AI-powered with database context."""
+    # #52 — Return friendly message if Gemini API key is not configured
+    if not settings.gemini_api_key or len(settings.gemini_api_key) < 20 or settings.gemini_api_key == "your-api-key":
+        return ChatResponse(
+            response="⚙️ AI Assistant is not yet configured. Please ask your administrator to add the GEMINI_API_KEY to the backend environment file (.env) and restart the server.",
+            context_used="unconfigured"
+        )
+
     save_chat_message(db, str(current_user.id), "user", message.message)
     context = fetch_user_context(current_user, db)
 

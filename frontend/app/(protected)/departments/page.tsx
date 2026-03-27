@@ -11,9 +11,12 @@ import {
     updateDepartment,
     deleteDepartment,
 } from "@/services/departments";
-import type { DepartmentUpdate } from "@/types/api";
-import type { Department, DepartmentMember, DepartmentProject } from "@/types/api";
+import { getUsers, updateUser } from "@/services/users";
+import { getProjects, updateProject } from "@/services/projects";
+import type { DepartmentUpdate, DepartmentCreate } from "@/types/api";
+import type { Department, DepartmentMember, DepartmentProject, User, Project } from "@/types/api";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+import DepartmentDetailsPanel from "@/components/DepartmentDetailsPanel";
 
 // ============ Toast ============
 function Toast({ message, type, onDone }: { message: string; type: "success" | "error"; onDone: () => void }) {
@@ -76,13 +79,44 @@ function MembersModal({
 }) {
     const [members, setMembers] = useState<DepartmentMember[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showAdd, setShowAdd] = useState(false);
+    const [allUsers, setAllUsers] = useState<User[]>([]);
+    const [selectedUserId, setSelectedUserId] = useState("");
+    const [adding, setAdding] = useState(false);
 
-    useEffect(() => {
+    const fetchMembers = useCallback(() => {
+        setLoading(true);
         getDepartmentMembers(dept.id)
             .then(setMembers)
             .catch(() => setMembers([]))
             .finally(() => setLoading(false));
     }, [dept.id]);
+
+    useEffect(() => {
+        fetchMembers();
+    }, [fetchMembers]);
+
+    // Fetch all users to populate select
+    useEffect(() => {
+        if (showAdd && allUsers.length === 0) {
+            getUsers({ limit: 500 }).then(setAllUsers).catch(console.error);
+        }
+    }, [showAdd, allUsers.length]);
+
+    const handleAdd = async () => {
+        if (!selectedUserId) return;
+        setAdding(true);
+        try {
+            await updateUser(selectedUserId, { department_id: dept.id });
+            setShowAdd(false);
+            setSelectedUserId("");
+            fetchMembers();
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setAdding(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -98,12 +132,51 @@ function MembersModal({
                             All Members associated by this department are listed below for quick access and management.
                         </p>
                     </div>
-                    <button onClick={onClose} className="text-foreground/40 hover:text-foreground transition p-1 mt-0.5">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                            <path d="M18 6L6 18M6 6l12 12" />
-                        </svg>
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {!showAdd && (
+                            <button
+                                onClick={() => setShowAdd(true)}
+                                className="text-xs font-medium px-3 py-1.5 rounded-md bg-blue-600/10 text-blue-600 hover:bg-blue-600/20 transition flex items-center gap-1.5"
+                            >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14"/></svg>
+                                Add Member
+                            </button>
+                        )}
+                        <button onClick={onClose} className="text-foreground/40 hover:text-foreground transition p-1 mt-0.5">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <path d="M18 6L6 18M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
+
+                {showAdd && (
+                    <div className="px-6 pb-4 flex items-center gap-2">
+                        <select
+                            value={selectedUserId}
+                            onChange={(e) => setSelectedUserId(e.target.value)}
+                            className="flex-1 border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none focus:border-blue-500/50 transition appearance-none"
+                        >
+                            <option value="">Select an employee...</option>
+                            {allUsers.filter(u => !members.some(m => m.id === u.id)).map(u => (
+                                <option key={u.id} value={u.id}>{u.full_name}</option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={handleAdd}
+                            disabled={!selectedUserId || adding}
+                            className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition"
+                        >
+                            {adding ? "Adding..." : "Add"}
+                        </button>
+                        <button
+                            onClick={() => { setShowAdd(false); setSelectedUserId(""); }}
+                            className="px-3 py-2 text-sm rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                )}
 
                 {/* Table */}
                 <div className="px-6 pb-5">
@@ -153,13 +226,43 @@ function ProjectsModal({
     const [projects, setProjects] = useState<DepartmentProject[]>([]);
     const [loading, setLoading] = useState(true);
     const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const [showAdd, setShowAdd] = useState(false);
+    const [allProjects, setAllProjects] = useState<Project[]>([]);
+    const [selectedProjectId, setSelectedProjectId] = useState("");
+    const [adding, setAdding] = useState(false);
 
-    useEffect(() => {
+    const fetchProjects = useCallback(() => {
+        setLoading(true);
         getDepartmentProjects(dept.id)
             .then(setProjects)
             .catch(() => setProjects([]))
             .finally(() => setLoading(false));
     }, [dept.id]);
+
+    useEffect(() => {
+        fetchProjects();
+    }, [fetchProjects]);
+
+    useEffect(() => {
+        if (showAdd && allProjects.length === 0) {
+            getProjects({ limit: 500 }).then((res) => setAllProjects(res as any)).catch(console.error);
+        }
+    }, [showAdd, allProjects.length]);
+
+    const handleAdd = async () => {
+        if (!selectedProjectId) return;
+        setAdding(true);
+        try {
+            await updateProject(selectedProjectId, { department_id: dept.id });
+            setShowAdd(false);
+            setSelectedProjectId("");
+            fetchProjects();
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setAdding(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -175,12 +278,51 @@ function ProjectsModal({
                             All projects handled by this department are listed below for quick access and management.
                         </p>
                     </div>
-                    <button onClick={onClose} className="text-foreground/40 hover:text-foreground transition p-1 mt-0.5">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                            <path d="M18 6L6 18M6 6l12 12" />
-                        </svg>
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {!showAdd && (
+                            <button
+                                onClick={() => setShowAdd(true)}
+                                className="text-xs font-medium px-3 py-1.5 rounded-md bg-blue-600/10 text-blue-600 hover:bg-blue-600/20 transition flex items-center gap-1.5"
+                            >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14"/></svg>
+                                Add Project
+                            </button>
+                        )}
+                        <button onClick={onClose} className="text-foreground/40 hover:text-foreground transition p-1 mt-0.5">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <path d="M18 6L6 18M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
+
+                {showAdd && (
+                    <div className="px-6 pb-4 flex items-center gap-2">
+                        <select
+                            value={selectedProjectId}
+                            onChange={(e) => setSelectedProjectId(e.target.value)}
+                            className="flex-1 border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none focus:border-blue-500/50 transition appearance-none"
+                        >
+                            <option value="">Select a project...</option>
+                            {allProjects.filter(p => !projects.some(dp => dp.id === p.id)).map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={handleAdd}
+                            disabled={!selectedProjectId || adding}
+                            className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 transition"
+                        >
+                            {adding ? "Adding..." : "Add"}
+                        </button>
+                        <button
+                            onClick={() => { setShowAdd(false); setSelectedProjectId(""); }}
+                            className="px-3 py-2 text-sm rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                )}
 
                 {/* Table */}
                 <div className="px-6 pb-5">
@@ -339,8 +481,16 @@ function AddDepartmentModal({
 }) {
     const [name, setName] = useState("");
     const [notes, setNotes] = useState("");
+    const [managerId, setManagerId] = useState("");
+    const [status, setStatus] = useState("active");
+    const [budget, setBudget] = useState(0);
+    const [users, setUsers] = useState<User[]>([]);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        getUsers({ limit: 100 }).then(setUsers).catch(console.error);
+    }, []);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
@@ -357,7 +507,14 @@ function AddDepartmentModal({
         setSaving(true);
         setError(null);
         try {
-            await createDepartment({ name: name.trim(), notes: notes.trim() || undefined });
+            const data: DepartmentCreate = {
+                name: name.trim(),
+                notes: notes.trim() || undefined,
+                status: status,
+                budget: budget,
+                managers: managerId ? [{ employee_id: managerId, is_primary: true }] : undefined
+            } as any;
+            await createDepartment(data);
             onCreated();
             onClose();
         } catch (err: unknown) {
@@ -417,6 +574,47 @@ function AddDepartmentModal({
                             placeholder="Brief description of this department..."
                             rows={3}
                             className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/30 focus:border-blue-500/50 transition resize-none"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Department Head</label>
+                            <select
+                                value={managerId}
+                                onChange={(e) => setManagerId(e.target.value)}
+                                className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none focus:border-blue-500/50 transition appearance-none"
+                            >
+                                <option value="">Select manager...</option>
+                                {users.map(u => (
+                                    <option key={u.id} value={u.id}>{u.full_name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground/70">Status</label>
+                            <select
+                                value={status}
+                                onChange={(e) => setStatus(e.target.value)}
+                                className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none focus:border-blue-500/50 transition appearance-none"
+                            >
+                                <option value="active">Active</option>
+                                <option value="on_hold">On Hold</option>
+                                <option value="draft">Draft</option>
+                                <option value="archived">Archived</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground/70">Budget ($) <span className="text-foreground/30">(optional)</span></label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={budget}
+                            onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
+                            className="w-full border border-foreground/15 rounded-lg px-3 py-2 bg-foreground/[0.03] text-sm text-foreground outline-none focus:border-blue-500/50 transition"
                         />
                     </div>
 
@@ -654,7 +852,7 @@ function BulkDeleteDepartmentModal({
 }
 
 // ============ Bulk Selection Bar ============
-function BulkSelectionBar({ count, onDelete, onClear }: { count: number; onDelete: () => void; onClear: () => void; }) {
+function BulkSelectionBar({ count, onDelete, onClear, onExport }: { count: number; onDelete: () => void; onClear: () => void; onExport: () => void; }) {
     return (
         <div className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex items-center gap-2.5">
@@ -709,6 +907,7 @@ export default function DepartmentsPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState("All");
     const [sortByMembers, setSortByMembers] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -719,6 +918,7 @@ export default function DepartmentsPage() {
     const [editModal, setEditModal] = useState<Department | null>(null);
     const [deleteModal, setDeleteModal] = useState<Department | null>(null);
     const [bulkDeleteModal, setBulkDeleteModal] = useState(false);
+    const [detailsModal, setDetailsModal] = useState<string | null>(null);
 
     // Toast
     const [toastMsg, setToastMsg] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -762,8 +962,16 @@ export default function DepartmentsPage() {
 
     // Filtering & sorting
     let filtered = departments.filter((d) => {
-        if (!searchTerm) return true;
-        return d.name.toLowerCase().includes(searchTerm.toLowerCase());
+        if (searchTerm && !d.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+        
+        if (statusFilter !== "All") {
+            const status = d.status || "active"; // Fallback to active if no status on dept
+            if (status.toLowerCase().replace(/_/g, " ") !== statusFilter.toLowerCase()) {
+                return false;
+            }
+        }
+        
+        return true;
     });
     if (sortByMembers) {
         filtered = [...filtered].sort((a, b) => (b.member_count ?? 0) - (a.member_count ?? 0));
@@ -855,6 +1063,19 @@ export default function DepartmentsPage() {
                             </svg>
                         )}
                     </button>
+                    
+                    {/* Status Filter */}
+                    <div className="flex bg-foreground/[0.02] border border-foreground/10 rounded-lg p-1 ml-4 gap-0.5">
+                        {["All", "Active", "On Hold", "Archived"].map((f) => (
+                            <button
+                                key={f}
+                                onClick={() => setStatusFilter(f)}
+                                className={f === statusFilter ? "px-3 py-1.5 rounded-[6px] text-[11px] font-medium transition-colors bg-white dark:bg-foreground/10 shadow-sm border border-foreground/5 text-foreground" : "px-3 py-1.5 rounded-[6px] text-[11px] font-medium transition-colors text-foreground/50 hover:text-foreground/80 hover:bg-foreground/[0.02]"}
+                            >
+                                {f}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Search */}
@@ -921,7 +1142,7 @@ export default function DepartmentsPage() {
                             <div
                                 key={dept.id}
                                 className="grid grid-cols-[40px_1fr_180px_100px_1fr_48px] items-center px-4 py-3.5 border-b border-foreground/5 hover:bg-foreground/[0.03] transition group cursor-pointer"
-                                onClick={() => router.push(`/departments/${dept.id}`)}
+                                onClick={() => setDetailsModal(dept.id)}
                             >
                                 <div onClick={(e) => e.stopPropagation()}>
                                     <input
@@ -952,7 +1173,7 @@ export default function DepartmentsPage() {
                                 <div onClick={(e) => e.stopPropagation()}>
                                     <RowMenu
                                         dept={dept}
-                                        onViewDetails={() => router.push(`/departments/${dept.id}`)}
+                                        onViewDetails={() => setDetailsModal(dept.id)}
                                         onViewMembers={() => setMembersModal(dept)}
                                         onViewProjects={() => setProjectsModal(dept)}
                                         onEdit={() => setEditModal(dept)}
@@ -997,6 +1218,12 @@ export default function DepartmentsPage() {
                     count={selectedIds.size}
                     onClose={() => setBulkDeleteModal(false)}
                     onConfirm={handleBulkDelete}
+                />
+            )}
+            {detailsModal && (
+                <DepartmentDetailsPanel
+                    deptId={detailsModal}
+                    onClose={() => setDetailsModal(null)}
                 />
             )}
             {toastMsg && (

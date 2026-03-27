@@ -39,6 +39,7 @@ export interface PersonalDashboard {
 export interface DateFilter {
     startDate?: string; // YYYY-MM-DD
     endDate?: string;   // YYYY-MM-DD
+    search?: string;
 }
 
 // ============ API Functions ============
@@ -47,6 +48,7 @@ export async function getPersonalDashboard(filter?: DateFilter): Promise<Persona
     const params = new URLSearchParams();
     if (filter?.startDate) params.set("start_date", filter.startDate);
     if (filter?.endDate) params.set("end_date", filter.endDate);
+    if (filter?.search) params.set("search", filter.search);
     const qs = params.toString();
     return apiGet<PersonalDashboard>(`/api/dashboard/personal${qs ? `?${qs}` : ""}`);
 }

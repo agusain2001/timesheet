@@ -14,6 +14,7 @@ import {
 } from "@/services/clients";
 import type { Client, ClientCreate, ClientUpdate, ClientProject } from "@/types/api";
 import { AddClientModal, EditClientModal } from "@/components/ClientModals";
+import { AddProjectModal } from "@/components/ProjectModals";
 import { HowItWorks } from "@/components/ui/HowItWorks";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -176,13 +177,19 @@ function ViewDetailsPanel({ client, onClose, onEdit }: { client: Client; onClose
 function RelatedProjectsModal({ client, onClose }: { client: Client; onClose: () => void }) {
     const [projects, setProjects] = useState<ClientProject[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showAddProject, setShowAddProject] = useState(false);
 
-    useEffect(() => {
+    const loadProjects = useCallback(() => {
+        setLoading(true);
         getClientProjects(client.id)
             .then(setProjects)
             .catch(() => setProjects([]))
             .finally(() => setLoading(false));
     }, [client.id]);
+
+    useEffect(() => {
+        loadProjects();
+    }, [loadProjects]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -219,12 +226,21 @@ function RelatedProjectsModal({ client, onClose }: { client: Client; onClose: ()
                 </div>
                 <div className="flex items-center justify-between px-6 pb-5">
                     <button onClick={onClose} className="px-4 py-2 text-xs rounded-lg border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition">← Go Back</button>
-                    <button className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 transition flex items-center gap-1.5">
+                    <button onClick={() => setShowAddProject(true)} className="px-4 py-2 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 transition flex items-center gap-1.5">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
                         Add Project
                     </button>
                 </div>
             </div>
+            {showAddProject && (
+                <AddProjectModal
+                    onClose={() => setShowAddProject(false)}
+                    onCreated={() => {
+                        setShowAddProject(false);
+                        loadProjects();
+                    }}
+                />
+            )}
         </div>
     );
 }

@@ -89,7 +89,7 @@ function ProjectFormBody({ form, setForm, clients }: { form: ProjectFormData; se
                         <input type="date" className={inputCls} value={form.start_date} onChange={upd("start_date")} />
                     </Field>
                     <Field label="Expected End Date">
-                        <input type="date" className={inputCls} value={form.end_date} onChange={upd("end_date")} />
+                        <input type="date" className={inputCls} value={form.end_date} onChange={upd("end_date")} min={form.start_date || undefined} />
                     </Field>
                     <div className="col-span-2">
                         <Field label="Description (Optional)">

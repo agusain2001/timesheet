@@ -27,6 +27,7 @@ interface AddTaskModalProps {
     isOpen: boolean;
     onClose: () => void;
     onTaskCreated?: () => void;
+    prefillTemplate?: TaskTemplate | null;
 }
 
 interface TaskTemplate {
@@ -307,7 +308,7 @@ function CalendarPicker({ value, onChange }: { value: string; onChange: (v: stri
 
 // ============ Main Modal ============
 
-export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTaskModalProps) {
+export default function AddTaskModal({ isOpen, onClose, onTaskCreated, prefillTemplate }: AddTaskModalProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
     const [form, setForm] = useState<TaskFormData>({
         name: "", project_id: "", task_type: "", description: "",
@@ -328,7 +329,22 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
         apiGet<ProjectOption[]>("/api/projects").then(setProjects).catch(() => { });
         apiGet<UserOption[]>("/api/users").then(setUsers).catch(() => { });
         apiGet<TaskTemplate[]>("/api/task-templates?limit=20").then(setTemplates).catch(() => { });
-    }, [isOpen]);
+        
+        if (prefillTemplate) {
+            setForm((prev) => ({
+                ...prev,
+                name: prefillTemplate.name || "",
+                task_type: prefillTemplate.task_type || "",
+                description: prefillTemplate.description || "",
+                priority: prefillTemplate.priority || "",
+                estimated_hours: prefillTemplate.estimated_hours?.toString() || "",
+                status: prefillTemplate.status || "",
+            }));
+            apiPost(`/api/task-templates/${prefillTemplate.id}/use`, {}).catch(() => {});
+        } else {
+            setForm({ name: "", project_id: "", task_type: "", description: "", priority: "", due_date: "", estimated_hours: "", status: "", assignee_id: "", assignee_ids: [] });
+        }
+    }, [isOpen, prefillTemplate]);
 
     // Load custom fields when project changes
     useEffect(() => {
@@ -457,7 +473,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskCreated }: AddTask
                                         disabled={applyingTemplate}
                                         className="px-2.5 py-1 rounded-lg text-xs bg-foreground/[0.04] border border-foreground/10 text-foreground/70 hover:bg-foreground/[0.08] hover:border-foreground/20 transition disabled:opacity-50"
                                     >
-                                        {tpl.name}
+                                        {tpl.name.replace(/\s*\(Copy\)(\s*\d*)?$/i, '').trim() || tpl.name}
                                     </button>
                                 ))}
                             </div>

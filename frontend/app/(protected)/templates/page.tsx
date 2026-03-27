@@ -7,6 +7,7 @@ import {
 import { getToken } from "@/lib/auth";
 import { apiGet } from "@/services/api";
 import { HowItWorks } from "@/components/ui/HowItWorks";
+import AddTaskModal from "@/components/AddTaskModal";
 import { validateSafeText } from "@/utils/validation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,11 +70,12 @@ const PRIORITY_BADGE: Record<string, string> = {
 
 // ─── Template Card ────────────────────────────────────────────────────────────
 
-function TemplateCard({ tpl, onEdit, onDelete, onDuplicate }: {
+function TemplateCard({ tpl, onEdit, onDelete, onDuplicate, onUse }: {
     tpl: Template;
     onEdit: (t: Template) => void;
     onDelete: (t: Template) => void;
     onDuplicate: (t: Template) => void;
+    onUse: (t: Template) => void;
 }) {
     return (
         <div className="p-5 rounded-2xl border border-foreground/10 bg-foreground/[0.02] hover:bg-white/8 transition-all flex flex-col gap-3">
@@ -136,6 +138,14 @@ function TemplateCard({ tpl, onEdit, onDelete, onDuplicate }: {
                     )}
                 </div>
             )}
+
+            <div className="mt-1 pt-3 border-t border-foreground/5">
+                <button
+                    onClick={() => onUse(tpl)}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors text-xs font-semibold">
+                    <Plus size={14} /> Create Task
+                </button>
+            </div>
         </div>
     );
 }
@@ -331,6 +341,7 @@ export default function TemplatesPage() {
     const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
     const [deleting, setDeleting] = useState(false);
     const [search, setSearch] = useState("");
+    const [useTemplate, setUseTemplate] = useState<Template | null>(null);
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -432,6 +443,7 @@ export default function TemplatesPage() {
                             onEdit={(t) => setModal(t)}
                             onDelete={(t) => setDeleteTarget(t)}
                             onDuplicate={handleDuplicate}
+                            onUse={(t) => setUseTemplate(t)}
                         />
                     ))}
                 </div>
@@ -463,6 +475,13 @@ export default function TemplatesPage() {
                     </div>
                 </div>
             )}
+
+            <AddTaskModal
+                isOpen={!!useTemplate}
+                onClose={() => setUseTemplate(null)}
+                prefillTemplate={useTemplate}
+                onTaskCreated={() => { setUseTemplate(null); fetchAll(); }}
+            />
         </div>
     );
 }
