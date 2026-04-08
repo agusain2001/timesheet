@@ -17,7 +17,7 @@ class Integration(Base):
     
     # Configuration
     config = Column(JSON, nullable=True)  # Provider-specific configuration
-    credentials = Column(JSON, nullable=True)  # Encrypted credentials
+    credentials = Column(JSON, nullable=True)  # Sensitive — use encrypt/decrypt helpers when reading/writing
     
     # Scope
     workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=True)

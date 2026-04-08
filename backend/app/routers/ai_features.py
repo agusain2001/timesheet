@@ -202,7 +202,7 @@ async def create_task_from_text(
     except Exception as e:
         return NLTaskResponse(
             success=False,
-            message=f"Error creating task: {str(e)}"
+            message="Failed to create task from AI suggestion"
         )
 
 @router.get("/suggestions/{task_id}", response_model=AITaskSuggestions)

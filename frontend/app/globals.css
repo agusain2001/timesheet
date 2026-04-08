@@ -35,3 +35,34 @@ body {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
 }
+
+/* ───── Dropdown / Select visibility fix ───── */
+/* Ensures native <select> options are visible in all themes */
+select {
+  color: var(--foreground);
+  background-color: var(--background);
+}
+
+select option {
+  color: #171717;
+  background-color: #ffffff;
+}
+
+.dark select option {
+  color: #ededed;
+  background-color: #1a1a1a;
+}
+
+/* Ensure all custom dropdowns & comboboxes have full opacity text */
+[role="listbox"] [role="option"],
+[role="combobox"] {
+  color: var(--foreground) !important;
+}
+
+/* Fix for Radix/Headless UI popovers on dark backgrounds */
+[data-radix-select-content],
+[data-radix-dropdown-menu-content] {
+  color: var(--foreground);
+  background-color: var(--background);
+}
+

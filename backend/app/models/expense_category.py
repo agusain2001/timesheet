@@ -1,6 +1,6 @@
 """Expense Category model for categorizing expenses."""
 import uuid
-from sqlalchemy import Column, String, Boolean, Numeric, DateTime, func
+from sqlalchemy import Column, String, Boolean, Numeric, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -10,8 +10,9 @@ class ExpenseCategory(Base):
     __tablename__ = "expense_categories"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String(100), nullable=False, unique=True)
-    code = Column(String(20), nullable=False, unique=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
+    name = Column(String(100), nullable=False)
+    code = Column(String(20), nullable=False)
     description = Column(String(500), nullable=True)
     icon = Column(String(50), nullable=True)  # Icon identifier
     color = Column(String(20), nullable=True)  # Hex color code

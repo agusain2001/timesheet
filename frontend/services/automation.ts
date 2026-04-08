@@ -67,6 +67,7 @@ export interface AutomationRuleCreate {
     description?: string;
     trigger_event: TriggerEvent;
     conditions: AutomationCondition[];
+    trigger_conditions?: Record<string, unknown> | null;
     actions: AutomationAction[];
     project_id?: string;
     is_active?: boolean;
@@ -148,7 +149,7 @@ export interface AutomationRulesParams {
     [key: string]: string | number | boolean | undefined;
 }
 
-const BASE_URL = "/automation";
+const BASE_URL = "/api/automation";
 
 // =============== Automation Rules ===============
 

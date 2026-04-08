@@ -15,6 +15,8 @@ from app.schemas import (
     ExpenseAuditLogResponse
 )
 from app.utils import get_current_active_user
+from app.utils.role_guards import is_manager, is_admin
+from app.utils.tenant import scope_to_org
 from app.services.file_upload import save_receipt
 from app.services.notification_service import NotificationService
 
@@ -53,9 +55,10 @@ def get_all_expenses(
 ):
     """Get all expenses with optional filters."""
     query = db.query(Expense)
-    
-    # Non-admins see their own or pending for approval
-    if current_user.role not in ["admin", "manager"]:
+    # First scope to org (managers see own org; super admin sees all)
+    query = scope_to_org(query, Expense, current_user)
+    # Non-managers only see their own expenses
+    if not is_manager(current_user):
         query = query.filter(Expense.user_id == current_user.id)
     elif user_id:
         query = query.filter(Expense.user_id == user_id)
@@ -97,12 +100,14 @@ def get_pending_expenses(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get pending expenses for approval (managers only)."""
-    if current_user.role not in ["admin", "manager"]:
+    if not is_manager(current_user):
         raise HTTPException(status_code=403, detail="Manager access required")
-    
-    expenses = db.query(Expense).filter(
+    query = db.query(Expense).filter(
         Expense.status.in_([ExpenseStatus.PENDING.value, ExpenseStatus.SUBMITTED.value])
-    ).order_by(Expense.created_at.desc()).all()
+    )
+    # scope to org
+    query = scope_to_org(query, Expense, current_user)
+    expenses = query.order_by(Expense.created_at.desc()).all()
     
     # Populate user info
     for expense in expenses:
@@ -142,7 +147,8 @@ def create_expense(
             )
             db.add(item)
             # Calculate with currency rate
-            total_amount += Decimal(str(item_data.amount)) * Decimal(str(item_data.currency_rate))
+            rate = Decimal(str(getattr(item_data, 'currency_rate', 1.0)))
+            total_amount += Decimal(str(item_data.amount)) * rate
     
     db_expense.total_amount = total_amount
     
@@ -169,7 +175,7 @@ def get_expense(
         raise HTTPException(status_code=404, detail="Expense not found")
     
     # Check access
-    if current_user.role not in ["admin", "manager"] and expense.user_id != current_user.id:
+    if not is_manager(current_user) and expense.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     expense.user = db.query(User).filter(User.id == expense.user_id).first()
@@ -351,14 +357,13 @@ def reject_expense(
     )
     db.add(approval)
     
-    reject_audit = create_audit_log(
+    create_audit_log(
         db=db,
         expense_id=expense.id,
         user_id=current_user.id,
         action="rejected",
         new_values={"status": ExpenseStatus.REJECTED.value, "rejection_reason": rejection.reason}
     )
-    db.add(reject_audit)
     
     db.commit()
     db.refresh(expense)
@@ -458,15 +463,24 @@ async def upload_receipt(
     # Save the file
     file_path = await save_receipt(file, expense_id, item_id)
     
-    # Update expense item if specified
+    # Update expense item if specified, else use the first item
+    item = None
     if item_id:
         item = db.query(ExpenseItem).filter(
             ExpenseItem.id == item_id,
             ExpenseItem.expense_id == expense_id
         ).first()
-        if item:
+    else:
+        item = db.query(ExpenseItem).filter(
+            ExpenseItem.expense_id == expense_id
+        ).first()
+        
+    if item:
+        if item.receipt_path:
+            item.receipt_path = f"{item.receipt_path},{file_path}"
+        else:
             item.receipt_path = file_path
-            db.commit()
+        db.commit()
     
     return {"message": "Receipt uploaded successfully", "path": file_path}
 

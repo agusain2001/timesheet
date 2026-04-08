@@ -9,8 +9,8 @@ export function LayoutContainer({ sidebar, children }: Props) {
       {/* Sidebar */}
       {sidebar}
 
-      {/* Content Area */}
-      <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
+      {/* Content Area — uniform p-6 padding for all pages */}
+      <main className="flex-1 min-h-0 overflow-y-auto p-6">{children}</main>
     </div>
   );
 }

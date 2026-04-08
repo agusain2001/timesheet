@@ -14,6 +14,7 @@ export interface User {
     avatar_url?: string;
     is_active: boolean;
     created_at: string;
+    accessible_pages?: string[]; // Populated by /users/me for RBAC sidebar filtering
 }
 
 export interface UserCreate {
@@ -79,6 +80,14 @@ export interface ClientUpdate {
     notes?: string;
 }
 
+export interface ClientProject {
+    id: string;
+    name: string;
+    status: string;
+    business_sector?: string;
+    managed_by?: string;
+}
+
 // =============== Department Types ===============
 export interface DepartmentManager {
     id: string;
@@ -100,19 +109,41 @@ export interface Department {
     id: string;
     name: string;
     notes?: string;
+    status?: string;
     managers: DepartmentManager[];
+    member_count?: number;
 }
 
 export interface DepartmentCreate {
     name: string;
     notes?: string;
+    status?: string;
     managers?: DepartmentManagerInput[];
 }
 
 export interface DepartmentUpdate {
     name?: string;
     notes?: string;
+    status?: string;
     managers?: DepartmentManagerInput[];
+}
+
+export interface DepartmentMember {
+    id: string;
+    full_name: string;
+    email: string;
+    position?: string;
+    role: string;
+    avatar_url?: string;
+    employee_code?: string;
+}
+
+export interface DepartmentProject {
+    id: string;
+    name: string;
+    status: string;
+    business_sector?: string;
+    managed_by?: string;
 }
 
 // =============== Project Types ===============
@@ -437,4 +468,62 @@ export interface ChatMessage {
 export interface ChatResponse {
     response: string;
     context_used?: string;
+    attachments?: ChatAttachment[];
+    extracted_data?: Record<string, unknown>;
 }
+
+export interface ChatAttachment {
+    fileName: string;
+    fileUrl: string;
+    fileType: string;
+    size: number;
+}
+
+export interface ChatHistoryItem {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    attachments: ChatAttachment[];
+    metadata: Record<string, unknown>;
+    created_at: string;
+}
+
+export interface DocumentScanResult {
+    file_name: string;
+    file_type: string;
+    raw_text?: string;
+    vendor_name?: string;
+    date?: string;
+    total_amount?: number;
+    currency: string;
+    category?: string;
+    description?: string;
+    summary?: string;
+    confidence: string;
+}
+
+export interface DocumentScanResponse {
+    success: boolean;
+    message: string;
+    results: DocumentScanResult[];
+}
+
+export interface SaveToActivityRequest {
+    activity_type: "expense" | "task";
+    title: string;
+    description?: string;
+    project_id?: string;
+    vendor?: string;
+    amount?: number;
+    currency?: string;
+    category?: string;
+    date?: string;
+}
+
+export interface SaveToActivityResponse {
+    success: boolean;
+    message: string;
+    activity_id?: string;
+    activity_type?: string;
+}
+

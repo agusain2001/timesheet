@@ -11,6 +11,7 @@ class Workspace(Base):
     __tablename__ = "workspaces"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, index=True)
     description = Column(Text, nullable=True)

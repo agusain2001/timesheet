@@ -3,6 +3,9 @@
 # Import Base first
 from app.database import Base
 
+# Organization MUST be imported before User (FK dependency order)
+from app.models.organization import Organization
+
 # Core models - import in order of dependencies
 from app.models.user import User, UserRole, AvailabilityStatus
 from app.models.department import Department, DepartmentManager
@@ -38,7 +41,7 @@ from app.models.expense_audit_log import ExpenseAuditLog
 from app.models.approval_rule import ApprovalRule
 
 # Support
-from app.models.support import SupportRequest, SupportStatus
+from app.models.support import SupportRequest, SupportStatus, SupportPriority
 
 # Notification models
 from app.models.notification import Notification, NotificationPreference, NotificationRule
@@ -61,8 +64,31 @@ from app.models.saved_view import SavedView, ViewShare
 # Email Settings models
 from app.models.email_settings import EmailPreference, EmailLog, TaskReminder
 
+# Custom Fields models
+from app.models.custom_field import CustomFieldDefinition, CustomFieldValue, FieldType
+
+# Chat History
+from app.models.chat_history import ChatHistory
+
+# Dropdown Config
+from app.models.dropdown_config import DropdownConfig
+
+# Page Access
+from app.models.page_access import UserPageAccess, ALWAYS_ACCESSIBLE, RESTRICTED_PAGES, ALL_PAGE_KEYS, get_accessible_pages
+
+# Permission models — import UserRole model as UserRoleAssignment to avoid conflict with UserRole enum
+from app.models.permission import (
+    Permission, PermissionAction, ResourceType,
+    Role, RolePermission,
+    UserRole as UserRoleAssignment,
+    ResourcePermission, AuditLog,
+    DEFAULT_PERMISSIONS, DEFAULT_ROLES,
+)
 
 __all__ = [
+    # Organization (multi-tenancy root)
+    "Organization",
+
     # Core
     "User", "UserRole", "AvailabilityStatus",
     "Department", "DepartmentManager",
@@ -98,7 +124,7 @@ __all__ = [
     "ApprovalRule",
     
     # Support
-    "SupportRequest", "SupportStatus",
+    "SupportRequest", "SupportStatus", "SupportPriority",
     
     # Notifications
     "Notification", "NotificationPreference", "NotificationRule",
@@ -118,5 +144,17 @@ __all__ = [
     
     # Email Settings
     "EmailPreference", "EmailLog", "TaskReminder",
+
+    # Custom Fields
+    "CustomFieldDefinition", "CustomFieldValue", "FieldType",
+
+    # Chat History
+    "ChatHistory",
+
+    # Dropdown Config
+    "DropdownConfig",
+
+    # Page Access
+    "UserPageAccess", "ALWAYS_ACCESSIBLE", "RESTRICTED_PAGES", "ALL_PAGE_KEYS", "get_accessible_pages",
 ]
 

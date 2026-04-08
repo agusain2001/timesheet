@@ -48,6 +48,7 @@ class Expense(Base):
     __tablename__ = "expenses"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)

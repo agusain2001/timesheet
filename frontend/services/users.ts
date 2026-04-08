@@ -5,7 +5,7 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "./api";
 import type { User, UserCreate, UserUpdate } from "@/types/api";
 
-const BASE_URL = "/users";
+const BASE_URL = "/api/users";
 
 export interface UsersParams {
     skip?: number;
@@ -13,6 +13,8 @@ export interface UsersParams {
     department_id?: string;
     role?: string;
     search?: string;
+    sort_by?: string;
+    sort_order?: "asc" | "desc";
     [key: string]: string | number | boolean | undefined;
 }
 
@@ -56,4 +58,20 @@ export async function updateUser(id: string, data: UserUpdate): Promise<User> {
  */
 export async function deleteUser(id: string): Promise<void> {
     return apiDelete(`${BASE_URL}/${id}`);
+}
+
+export interface UserProject {
+    id: string;
+    name: string;
+    role: string;
+    business_sector: string;
+    status: string;
+}
+
+export async function getUserProjects(userId: string): Promise<UserProject[]> {
+    return apiGet<UserProject[]>(`${BASE_URL}/${userId}/projects`);
+}
+
+export async function exportUsers(userIds: string[], format: "csv" = "csv"): Promise<Blob> {
+    return apiPost<Blob>(`${BASE_URL}/export`, { user_ids: userIds, format }, { responseType: "blob" });
 }

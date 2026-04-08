@@ -19,6 +19,14 @@ from app.services.email_service import email_service, EmailTemplates
 router = APIRouter()
 
 
+def _parse_due_date(value: str) -> datetime:
+    """Parse an ISO date string, raising HTTPException on invalid input."""
+    try:
+        return datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail=f"Invalid date format: {value}")
+
+
 # ==================== SCHEMAS ====================
 
 class UserInviteCreate(BaseModel):
@@ -310,7 +318,7 @@ def create_task_from_template(
         created_by_id=current_user.id,
         estimated_hours=float(template.estimated_hours) if template.estimated_hours else None,
         tags=template.default_tags,
-        due_date=datetime.fromisoformat(due_date) if due_date else None
+        due_date=_parse_due_date(due_date) if due_date else None
     )
     db.add(task)
     db.commit()
@@ -497,7 +505,7 @@ async def export_user_data(
     for ts in timesheets:
         user_data["timesheets"].append({
             "id": ts.id,
-            "date": str(ts.date),
+            "date": str(ts.week_starting),
             "hours": ts.total_hours,
             "status": ts.status
         })

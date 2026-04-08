@@ -20,7 +20,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             plain_password.encode('utf-8'),
             hashed_password.encode('utf-8')
         )
-    except Exception:
+    except (ValueError, TypeError):
         return False
 
 
@@ -69,8 +69,8 @@ async def get_current_user(
     if payload is None:
         raise credentials_exception
     
-    user_id: str = payload.get("sub")
-    if user_id is None:
+    user_id = payload.get("sub")
+    if not isinstance(user_id, str) or not user_id:
         raise credentials_exception
     
     user = db.query(User).filter(User.id == user_id).first()

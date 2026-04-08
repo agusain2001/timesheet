@@ -118,7 +118,7 @@ export interface ProjectTemplateCreate {
     is_public?: boolean;
 }
 
-const BASE_URL = "/search";
+const BASE_URL = "/api/search";
 
 // =============== Global Search ===============
 

@@ -312,12 +312,17 @@ class SchedulerService:
         
         jobs = []
         for job in self.scheduler.get_jobs():
-            jobs.append({
+            job_data = {
                 'id': job.id,
                 'name': job.name,
-                'next_run': job.next_run_time,
-                'trigger': str(job.trigger)
-            })
+                'next_run': job.next_run_time.isoformat() if job.next_run_time else None,
+                'trigger': str(job.trigger),
+                'args': job.args
+            }
+            # Add custom metadata (report_type, frequency, etc.)
+            job_data.update(self._jobs.get(job.id, {}))
+            jobs.append(job_data)
+            
         return jobs
     
     # ==================== System Job Implementations ====================
@@ -588,8 +593,9 @@ class SchedulerService:
         
         kwargs = {'args': [report_id, report_type, user_id]}
         
+        result = False
         if frequency == 'daily':
-            return self.add_cron_job(
+            result = self.add_cron_job(
                 job_id=job_id,
                 func=self._generate_and_send_report,
                 hour=hour,
@@ -598,7 +604,7 @@ class SchedulerService:
             )
         elif frequency == 'weekly':
             dow = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][day_of_week or 1]
-            return self.add_cron_job(
+            result = self.add_cron_job(
                 job_id=job_id,
                 func=self._generate_and_send_report,
                 day_of_week=dow,
@@ -607,7 +613,7 @@ class SchedulerService:
                 **kwargs
             )
         elif frequency == 'monthly':
-            return self.add_cron_job(
+            result = self.add_cron_job(
                 job_id=job_id,
                 func=self._generate_and_send_report,
                 day=day_of_month or 1,
@@ -616,7 +622,18 @@ class SchedulerService:
                 **kwargs
             )
         
-        return False
+        if result:
+            self._jobs[job_id].update({
+                'report_type': report_type,
+                'frequency': frequency,
+                'user_id': user_id,
+                'hour': hour,
+                'minute': minute,
+                'day_of_week': day_of_week,
+                'day_of_month': day_of_month
+            })
+            
+        return result
     
     async def _generate_and_send_report(self, report_id: str, report_type: str, user_id: str):
         """Generate and email a scheduled report."""

@@ -1,562 +1,703 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Modal } from "@/components/ui/Modal";
-import { toast } from "sonner";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { getToken } from "@/lib/auth";
 import {
     getSupportRequests,
     createSupportRequest,
-    updateSupportRequest,
+    getSupportUsers,
     deleteSupportRequest,
-    SupportRequest,
+    updateSupportRequest,
+    type SupportRequest,
+    type SupportUser,
+    type SupportRequestCreate,
 } from "@/services/support";
+import { AddRequestModal } from "@/components/SupportModals";
+import { HowItWorks } from "@/components/ui/HowItWorks";
 
-// Icons
-const PlusIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-    </svg>
-);
+// ============ Confirm Dialog ============
+function ConfirmDialog({ message, subtext, onConfirm, onCancel, danger = true }: {
+    message: string;
+    subtext?: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    danger?: boolean;
+}) {
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
+            <div className="w-full max-w-[360px] rounded-2xl border border-foreground/10 bg-background shadow-2xl mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="p-6 text-center">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${danger ? 'bg-red-500/10' : 'bg-blue-500/10'}`}>
+                        {danger ? (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
+                                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                            </svg>
+                        ) : (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
+                                <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" />
+                            </svg>
+                        )}
+                    </div>
+                    <h3 className="text-base font-bold text-foreground mb-1">{message}</h3>
+                    {subtext && <p className="text-xs text-foreground/50 mb-5">{subtext}</p>}
+                    {!subtext && <div className="mb-5" />}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onCancel}
+                            className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-foreground/15 text-foreground/70 hover:bg-foreground/5 transition font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={onConfirm}
+                            className={`flex-1 px-4 py-2.5 text-sm rounded-xl font-semibold text-white transition ${
+                                danger ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'
+                            }`}
+                        >
+                            {danger ? 'Delete' : 'Confirm'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
-const EyeIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-);
+// ============ Helpers ============
 
-const EditIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-    </svg>
-);
+function formatTimestamp(iso: string): string {
+    try {
+        const d = new Date(iso);
+        const now = new Date();
+        const isToday = d.toDateString() === now.toDateString();
+        const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+        return isToday ? `Today, ${time}` : `${d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}, ${time}`;
+    } catch {
+        return iso;
+    }
+}
 
-const TrashIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-);
+function priorityIcon(p: string) {
+    const colors: Record<string, string> = { urgent: "#ef4444", high: "#f97316", normal: "#3b82f6", low: "#6b7280" };
+    return (
+        <span className="inline-flex items-center gap-1">
+            <svg width="12" height="14" viewBox="0 0 12 14" fill={colors[p] || "#6b7280"}>
+                <path d="M1 1v12M1 1h8l-3 3.5L9 8H1" />
+            </svg>
+        </span>
+    );
+}
 
-const SearchIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-    </svg>
-);
+function getInitials(name: string): string {
+    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
 
-const UploadIcon = () => (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-    </svg>
-);
+function avatarBg(name: string): string {
+    const hue = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+    return `hsl(${hue}, 60%, 45%)`;
+}
 
-const XIcon = () => (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-);
+const MODULES = ["Timesheet", "Expense", "Project", "Task", "Team", "Other"];
+const PRIORITIES = [
+    { value: "urgent", label: "Urgent", color: "#ef4444" },
+    { value: "high", label: "High", color: "#f97316" },
+    { value: "normal", label: "Normal", color: "#3b82f6" },
+    { value: "low", label: "Low", color: "#6b7280" },
+];
+
+// ============ Filter Chip ============
+function FilterChip({ label, icon, active, onClick }: { label: string; icon?: React.ReactNode; active?: boolean; onClick?: () => void }) {
+    return (
+        <button
+            onClick={onClick}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition
+                ${active ? "bg-blue-600 text-white border-blue-600" : "bg-transparent text-foreground/70 border-foreground/20 hover:border-foreground/40"}`}
+        >
+            {icon}
+            {label}
+        </button>
+    );
+}
+
+
+
+// ============ Skeleton ============
+function Skeleton({ className }: { className?: string }) {
+    return <div className={`animate-pulse bg-foreground/10 rounded ${className || ""}`} />;
+}
+
+function SupportSkeleton() {
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-10 w-36 rounded-lg" />
+            </div>
+            <div className="flex gap-2">
+                {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-8 w-24 rounded-full" />)}
+            </div>
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+        </div>
+    );
+}
+
+// ============ Main Page ============
 
 export default function SupportPage() {
+    const router = useRouter();
     const [requests, setRequests] = useState<SupportRequest[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [error, setError] = useState<string | null>(null);
+    const [showModal, setShowModal] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [viewingRequest, setViewingRequest] = useState<SupportRequest | null>(null);
+    const [confirmDialog, setConfirmDialog] = useState<{ message: string; subtext?: string; onConfirm: () => void } | null>(null);
 
-    // Modal states
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [showViewModal, setShowViewModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [selectedRequest, setSelectedRequest] = useState<SupportRequest | null>(null);
+    const showConfirm = (message: string, subtext: string, onConfirm: () => void) => {
+        setConfirmDialog({ message, subtext, onConfirm });
+    };
 
-    // Form states
-    const [message, setMessage] = useState("");
-    const [selectedImage, setSelectedImage] = useState<File | null>(null);
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [creating, setCreating] = useState(false);
+    // Filters
+    const [filterPriority, setFilterPriority] = useState<string | null>(null);
+    const [showPriorityFilter, setShowPriorityFilter] = useState(false);
+    const [filterSource, setFilterSource] = useState<string | null>(null);
+    const [showSourceFilter, setShowSourceFilter] = useState(false);
+    const [filterReadStatus, setFilterReadStatus] = useState<string | null>(null);
+    const [showReadFilter, setShowReadFilter] = useState(false);
+    const [filterDate, setFilterDate] = useState<string | null>(null);
+    const [showDateFilter, setShowDateFilter] = useState(false);
 
-    // Pagination
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const DATE_RANGES = [
+        { label: "Today", value: "today" },
+        { label: "This Week", value: "week" },
+        { label: "This Month", value: "month" },
+    ];
+    const READ_STATUS_OPTIONS = [
+        { label: "Unread (Open)", value: "open" },
+        { label: "Read (Resolved)", value: "resolved" },
+    ];
+
+
+    const fetchRequests = useCallback(() => {
+        const token = getToken();
+        if (!token) {
+            router.push("/login?redirect=/support");
+            return;
+        }
+
+        const params: Record<string, string | number | boolean | undefined> = {};
+        if (filterPriority) params.priority = filterPriority;
+
+        getSupportRequests(params)
+            .then((data) => {
+                setRequests(data);
+                setLoading(false);
+            })
+            .catch((err) => {
+                console.error("Support fetch error:", err);
+                if (err?.status === 401 || err?.message?.includes("Not authenticated")) {
+                    router.push("/login?redirect=/support");
+                    return;
+                }
+                setError("Failed to load support requests");
+                setLoading(false);
+            });
+    }, [router, filterPriority]);
 
     useEffect(() => {
         fetchRequests();
-    }, []);
+    }, [fetchRequests]);
 
-    const fetchRequests = async () => {
-        try {
-            setLoading(true);
-            const data = await getSupportRequests();
-            setRequests(data);
-        } catch (err) {
-            console.error("Failed to fetch support requests:", err);
-            setRequests([]);
-        } finally {
-            setLoading(false);
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredRequests.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredRequests.map(r => r.id)));
         }
     };
 
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            if (file.size > 10 * 1024 * 1024) {
-                toast.error("Image size must be less than 10MB");
-                return;
+    const toggleSelect = (id: string) => {
+        const next = new Set(selectedIds);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        setSelectedIds(next);
+    };
+
+    // Client-side filtering
+    const filteredRequests = requests.filter(r => {
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            const matchSubject = r.subject?.toLowerCase().includes(term);
+            const matchMessage = r.message.toLowerCase().includes(term);
+            if (!matchSubject && !matchMessage) return false;
+        }
+        if (filterSource && r.user?.full_name !== filterSource) return false;
+        // Read status filter: map "open" to unread, "resolved" to read
+        if (filterReadStatus && r.status !== filterReadStatus) return false;
+        // Date range filter
+        if (filterDate) {
+            const created = new Date(r.created_at);
+            const now = new Date();
+            if (filterDate === "today") {
+                if (created.toDateString() !== now.toDateString()) return false;
+            } else if (filterDate === "week") {
+                const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+                if (created < weekAgo) return false;
+            } else if (filterDate === "month") {
+                const monthAgo = new Date(now); monthAgo.setMonth(now.getMonth() - 1);
+                if (created < monthAgo) return false;
             }
-            if (!['image/jpeg', 'image/png', 'image/gif', 'image/jpg'].includes(file.type)) {
-                toast.error("Only JPEG, PNG, JPG, GIF images are allowed");
-                return;
-            }
-            setSelectedImage(file);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setImagePreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
         }
-    };
-
-    const removeImage = () => {
-        setSelectedImage(null);
-        setImagePreview(null);
-    };
-
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!message.trim()) return;
-
-        try {
-            setCreating(true);
-            // TODO: If image is selected, upload it first and get URL
-            await createSupportRequest({ message });
-            toast.success("Support request created successfully!");
-            setShowCreateModal(false);
-            setMessage("");
-            setSelectedImage(null);
-            setImagePreview(null);
-            fetchRequests();
-        } catch (err) {
-            console.error("Failed to create support request:", err);
-            toast.error("Failed to create support request");
-        } finally {
-            setCreating(false);
-        }
-    };
-
-    const handleStatusUpdate = async (id: string, status: string) => {
-        try {
-            await updateSupportRequest(id, { status: status as "open" | "in_progress" | "resolved" | "closed" });
-            toast.success("Status updated successfully!");
-            fetchRequests();
-            setShowEditModal(false);
-        } catch (err) {
-            console.error("Failed to update status:", err);
-            toast.error("Failed to update status");
-        }
-    };
-
-    const handleDelete = async () => {
-        if (!selectedRequest) return;
-
-        try {
-            await deleteSupportRequest(selectedRequest.id);
-            toast.success("Support request deleted!");
-            setShowDeleteModal(false);
-            setSelectedRequest(null);
-            fetchRequests();
-        } catch (err) {
-            console.error("Failed to delete:", err);
-            toast.error("Failed to delete support request");
-        }
-    };
-
-    // Filter requests
-    const filteredRequests = requests.filter((req) => {
-        const matchesSearch = req.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            req.user?.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter === "all" || req.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return true;
     });
 
-    // Pagination
-    const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
-    const paginatedRequests = filteredRequests.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
 
-    const statusColors: Record<string, string> = {
-        open: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-        in_progress: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-        resolved: "bg-green-500/20 text-green-400 border-green-500/30",
-        closed: "bg-gray-500/20 text-gray-400 border-gray-500/30",
-    };
+    const uniqueSources = Array.from(new Set(requests.map(r => r.user?.full_name).filter(Boolean))) as string[];
 
-    const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-        });
-    };
+    if (loading) return <SupportSkeleton />;
 
-    const getInitials = (name?: string) => {
-        if (!name) return "U";
-        return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    };
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <p className="text-foreground/60 text-sm">{error}</p>
+                    <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition">
+                        Retry
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <DashboardLayout>
-            <div className="space-y-6">
-                {/* Header */}
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">Support Management</h1>
-                    <p className="text-foreground/60 mt-1">Manage and track support requests from employees</p>
-                </div>
-
-                {/* New Support Request Button */}
+        <div className="space-y-5 max-w-[1400px] mx-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-foreground">Support</h1>
                 <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    onClick={() => setShowModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-foreground/15 text-foreground hover:bg-foreground/5 transition"
                 >
-                    <PlusIcon />
-                    New Support Request
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M12 5v14M5 12h14" /></svg>
+                    Add Request
                 </button>
+            </div>
 
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-4">
-                    <div className="relative flex-1 min-w-[200px] max-w-md">
-                        <SearchIcon />
-                        <input
-                            type="text"
-                            placeholder="Search support messages..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-foreground/5 border border-foreground/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            {/* How It Works */}
+            <HowItWorks
+                pageKey="support"
+                color="green"
+                description="The Support page lets you submit and track help requests. Use it to report issues, ask questions, or flag blockers to your team."
+                bullets={[
+                    "Click Add Request to open a support ticket — set subject, priority, and module.",
+                    "Filter by Source (requester) or Priority to quickly find relevant tickets.",
+                    "Use the Search button to find requests by keyword in subject or message.",
+                    "Select multiple requests with checkboxes for bulk actions.",
+                ]}
+            />
+
+            {/* Filter Chips */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {/* Source filter */}
+                    <div className="relative">
+                        <FilterChip
+                            label="Source"
+                            active={!!filterSource}
+                            onClick={() => { setShowSourceFilter(!showSourceFilter); setShowPriorityFilter(false); }}
+                            icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>}
                         />
-                    </div>
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-4 py-2 bg-foreground/5 border border-foreground/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="all">All Status</option>
-                        <option value="open">Open</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="resolved">Resolved</option>
-                        <option value="closed">Closed</option>
-                    </select>
-                    {(searchQuery || statusFilter !== "all") && (
-                        <button
-                            onClick={() => {
-                                setSearchQuery("");
-                                setStatusFilter("all");
-                            }}
-                            className="px-4 py-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Clear Filters
-                        </button>
-                    )}
-                </div>
-
-                {/* Table */}
-                <div className="rounded-xl border border-foreground/10 bg-background overflow-hidden">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-48">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-                        </div>
-                    ) : paginatedRequests.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-48 text-foreground/60">
-                            <p>No support requests found</p>
-                            <button
-                                onClick={() => setShowCreateModal(true)}
-                                className="mt-3 text-blue-400 hover:text-blue-300 text-sm"
-                            >
-                                Create your first support request
-                            </button>
-                        </div>
-                    ) : (
-                        <table className="w-full">
-                            <thead className="bg-foreground/5 border-b border-foreground/10">
-                                <tr>
-                                    <th className="text-left px-6 py-4 text-sm font-medium text-foreground/60">Employee</th>
-                                    <th className="text-left px-6 py-4 text-sm font-medium text-foreground/60">Message</th>
-                                    <th className="text-left px-6 py-4 text-sm font-medium text-foreground/60">Status</th>
-                                    <th className="text-left px-6 py-4 text-sm font-medium text-foreground/60">Date</th>
-                                    <th className="text-left px-6 py-4 text-sm font-medium text-foreground/60">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-foreground/10">
-                                {paginatedRequests.map((request) => (
-                                    <tr key={request.id} className="hover:bg-foreground/5 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-sm font-medium">
-                                                    {getInitials(request.user?.full_name)}
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-foreground">{request.user?.full_name || "Unknown"}</p>
-                                                    <p className="text-xs text-foreground/50">{request.user?.email || "-"}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <p className="text-foreground/80 max-w-md truncate">{request.message}</p>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[request.status] || statusColors.open}`}>
-                                                {request.status.replace("_", " ")}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-foreground/60 text-sm">
-                                            {formatDate(request.created_at)}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedRequest(request);
-                                                        setShowViewModal(true);
-                                                    }}
-                                                    className="p-2 hover:bg-foreground/10 rounded-lg transition-colors text-blue-400"
-                                                    title="View"
-                                                >
-                                                    <EyeIcon />
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedRequest(request);
-                                                        setShowEditModal(true);
-                                                    }}
-                                                    className="p-2 hover:bg-foreground/10 rounded-lg transition-colors text-amber-400"
-                                                    title="Edit"
-                                                >
-                                                    <EditIcon />
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedRequest(request);
-                                                        setShowDeleteModal(true);
-                                                    }}
-                                                    className="p-2 hover:bg-foreground/10 rounded-lg transition-colors text-red-400"
-                                                    title="Delete"
-                                                >
-                                                    <TrashIcon />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
+                        {showSourceFilter && (
+                            <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-foreground/10 bg-background shadow-xl z-20 py-1">
+                                <button onClick={() => { setFilterSource(null); setShowSourceFilter(false); }} className="w-full text-left px-3 py-2 text-xs text-foreground/60 hover:bg-foreground/10 transition">All Sources</button>
+                                {uniqueSources.map(s => (
+                                    <button key={s} onClick={() => { setFilterSource(s); setShowSourceFilter(false); }} className={`w-full text-left px-3 py-2 text-xs hover:bg-foreground/10 transition ${filterSource === s ? "text-blue-400" : "text-foreground/80"}`}>{s}</button>
                                 ))}
-                            </tbody>
-                        </table>
-                    )}
+                            </div>
+                        )}
+                    </div>
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between px-6 py-4 border-t border-foreground/10">
-                            <p className="text-sm text-foreground/60">
-                                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredRequests.length)} of {filteredRequests.length} results
-                            </p>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                    disabled={currentPage === 1}
-                                    className="px-3 py-1 bg-foreground/10 hover:bg-foreground/20 disabled:opacity-50 rounded-lg text-sm transition-colors"
-                                >
-                                    Previous
-                                </button>
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                    <button
-                                        key={page}
-                                        onClick={() => setCurrentPage(page)}
-                                        className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${currentPage === page
-                                            ? "bg-blue-600 text-white"
-                                            : "bg-foreground/10 hover:bg-foreground/20"
-                                            }`}
-                                    >
-                                        {page}
+                    {/* Priority filter */}
+                    <div className="relative">
+                        <FilterChip
+                            label="Priority"
+                            active={!!filterPriority}
+                            onClick={() => { setShowPriorityFilter(!showPriorityFilter); setShowSourceFilter(false); }}
+                            icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>}
+                        />
+                        {showPriorityFilter && (
+                            <div className="absolute left-0 top-full mt-1 w-40 rounded-lg border border-foreground/10 bg-background shadow-xl z-20 py-1">
+                                <button onClick={() => { setFilterPriority(null); setShowPriorityFilter(false); }} className="w-full text-left px-3 py-2 text-xs text-foreground/60 hover:bg-foreground/10 transition">All Priorities</button>
+                                {PRIORITIES.map(p => (
+                                    <button key={p.value} onClick={() => { setFilterPriority(p.value); setShowPriorityFilter(false); }} className="flex items-center gap-2 w-full px-3 py-2 text-xs text-foreground/80 hover:bg-foreground/10 transition">
+                                        {priorityIcon(p.value)} {p.label}
                                     </button>
                                 ))}
-                                <button
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={currentPage === totalPages}
-                                    className="px-3 py-1 bg-foreground/10 hover:bg-foreground/20 disabled:opacity-50 rounded-lg text-sm transition-colors"
-                                >
-                                    Next
-                                </button>
                             </div>
-                        </div>
+                        )}
+                    </div>
+
+                    <div className="relative">
+                        <FilterChip label="Read Status" active={!!filterReadStatus}
+                            onClick={() => { setShowReadFilter(!showReadFilter); setShowPriorityFilter(false); setShowSourceFilter(false); setShowDateFilter(false); }}
+                            icon={<span className={`w-2 h-2 rounded-full ${filterReadStatus ? 'bg-blue-400' : 'bg-green-400'}`} />}
+                        />
+                        {showReadFilter && (
+                            <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-foreground/10 bg-background shadow-xl z-20 py-1">
+                                <button onClick={() => { setFilterReadStatus(null); setShowReadFilter(false); }} className="w-full text-left px-3 py-2 text-xs text-foreground/60 hover:bg-foreground/10 transition">All</button>
+                                {READ_STATUS_OPTIONS.map(opt => (
+                                    <button key={opt.value} onClick={() => { setFilterReadStatus(opt.value); setShowReadFilter(false); }} className={`w-full text-left px-3 py-2 text-xs hover:bg-foreground/10 transition ${filterReadStatus === opt.value ? 'text-blue-400' : 'text-foreground/80'}`}>{opt.label}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className="relative">
+                        <FilterChip label={filterDate ? DATE_RANGES.find(d => d.value === filterDate)?.label || "Date" : "Date"} active={!!filterDate}
+                            onClick={() => { setShowDateFilter(!showDateFilter); setShowPriorityFilter(false); setShowSourceFilter(false); setShowReadFilter(false); }}
+                            icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>}
+                        />
+                        {showDateFilter && (
+                            <div className="absolute left-0 top-full mt-1 w-40 rounded-lg border border-foreground/10 bg-background shadow-xl z-20 py-1">
+                                <button onClick={() => { setFilterDate(null); setShowDateFilter(false); }} className="w-full text-left px-3 py-2 text-xs text-foreground/60 hover:bg-foreground/10 transition">All Time</button>
+                                {DATE_RANGES.map(dr => (
+                                    <button key={dr.value} onClick={() => { setFilterDate(dr.value); setShowDateFilter(false); }} className={`w-full text-left px-3 py-2 text-xs hover:bg-foreground/10 transition ${filterDate === dr.value ? 'text-blue-400' : 'text-foreground/80'}`}>{dr.label}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                </div>
+
+                {/* Search */}
+                <div className="flex items-center gap-2">
+                    {searchOpen && (
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search requests..."
+                            autoFocus
+                            className="w-52 border border-foreground/15 rounded-lg px-3 py-1.5 bg-foreground/[0.03] text-sm text-foreground outline-none placeholder:text-foreground/40 focus:border-blue-500/40 transition"
+                        />
+                    )}
+                    <button onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) setSearchTerm(""); }} className="text-foreground/50 hover:text-foreground transition flex items-center gap-1 text-xs">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+                        Search
+                    </button>
+                    {selectedIds.size > 0 && (
+                        <button
+                            onClick={() => showConfirm(
+                                `Delete ${selectedIds.size} request(s)?`,
+                                'This action cannot be undone.',
+                                async () => {
+                                    setConfirmDialog(null);
+                                    await Promise.all(Array.from(selectedIds).map(id => deleteSupportRequest(id))).catch(console.error);
+                                    setSelectedIds(new Set());
+                                    fetchRequests();
+                                }
+                            )}
+                            className="text-red-500 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg text-xs font-medium transition ml-2 flex items-center gap-1"
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                            Delete Selected ({selectedIds.size})
+                        </button>
                     )}
                 </div>
             </div>
 
-            {/* Create Modal */}
-            <Modal
-                isOpen={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
-                title="Create Support Request"
-            >
-                <form onSubmit={handleCreate} className="space-y-4">
+            {/* Table */}
+            <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] overflow-hidden">
+                {/* Table Header */}
+                <div className="grid grid-cols-[40px_1fr_150px_160px_60px] items-center px-4 py-3 border-b border-foreground/10 text-xs font-medium text-foreground/50 uppercase tracking-wider">
                     <div>
-                        <label className="block text-sm font-medium text-foreground/80 mb-1">
-                            Support Message <span className="text-red-400">*</span>
-                        </label>
-                        <textarea
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            className="w-full px-3 py-2 bg-foreground/5 border border-foreground/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px]"
-                            placeholder="Describe your support request in detail..."
-                            autoFocus
+                        <input
+                            type="checkbox"
+                            checked={filteredRequests.length > 0 && selectedIds.size === filteredRequests.length}
+                            onChange={toggleSelectAll}
+                            className="w-4 h-4 rounded border-foreground/30 accent-blue-600"
                         />
                     </div>
+                    <div>Activity</div>
+                    <div>Source</div>
+                    <div>Date</div>
+                    <div className="text-right">Action</div>
+                </div>
 
-                    {/* Image Upload */}
-                    <div>
-                        <label className="block text-sm font-medium text-foreground/80 mb-1">
-                            Support Image (Optional)
-                        </label>
-                        {imagePreview ? (
-                            <div className="relative inline-block">
-                                <img
-                                    src={imagePreview}
-                                    alt="Preview"
-                                    className="max-h-40 rounded-lg border border-foreground/20"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={removeImage}
-                                    className="absolute -top-2 -right-2 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
-                                >
-                                    <XIcon />
-                                </button>
-                            </div>
-                        ) : (
-                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-foreground/20 rounded-lg cursor-pointer hover:bg-foreground/5 transition-colors">
-                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                    <UploadIcon />
-                                    <p className="mt-2 text-sm text-foreground/60">Upload Image</p>
-                                </div>
+                {/* Rows */}
+                {filteredRequests.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-foreground/20 mb-4">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <p className="text-sm font-semibold text-foreground/70">No support requests yet</p>
+                        <p className="text-xs text-foreground/40 mt-1">Your support requests and conversations will appear here once you create or receive them.</p>
+                    </div>
+                ) : (
+                    filteredRequests.map((req) => (
+                        <div
+                            key={req.id}
+                            className="grid grid-cols-[40px_1fr_150px_160px_60px] items-center px-4 py-3.5 border-b border-foreground/5 last:border-0 hover:bg-foreground/[0.03] transition cursor-pointer"
+                            onClick={() => setViewingRequest(req)}
+                        >
+                            <div onClick={(e) => e.stopPropagation()}>
                                 <input
-                                    type="file"
-                                    className="hidden"
-                                    accept="image/jpeg,image/png,image/jpg,image/gif"
-                                    onChange={handleImageSelect}
+                                    type="checkbox"
+                                    checked={selectedIds.has(req.id)}
+                                    onChange={() => toggleSelect(req.id)}
+                                    className="w-4 h-4 rounded border-foreground/30 accent-blue-600"
                                 />
-                            </label>
-                        )}
-                        <p className="text-xs text-blue-400 mt-1">
-                            Supported formats: JPEG, PNG, JPG, GIF. Maximum size: 10MB
-                        </p>
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setShowCreateModal(false);
-                                setSelectedImage(null);
-                                setImagePreview(null);
-                            }}
-                            className="flex-1 px-4 py-2 bg-foreground/10 hover:bg-foreground/20 rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={creating || !message.trim()}
-                            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                            {creating ? "Creating..." : "Create"}
-                        </button>
-                    </div>
-                </form>
-            </Modal>
-
-            {/* View Modal */}
-            <Modal
-                isOpen={showViewModal}
-                onClose={() => setShowViewModal(false)}
-                title="Support Request Details"
-            >
-                {selectedRequest && (
-                    <div className="space-y-4">
-                        <div>
-                            <p className="text-sm text-foreground/60">Employee</p>
-                            <p className="font-medium">{selectedRequest.user?.full_name || "Unknown"}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-foreground/60">Message</p>
-                            <p className="text-foreground/80 whitespace-pre-wrap">{selectedRequest.message}</p>
-                        </div>
-                        <div className="flex gap-6">
-                            <div>
-                                <p className="text-sm text-foreground/60">Status</p>
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[selectedRequest.status]}`}>
-                                    {selectedRequest.status.replace("_", " ")}
-                                </span>
                             </div>
                             <div>
-                                <p className="text-sm text-foreground/60">Created</p>
-                                <p>{formatDate(selectedRequest.created_at)}</p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-foreground/90">{req.subject || "Support request"}</span>
+                                    {priorityIcon(req.priority)}
+                                </div>
+                                <p className="text-xs text-foreground/50 mt-0.5 line-clamp-1">
+                                    {req.message}
+                                </p>
                             </div>
-                        </div>
-                    </div>
-                )}
-            </Modal>
-
-            {/* Edit Status Modal */}
-            <Modal
-                isOpen={showEditModal}
-                onClose={() => setShowEditModal(false)}
-                title="Update Status"
-            >
-                {selectedRequest && (
-                    <div className="space-y-4">
-                        <p className="text-foreground/60">Update status for this support request:</p>
-                        <div className="grid grid-cols-2 gap-2">
-                            {["open", "in_progress", "resolved", "closed"].map((status) => (
-                                <button
-                                    key={status}
-                                    onClick={() => handleStatusUpdate(selectedRequest.id, status)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${selectedRequest.status === status
-                                        ? statusColors[status]
-                                        : "bg-foreground/5 border-foreground/20 hover:bg-foreground/10"
-                                        }`}
-                                >
-                                    {status.replace("_", " ")}
+                            <div className="flex items-center gap-2">
+                                {req.user ? (
+                                    <span
+                                        className="w-7 h-7 rounded-full text-[10px] flex items-center justify-center text-white font-bold shrink-0"
+                                        style={{ background: avatarBg(req.user.full_name) }}
+                                        title={req.user.full_name}
+                                    >
+                                        {getInitials(req.user.full_name)}
+                                    </span>
+                                ) : (
+                                    <span className="text-xs text-foreground/40">Unknown</span>
+                                )}
+                            </div>
+                            <div className="text-xs text-foreground/60">
+                                {formatTimestamp(req.created_at)}
+                            </div>
+                            <div className="flex items-center justify-end gap-2 pr-2">
+                                <button className="text-foreground/40 hover:text-red-500 transition p-1" onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    showConfirm(
+                                        'Delete this request?',
+                                        'This ticket will be permanently removed.',
+                                        async () => {
+                                            setConfirmDialog(null);
+                                            await deleteSupportRequest(req.id).catch(console.error);
+                                            const next = new Set(selectedIds);
+                                            next.delete(req.id);
+                                            setSelectedIds(next);
+                                            fetchRequests();
+                                        }
+                                    );
+                                }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
                                 </button>
-                            ))}
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {/* Add Modal */}
+            <AddRequestModal isOpen={showModal} onClose={() => setShowModal(false)} onCreated={fetchRequests} />
+            
+            {/* View/Edit Modal */}
+            {viewingRequest && (
+                <ViewRequestModal 
+                    request={viewingRequest} 
+                    onClose={() => setViewingRequest(null)} 
+                    onUpdated={fetchRequests} 
+                    onDeleted={() => { 
+                        const next = new Set(selectedIds);
+                        next.delete(viewingRequest.id);
+                        setSelectedIds(next);
+                        setViewingRequest(null); 
+                        fetchRequests(); 
+                    }}
+                    onRequestConfirm={showConfirm}
+                />
+            )}
+
+            {/* Confirm Dialog */}
+            {confirmDialog && (
+                <ConfirmDialog
+                    message={confirmDialog.message}
+                    subtext={confirmDialog.subtext}
+                    onConfirm={confirmDialog.onConfirm}
+                    onCancel={() => setConfirmDialog(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+// ─── View/Edit Modal ────────────────────────────────────────────────────────
+function ViewRequestModal({ request, onClose, onUpdated, onDeleted, onRequestConfirm }: { 
+    request: SupportRequest;
+    onClose: () => void;
+    onUpdated: () => void;
+    onDeleted: () => void;
+    onRequestConfirm: (message: string, subtext: string, onConfirm: () => void) => void;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [subject, setSubject] = useState(request.subject || "");
+    const [message, setMessage] = useState(request.message || "");
+    const [priority, setPriority] = useState(request.priority);
+    const [status, setStatus] = useState(request.status);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+
+    const handleSave = async () => {
+        setSaving(true);
+        setSaveError(null);
+        try {
+            await updateSupportRequest(request.id, { subject, message, priority, status });
+            setEditing(false);
+            onUpdated();
+        } catch (e) {
+            console.error(e);
+            setSaveError('Failed to update request. Please try again.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = () => {
+        onRequestConfirm(
+            'Delete this support request?',
+            'This ticket will be permanently removed and cannot be recovered.',
+            async () => {
+                try {
+                    await deleteSupportRequest(request.id);
+                    onDeleted();
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+        );
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+            <div className="w-full max-w-[600px] rounded-2xl border border-foreground/10 bg-background shadow-xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="flex items-start justify-between p-6 border-b border-foreground/10 shrink-0">
+                    <div>
+                        <div className="flex items-center gap-3 mb-1">
+                            {editing ? (
+                                <input value={subject} onChange={e => setSubject(e.target.value)} className="font-bold text-lg bg-foreground/5 border border-foreground/10 rounded px-2" />
+                            ) : (
+                                <h2 className="text-xl font-bold text-foreground">{request.subject || "Support Request"}</h2>
+                            )}
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+                                status === "open" ? "bg-blue-500/10 text-blue-500" :
+                                status === "in_progress" ? "bg-orange-500/10 text-orange-500" :
+                                status === "resolved" ? "bg-green-500/10 text-green-500" : "bg-foreground/10 text-foreground/50"
+                            }`}>
+                                {status.replace("_", " ")}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-foreground/50">
+                            {request.user && (
+                                <span className="flex items-center gap-1.5">
+                                    <span className="w-4 h-4 rounded-full text-[8px] flex items-center justify-center text-white" style={{ background: avatarBg(request.user.full_name) }}>
+                                        {getInitials(request.user.full_name)}
+                                    </span>
+                                    {request.user.full_name}
+                                </span>
+                            )}
+                            <span>•</span>
+                            <span>{formatTimestamp(request.created_at)}</span>
                         </div>
                     </div>
-                )}
-            </Modal>
+                    <button onClick={onClose} className="p-1 rounded-md text-foreground/40 hover:bg-foreground/10 transition">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                </div>
 
-            {/* Delete Confirmation Modal */}
-            <Modal
-                isOpen={showDeleteModal}
-                onClose={() => setShowDeleteModal(false)}
-                title="Delete Support Request"
-            >
-                <div className="space-y-4">
-                    <p className="text-foreground/60">
-                        Are you sure you want to delete this support request? This action cannot be undone.
-                    </p>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => setShowDeleteModal(false)}
-                            className="flex-1 px-4 py-2 bg-foreground/10 hover:bg-foreground/20 rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleDelete}
-                            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Delete
-                        </button>
+                {/* Body */}
+                <div className="p-6 overflow-y-auto space-y-6">
+                    {/* Details Row */}
+                    <div className="flex gap-6 border-b border-foreground/10 pb-6">
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase text-foreground/40 tracking-wider mb-2">Priority</p>
+                            {editing ? (
+                                <select value={priority} onChange={e => setPriority(e.target.value as any)} className="bg-foreground/5 border border-foreground/10 rounded p-1 text-xs">
+                                    {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                                </select>
+                            ) : (
+                                <span className="flex items-center gap-1.5 text-sm">{priorityIcon(priority)} <span className="capitalize">{priority}</span></span>
+                            )}
+                        </div>
+                        {editing && (
+                            <div>
+                                <p className="text-[10px] font-semibold uppercase text-foreground/40 tracking-wider mb-2">Status</p>
+                                <select value={status} onChange={e => setStatus(e.target.value as any)} className="bg-foreground/5 border border-foreground/10 rounded p-1 text-xs">
+                                    <option value="open">Open</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="resolved">Resolved</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                            </div>
+                        )}
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase text-foreground/40 tracking-wider mb-2">Module</p>
+                            <span className="text-sm text-foreground/70">{request.related_module || "Untracked"}</span>
+                        </div>
+                    </div>
+
+                    {/* Message section */}
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase text-foreground/40 tracking-wider mb-2">Description</p>
+                        {editing ? (
+                            <textarea
+                                value={message}
+                                onChange={e => setMessage(e.target.value)}
+                                rows={6}
+                                className="w-full bg-foreground/5 border border-foreground/10 rounded-lg p-3 text-sm resize-none"
+                            />
+                        ) : (
+                            <div className="bg-foreground/[0.03] border border-foreground/10 rounded-xl p-4 text-sm whitespace-pre-wrap leading-relaxed">
+                                {request.message}
+                            </div>
+                        )}
                     </div>
                 </div>
-            </Modal>
-        </DashboardLayout>
+
+                    {/* Save Error */}
+                    {saveError && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm text-red-500">
+                            {saveError}
+                        </div>
+                    )}
+                {/* Footer Controls */}
+                <div className="flex items-center justify-between p-4 px-6 border-t border-foreground/10 bg-foreground/[0.02] shrink-0">
+                    {!editing ? (
+                        <>
+                            <button onClick={handleDelete} className="text-red-500 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5">
+                                Delete Ticket
+                            </button>
+                            <div className="flex gap-2">
+                                <button onClick={onClose} className="px-4 py-2 text-sm text-foreground/60 transition">Close</button>
+                                <button onClick={() => setEditing(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                                    Edit Ticket
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div></div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setEditing(false)} className="px-4 py-2 text-sm text-foreground/60 transition" disabled={saving}>Cancel</button>
+                                <button onClick={handleSave} disabled={saving} className="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                                    {saving ? "Saving..." : "Save Changes"}
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
     );
 }

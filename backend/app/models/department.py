@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, date
-from sqlalchemy import Column, String, Text, ForeignKey, DateTime, Date, Boolean
+from sqlalchemy import Column, String, Text, ForeignKey, DateTime, Date, Boolean, func, Numeric
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -27,11 +27,15 @@ class Department(Base):
     __tablename__ = "departments"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     notes = Column(Text, nullable=True)
+    status = Column(String(50), default="active")
+    budget = Column(Numeric(15, 2), default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
+    organization = relationship("Organization", back_populates="departments")
     employees = relationship("User", back_populates="department")
     department_managers = relationship("DepartmentManager", back_populates="department", cascade="all, delete-orphan")
     projects = relationship("Project", back_populates="department")

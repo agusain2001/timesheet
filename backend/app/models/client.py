@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, JSON, DateTime, func
+from sqlalchemy import Column, String, Text, JSON, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -10,6 +10,7 @@ class Client(Base):
     __tablename__ = "clients"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     alias = Column(String(50), nullable=True)
     region = Column(String(100), nullable=True)
@@ -21,5 +22,6 @@ class Client(Base):
     created_at = Column(DateTime, server_default=func.now())
     
     # Relationships
+    organization = relationship("Organization", back_populates="clients")
     projects = relationship("Project", back_populates="client")
 

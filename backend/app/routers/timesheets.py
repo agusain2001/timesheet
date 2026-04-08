@@ -6,6 +6,8 @@ from app.database import get_db
 from app.models import Timesheet, TimeEntry, User, TimesheetStatus
 from app.schemas import TimesheetCreate, TimesheetUpdate, TimesheetResponse, TimeEntryCreate
 from app.utils import get_current_active_user
+from app.utils.role_guards import is_manager, is_admin
+from app.utils.tenant import scope_to_org
 
 router = APIRouter()
 
@@ -21,16 +23,15 @@ def get_all_timesheets(
 ):
     """Get all timesheets with optional filters."""
     query = db.query(Timesheet)
-    
-    # Non-admins can only see their own
-    if current_user.role not in ["admin", "manager"]:
+    # Tenant isolation
+    query = scope_to_org(query, Timesheet, current_user)
+    # Non-managers can only see their own
+    if not is_manager(current_user):
         query = query.filter(Timesheet.user_id == current_user.id)
     elif user_id:
         query = query.filter(Timesheet.user_id == user_id)
-    
     if status_filter:
         query = query.filter(Timesheet.status == status_filter)
-    
     return query.order_by(Timesheet.week_starting.desc()).offset(skip).limit(limit).all()
 
 

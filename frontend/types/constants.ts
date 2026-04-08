@@ -5,6 +5,8 @@ export type NavItem = {
   href?: string;
   icon: LucideIcon;
   children?: NavItem[];
+  pageKey?: string; // Used for RBAC-based sidebar filtering
+  roles?: string[]; // If set, only users with one of these roles can see this item
 };
 
 // Re-export API types for backwards compatibility

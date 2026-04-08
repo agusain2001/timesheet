@@ -7,7 +7,8 @@ from sqlalchemy import func
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import User, Task, Team, TeamMember, TimeEntry, Timesheet, Project
+from app.models import User, Task, Team, TeamMember, TimeEntry, Timesheet, Project, TimeLog
+from sqlalchemy.orm import joinedload
 from app.utils import get_current_active_user
 
 router = APIRouter()
@@ -519,3 +520,83 @@ def get_overallocation_alerts(
                 ))
     
     return alerts
+
+
+@router.get("/user/{user_id}/detail")
+def get_user_workload_detail(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get detailed workload for a specific user with task breakdown by project."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    now = datetime.utcnow()
+    capacity = user.capacity_hours_week or 40.0
+
+    # All active tasks with project info
+    active_tasks = db.query(Task).options(
+        joinedload(Task.project)
+    ).filter(
+        Task.assignee_id == user_id,
+        Task.status.notin_(["done", "completed", "cancelled"])
+    ).order_by(Task.due_date.asc().nullslast()).all()
+
+    allocated_hours = sum(t.estimated_hours or 0 for t in active_tasks)
+    utilization = round((allocated_hours / capacity * 100), 1) if capacity > 0 else 0
+
+    # Task breakdown by project
+    project_map = {}
+    for t in active_tasks:
+        pname = t.project.name if t.project else "No Project"
+        pid = str(t.project_id) if t.project_id else None
+        if pname not in project_map:
+            project_map[pname] = {"project_id": pid, "project_name": pname, "task_count": 0, "allocated_hours": 0}
+        project_map[pname]["task_count"] += 1
+        project_map[pname]["allocated_hours"] += t.estimated_hours or 0
+
+    # Hours this week
+    week_start = now - timedelta(days=7)
+    hours_week = db.query(func.sum(TimeLog.hours)).filter(
+        TimeLog.user_id == user_id,
+        func.date(TimeLog.date) >= week_start.date()
+    ).scalar() or 0.0
+
+    tasks_list = []
+    for t in active_tasks:
+        tasks_list.append({
+            "id": str(t.id),
+            "name": t.name,
+            "status": t.status,
+            "priority": t.priority,
+            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "project_name": t.project.name if t.project else None,
+            "project_id": str(t.project_id) if t.project_id else None,
+            "estimated_hours": t.estimated_hours,
+            "actual_hours": t.actual_hours,
+        })
+
+    dept = None
+    if user.department:
+        dept = {"id": str(user.department.id), "name": user.department.name}
+
+    return {
+        "user": {
+            "id": str(user.id),
+            "full_name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "position": user.position,
+            "avatar_url": user.avatar_url,
+            "department": dept,
+        },
+        "capacity_hours": capacity,
+        "allocated_hours": round(allocated_hours, 1),
+        "utilization_percent": utilization,
+        "hours_this_week": round(float(hours_week), 1),
+        "tasks": tasks_list,
+        "task_count": len(active_tasks),
+        "project_breakdown": list(project_map.values()),
+    }

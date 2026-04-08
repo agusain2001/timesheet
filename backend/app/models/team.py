@@ -11,6 +11,7 @@ class Team(Base):
     __tablename__ = "teams"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     parent_team_id = Column(String(36), ForeignKey("teams.id"), nullable=True)  # Hierarchy
@@ -25,6 +26,7 @@ class Team(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
+    organization = relationship("Organization", back_populates="teams")
     parent_team = relationship("Team", remote_side=[id], backref="sub_teams")
     department = relationship("Department", backref="teams")
     lead = relationship("User", foreign_keys=[lead_id], backref="led_teams")

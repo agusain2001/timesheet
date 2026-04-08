@@ -14,17 +14,16 @@ class AITaskService:
     
     def __init__(self, db: Session):
         self.db = db
-        self.model = None
+        self._client = None
         self._init_model()
-    
+
     def _init_model(self):
-        """Initialize Gemini model if API key is available."""
+        """Initialize Gemini client if API key is available."""
         settings = get_settings()
         if settings.gemini_api_key and len(settings.gemini_api_key) > 20:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.gemini_api_key)
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
+                from google import genai
+                self._client = genai.Client(api_key=settings.gemini_api_key)
             except Exception as e:
                 print(f"Failed to init AI model: {e}")
     
@@ -177,9 +176,9 @@ class AITaskService:
     
     async def create_task_from_natural_language(self, text: str, user: User) -> Optional[Dict[str, Any]]:
         """Parse natural language to create a task."""
-        if not self.model:
+        if not self._client:
             return self._fallback_parse(text, user)
-        
+
         try:
             prompt = f"""Parse this task description into structured data:
 "{text}"
@@ -193,8 +192,8 @@ Extract and return JSON with these fields:
 - tags: array of relevant tags
 
 Only return valid JSON, no other text."""
-            
-            response = self.model.generate_content(prompt)
+
+            response = self._client.models.generate_content(model='gemini-2.0-flash-exp', contents=prompt)
             
             import re
             json_match = re.search(r'\{[\s\S]*\}', response.text)
@@ -259,7 +258,7 @@ Only return valid JSON, no other text."""
             suggestions.append("Update task status or add notes on what's blocking progress")
         
         # AI-enhanced suggestions if available
-        if self.model and task.description:
+        if self._client and task.description:
             try:
                 prompt = f"""Given this task:
 Title: {task.name}
@@ -268,8 +267,8 @@ Status: {task.status}
 Priority: {task.priority}
 
 Provide 2-3 brief, actionable suggestions to complete this task effectively. Keep each under 100 characters."""
-                
-                response = self.model.generate_content(prompt)
+
+                response = self._client.models.generate_content(model='gemini-2.0-flash-exp', contents=prompt)
                 if response.text:
                     ai_suggestions = [s.strip() for s in response.text.split('\n') if s.strip() and len(s) < 150]
                     suggestions.extend(ai_suggestions[:3])

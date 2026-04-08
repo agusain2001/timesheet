@@ -10,6 +10,9 @@ class TaskType(str, PyEnum):
     PERSONAL = "personal"
     PROJECT = "project"
     ASSIGNED = "assigned"
+    BUG = "bug"
+    FEATURE = "feature"
+    IMPROVEMENT = "improvement"
 
 
 class TaskPriority(str, PyEnum):
@@ -17,9 +20,11 @@ class TaskPriority(str, PyEnum):
     MEDIUM = "medium"
     HIGH = "high"
     URGENT = "urgent"
+    CRITICAL = "critical"
 
 
 class TaskStatus(str, PyEnum):
+    DRAFT = "draft"
     BACKLOG = "backlog"
     TODO = "todo"
     IN_PROGRESS = "in_progress"
@@ -38,6 +43,7 @@ class Task(Base):
     __tablename__ = "tasks"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     task_type = Column(String(20), default=TaskType.PERSONAL.value)
