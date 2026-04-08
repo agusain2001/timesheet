@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; import sys; files=[''app/routers/system_stats.py'',''app/routers/project_structure.py'',''app/routers/dropdown_config.py'',''app/routers/reports.py'',''app/routers/advanced_features.py'',''app/routers/task_templates.py'',''app/services/reminder_scheduler.py'',''app/database.py'',''app/utils/error_handlers.py'',''app/utils/encryption.py'',''app/utils/security.py'']; errors=[]; [errors.append\\(f\\) for f in files if not \\(lambda f: \\(open\\(f\\).read\\(\\), True\\)[-1] and ast.parse\\(open\\(f\\).read\\(\\)\\)\\)\\(f\\)]; print\\(''All files parse OK'' if not errors else f''Errors: {errors}''\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(pip show:*)",
+      "Bash(npx pyright:*)",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\)\\) for f in [''app/routers/system_stats.py'',''app/routers/teams.py'']]; print\\(''Both files parse OK''\\)\")",
+      "Bash(pip index:*)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"import importlib.metadata; print\\(importlib.metadata.requires\\(''''langchain-google-genai''''\\)\\)\")",
+      "Bash(curl -s https://pypi.org/pypi/google-genai/json)"
+    ]
+  }
+}
